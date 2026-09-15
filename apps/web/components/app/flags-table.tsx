@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   FilterIcon,
   MoreHorizontalIcon,
@@ -165,9 +166,12 @@ export function FlagsTable({
               return (
                 <TableRow key={flag.key}>
                   <TableCell className={cellClass}>
-                    <span className="block font-mono text-[12px] font-medium">
+                    <Link
+                      href={`/flags/${flag.key}`}
+                      className="hover:text-primary block font-mono text-[12px] font-medium transition-colors"
+                    >
                       {flag.key}
-                    </span>
+                    </Link>
                     <span className="text-muted-foreground block text-[11px]">
                       {flag.owner} · {flag.description}
                     </span>

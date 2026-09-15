@@ -1,0 +1,176 @@
+import { GitCompareArrowsIcon } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { FlagDetailView } from "@/lib/flag-detail-data";
+
+/**
+ * History tab.
+ *
+ * Entirely read-only, so it stays a Server Component — no client boundary is
+ * needed for a timeline and two selects that are not yet wired to anything.
+ */
+export function FlagHistory({ flag }: { flag: FlagDetailView }) {
+  const current = flag.versions.find((version) => version.current);
+  const previous = flag.versions.find((version) => !version.current);
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)]">
+      <section className="bg-card rounded-lg border p-4">
+        <h2 className="text-[13px] font-medium">Version history</h2>
+        <p className="text-muted-foreground mt-1 text-[11px]">
+          Every change to {flag.key}, newest first.
+        </p>
+
+        {flag.versions.length === 0 ? (
+          <p className="text-muted-foreground mt-4 rounded-lg border border-dashed p-4 text-[12px]">
+            No recorded changes yet. This flag has not been modified since it was
+            created.
+          </p>
+        ) : (
+          <ol className="mt-4 space-y-1">
+            {flag.versions.map((version) => (
+              <li
+                key={version.version}
+                className={
+                  version.current
+                    ? "bg-primary/5 border-primary/30 rounded-lg border p-3"
+                    : "rounded-lg p-3"
+                }
+              >
+                <div className="flex flex-wrap items-start gap-3">
+                  <span className="bg-muted text-muted-foreground mt-0.5 rounded-md px-1.5 py-0.5 font-mono text-[10px]">
+                    {version.version}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px]">
+                      {version.description}
+                      {version.current ? (
+                        <Badge variant="ok" className="ml-2 align-middle">
+                          Current
+                        </Badge>
+                      ) : null}
+                    </p>
+                    <p className="text-muted-foreground mt-0.5 text-[11px]">
+                      {version.author} · {version.ageLabel}
+                    </p>
+                  </div>
+
+                  <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
+                    {version.serve}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <div className="space-y-4">
+        <section className="bg-card rounded-lg border p-4">
+          <h2 className="text-[13px] font-medium">Current version</h2>
+
+          {current ? (
+            <>
+              <div className="mt-3 flex items-center gap-2">
+                <span className="bg-primary/10 text-primary rounded-md px-1.5 py-0.5 font-mono text-[10px]">
+                  {current.version}
+                </span>
+                <p className="text-[12px]">{current.description}</p>
+              </div>
+
+              <dl className="mt-3 divide-y text-[12px]">
+                {[
+                  ["Author", current.author],
+                  ["Published", current.ageLabel],
+                  ["Variations", `${flag.variations.length}`],
+                  ["Rollout", `${flag.rolloutPercentage}% in ${flag.environment}`],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0"
+                  >
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd className="text-right capitalize">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </>
+          ) : (
+            <p className="text-muted-foreground mt-3 text-[12px]">
+              No published version yet.
+            </p>
+          )}
+        </section>
+
+        <section className="bg-card rounded-lg border p-4">
+          <h2 className="text-[13px] font-medium">Compare versions</h2>
+          <p className="text-muted-foreground mt-1 text-[11px]">
+            Highlight what changed between two versions.
+          </p>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="compare-from">From</Label>
+              <Select defaultValue={previous?.version ?? current?.version}>
+                <SelectTrigger
+                  id="compare-from"
+                  className="h-8 w-full font-mono text-[12px]"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {flag.versions.map((version) => (
+                    <SelectItem key={version.version} value={version.version}>
+                      {version.version}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="compare-to">To</Label>
+              <Select defaultValue={current?.version}>
+                <SelectTrigger
+                  id="compare-to"
+                  className="h-8 w-full font-mono text-[12px]"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {flag.versions.map((version) => (
+                    <SelectItem key={version.version} value={version.version}>
+                      {version.version}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled
+            title="Diffing — coming soon"
+            className="mt-3 w-full gap-1.5 text-[11px]"
+          >
+            <GitCompareArrowsIcon aria-hidden="true" className="size-3.5" />
+            {previous && current
+              ? `View diff ${previous.version} → ${current.version}`
+              : "View diff"}
+          </Button>
+        </section>
+      </div>
+    </div>
+  );
+}
