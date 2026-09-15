@@ -335,6 +335,17 @@ const heroStats: HeroStat[] = [
 ];
 
 /**
+ * Look up a flag's summary row by key.
+ *
+ * The flag list is the canonical set of keys: a key that is not listed here
+ * does not exist, which is what the detail route uses to decide between the
+ * derived record and a 404.
+ */
+export function getFlagSummary(key: string): DashboardFlag | null {
+  return flags.find((flag) => flag.key === key) ?? null;
+}
+
+/**
  * Build the dashboard payload.
  *
  * @param now - The moment relative labels are measured against. Callers pass a
