@@ -541,12 +541,12 @@ if (enabled) {
 
 The SDK is designed to eventually support:
 
-* Local configuration caching
-* Offline evaluation
-* Automatic configuration refresh
-* Fallback values
-* Low-latency evaluation
-* Environment isolation
+- Local configuration caching
+- Offline evaluation
+- Automatic configuration refresh
+- Fallback values
+- Low-latency evaluation
+- Environment isolation
 
 ---
 
@@ -580,13 +580,13 @@ Dariise separates management credentials from application evaluation credentials
 
 The platform will support:
 
-* Environment-scoped API keys
-* Role-based access control
-* API key rotation
-* Audit logging
-* Secure credential storage
-* Project isolation
-* Environment isolation
+- Environment-scoped API keys
+- Role-based access control
+- API key rotation
+- Audit logging
+- Secure credential storage
+- Project isolation
+- Environment isolation
 
 Secrets should never be committed to source control.
 
@@ -596,50 +596,50 @@ Secrets should never be committed to source control.
 
 ### Phase 1 — Core
 
-* [x] Project setup
-* [ ] Authentication — sign in, create account, reset password, and create workspace screens are built; the API and session handling are not
-* [ ] Projects
-* [ ] Environments
-* [ ] Feature flag CRUD
-* [ ] Boolean flags
-* [ ] Dashboard — overview and feature flag screens are built against fixtures; not yet wired to the API
-* [ ] Audit logs
+- [x] Project setup
+- [ ] Authentication — sign in, create account, reset password, and create workspace screens are built; the API and session handling are not
+- [ ] Projects
+- [ ] Environments
+- [ ] Feature flag CRUD
+- [ ] Boolean flags
+- [ ] Dashboard — overview and feature flag screens are built against fixtures; not yet wired to the API
+- [ ] Audit logs
 
 ### Phase 2 — Targeting
 
-* [ ] User attributes
-* [ ] Targeting rules
-* [ ] Percentage rollouts
-* [ ] Segments
-* [ ] Deterministic user bucketing
+- [ ] User attributes
+- [ ] Targeting rules
+- [ ] Percentage rollouts
+- [ ] Segments
+- [ ] Deterministic user bucketing
 
 ### Phase 3 — SDK & Performance
 
-* [ ] JavaScript/TypeScript SDK
-* [ ] Python SDK
-* [ ] Go SDK
-* [ ] Local caching
-* [ ] Redis caching
-* [ ] Configuration polling
-* [ ] Real-time updates
-* [ ] Fallback behavior
+- [ ] JavaScript/TypeScript SDK
+- [ ] Python SDK
+- [ ] Go SDK
+- [ ] Local caching
+- [ ] Redis caching
+- [ ] Configuration polling
+- [ ] Real-time updates
+- [ ] Fallback behavior
 
 ### Phase 4 — Progressive Delivery
 
-* [ ] Scheduled rollouts
-* [ ] Rollout history
-* [ ] Feature dependencies
-* [ ] Approval workflows
-* [ ] Automatic rollback
-* [ ] Change notifications
+- [ ] Scheduled rollouts
+- [ ] Rollout history
+- [ ] Feature dependencies
+- [ ] Approval workflows
+- [ ] Automatic rollback
+- [ ] Change notifications
 
 ### Phase 5 — Observability
 
-* [ ] Flag evaluation metrics
-* [ ] Evaluation latency
-* [ ] Error tracking
-* [ ] Usage analytics
-* [ ] OpenTelemetry integration
+- [ ] Flag evaluation metrics
+- [ ] Evaluation latency
+- [ ] Error tracking
+- [ ] Usage analytics
+- [ ] OpenTelemetry integration
 
 ---
 
@@ -649,38 +649,20 @@ Dariise is being built with a focus on the engineering challenges behind feature
 
 Key areas include:
 
-* Low-latency flag evaluation
-* Deterministic percentage rollouts
-* Configuration consistency
-* Caching and invalidation
-* Safe fallback behavior
-* Environment isolation
-* API authentication
-* Configuration versioning
-* Auditability
-* Horizontal scalability
-* Reliable SDK behavior
+- Low-latency flag evaluation
+- Deterministic percentage rollouts
+- Configuration consistency
+- Caching and invalidation
+- Safe fallback behavior
+- Environment isolation
+- API authentication
+- Configuration versioning
+- Auditability
+- Horizontal scalability
+- Reliable SDK behavior
 
 ---
 
 ## License
 
 MIT
-
-```
-
-### One change I'd make to this README later
-
-Once you actually implement the system, I'd make the **Engineering Goals** section one of the strongest parts of the README.
-
-For example, instead of just saying:
-
-> "Redis caching"
-
-you could eventually document an actual engineering decision:
-
-> **Why local SDK evaluation?**  
-> Feature evaluation should not require a network request for every user request. Dariise SDKs maintain a local copy of the relevant configuration and periodically synchronize changes from the control plane.
-
-That kind of documentation makes the project much more impressive to a senior engineering hiring manager because it demonstrates **architecture and tradeoff thinking**, not just that you built a dashboard.
-```
