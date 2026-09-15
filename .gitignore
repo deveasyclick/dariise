@@ -1,0 +1,40 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# local tool caches (pnpm dlx, etc.)
+.cache/
+.local/
+.config/
+
+# next.js
+.next/
+out/
+build/
+next-env.d.ts
+
+# production
+dist/
+
+# environment
+.env
+.env.local
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# testing
+coverage/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

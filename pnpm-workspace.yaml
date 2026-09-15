@@ -1,0 +1,17 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Keep the content-addressable store inside the repository instead of the
+# user's home directory, so installs work in sandboxed/CI environments.
+storeDir: .pnpm-store
+
+# Dependency build scripts are blocked by default (pnpm 11+). Every entry below
+# is an explicit decision about a package that requests a lifecycle script.
+allowBuilds:
+  # Native module resolver used by eslint-config-next; its install script
+  # fetches the platform-specific binding.
+  unrs-resolver: true
+  # sharp is optional: Next.js only needs it for optimized production images.
+  # Nothing renders next/image yet, so its build stays blocked.
+  sharp: false
