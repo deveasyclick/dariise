@@ -61,8 +61,8 @@ export const navSections: NavSection[] = [
   {
     label: "Workspace",
     items: [
-      { label: "Members", icon: UsersIcon },
       { label: "Settings", icon: SettingsIcon },
+      { label: "Team", icon: UsersIcon },
     ],
   },
 ];
