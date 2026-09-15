@@ -49,6 +49,11 @@ second one and points at the existing server instead.
 | `/create-workspace` | Create workspace | `(auth)` |
 | `/overview` | Dashboard overview | `(app)` |
 | `/flags` | Feature flags | `(app)` |
+| `/flags/new` | Create a flag | `(app)` |
+| `/flags/[key]` | Flag detail — Configuration | `(app)` |
+| `/flags/[key]/targeting` | Flag detail — Targeting | `(app)` |
+| `/flags/[key]/history` | Flag detail — History | `(app)` |
+| `/flags/[key]/dependencies` | Flag detail — Dependencies | `(app)` |
 
 Both groups are route groups, so their names never appear in a URL.
 `app/layout.tsx` remains the only root layout.
@@ -57,14 +62,19 @@ Both groups are route groups, so their names never appear in a URL.
 shell — fixed sidebar, topbar, and a scrolling content area — and is rendered per
 request so the dashboard figures and relative timestamps stay current.
 
+The flag detail tabs are `<Link>`s rather than tab state, so each one is a real,
+addressable route. Configuration is the bare `/flags/[key]` route, matching the
+default tab. An unknown key calls `notFound()`.
+
 ## Layout
 
 ```text
 app/(auth)/             # Sign in, sign up, reset, create workspace
-app/(app)/              # Dashboard shell: /overview and /flags
+app/(app)/              # Dashboard: overview, flags, flag detail and its tabs
 app/layout.tsx          # Root layout: fonts, metadata, globals.css
 app/globals.css         # Design tokens (see below)
 components/app/         # Sidebar, topbar, nav config, dashboard cards, table
+components/app/flags/   # Flag headers, tabs, create form, tab panels
 components/auth/        # Auth shell, shared fields, and the four forms
 components/ui/          # shadcn/ui primitives
 components/logo.tsx     # brand mark
@@ -72,6 +82,8 @@ lib/api.ts              # typed client for the Dariise API
 lib/auth-stub.ts        # temporary auth stand-in (no backend yet)
 lib/dashboard-data.ts   # temporary dashboard fixtures (no backend yet)
 lib/env.ts              # runtime configuration
+lib/flag-detail-data.ts # temporary per-flag detail records
+lib/flag-stub.ts        # temporary flag create/publish stand-in
 lib/format.ts           # relative time and number formatters
 lib/types.ts            # domain types shared with the API
 lib/validation.ts       # dependency-free form validators
@@ -135,5 +147,13 @@ Configuration is read in `lib/env.ts`. Only variables prefixed with
   responses. `getDashboardData(now)` takes the current instant so relative
   timestamps are derived rather than stored, which keeps server output and
   hydration in agreement. It is the second swap point once `apps/api` lands.
+- `lib/flag-detail-data.ts` holds the per-flag detail records. Only
+  `checkout-v2` is transcribed in full; every other flag derives a plain record
+  from its summary row so no table row leads to an empty page.
+- `lib/flag-stub.ts` stands in for the flag write endpoints. Creating and
+  publishing acknowledge locally and persist nothing — a reload discards them.
 - The topbar's search, environment switcher, notifications and theme toggle are
   presentational and marked as coming soon, matching the sidebar rule.
+- Interactive controls without an implementation — `Edit Flag`, `Auto segment`,
+  `Add user`, `Archive Flag`, version diffing — are disabled with a title rather
+  than pretending to work.

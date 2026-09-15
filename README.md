@@ -322,19 +322,22 @@ dariise/
 │   ├── web/
 │   │   ├── app/
 │   │   │   ├── (auth)/         # sign in, sign up, reset, create workspace
-│   │   │   ├── (app)/          # dashboard shell: overview, feature flags
+│   │   │   ├── (app)/          # dashboard: overview and feature flags
 │   │   │   ├── layout.tsx
 │   │   │   ├── not-found.tsx
 │   │   │   └── globals.css     # design tokens
 │   │   ├── components/
 │   │   │   ├── app/            # sidebar, topbar, dashboard cards, flags table
+│   │   │   │   └── flags/      # flag headers, tabs, create form, tab panels
 │   │   │   ├── auth/           # auth shell, shared fields, forms
 │   │   │   ├── ui/             # shadcn/ui primitives
 │   │   │   └── logo.tsx
 │   │   ├── lib/
 │   │   │   ├── api.ts          # typed Dariise API client
 │   │   │   ├── auth-stub.ts    # temporary stand-in until apps/api exists
-│   │   │   ├── dashboard-data.ts  # temporary dashboard fixtures
+│   │   │   ├── dashboard-data.ts   # temporary dashboard fixtures
+│   │   │   ├── flag-detail-data.ts # temporary per-flag detail records
+│   │   │   ├── flag-stub.ts    # temporary flag create/publish stand-in
 │   │   │   ├── env.ts          # runtime configuration
 │   │   │   ├── format.ts       # relative time and number formatters
 │   │   │   ├── types.ts        # domain types shared with the API
@@ -600,8 +603,8 @@ Secrets should never be committed to source control.
 - [ ] Authentication — sign in, create account, reset password, and create workspace screens are built; the API and session handling are not
 - [ ] Projects
 - [ ] Environments
-- [ ] Feature flag CRUD
-- [ ] Boolean flags
+- [ ] Feature flag CRUD — create, detail, targeting, history and dependency screens are built against fixtures; writes are not persisted
+- [ ] Boolean flags — the create flow and configuration screens model Boolean flags; other types are selectable but not yet configurable
 - [ ] Dashboard — overview and feature flag screens are built against fixtures; not yet wired to the API
 - [ ] Audit logs
 
