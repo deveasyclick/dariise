@@ -1,0 +1,264 @@
+@import "tailwindcss";
+@import "shadcn/tailwind.css";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Dariise design tokens.
+ *
+ * Three groups:
+ *  1. auth-only   — used exclusively by the authentication screens
+ *  2. shared      — auth plus every application screen
+ *  3. app-only    — dashboard, sidebar and application chrome
+ *
+ * Values are the source-of-truth hex values, kept verbatim rather than
+ * converted to another colour space so they can be diffed against the design
+ * spec. A handful of tokens that the shadcn primitives require (popover,
+ * secondary, accent, input, ring, chart, sidebar) are derived from the
+ * documented scale and marked "derived" below.
+ */
+
+:root {
+  --radius: 0.625rem;
+
+  /* ---- shared ---- */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a; /* derived */
+  --popover: #ffffff; /* derived */
+  --popover-foreground: #0f172a; /* derived */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --danger-ink: #b91c1c;
+  --info-ink: #0369a1;
+
+  /* ---- shared, derived for shadcn primitives ---- */
+  --secondary: #f1f5f9; /* derived: = --muted */
+  --secondary-foreground: #0f172a; /* derived: = --foreground */
+  --accent: #f1f5f9; /* derived: = --muted */
+  --accent-foreground: #0f172a; /* derived: = --foreground */
+  --input: #e2e8f0; /* derived: = --border */
+  --ring: #2563eb; /* derived: = --primary */
+
+  /* ---- status ---- */
+  --success: #22a45d;
+  --success-foreground: #ffffff;
+  --destructive: #b91c1c; /* derived: = --danger-ink */
+  --info: #0369a1; /* derived: = --info-ink */
+
+  /* ---- auth-only ---- */
+  --auth-panel: #eaf2ff;
+  --auth-panel-border: #dce8ff;
+  --auth-heading: #0f172a;
+  --auth-body: #475569;
+  --auth-muted: #64748b;
+  --auth-accent: #2563eb;
+  --auth-glyph-bg: #2563eb1f;
+  --auth-badge: #ffffff;
+  --auth-badge-border: #c7dbff;
+
+  /* ---- app-only ---- */
+  --primary-ink: #1d4ed8;
+  --ok-ink: #15803d;
+  --warn-ink: #b45309;
+  --slate-ink: #475569;
+  --purple-ink: #6d28d9;
+
+  /* ---- navigation ---- */
+  --nav-bg: #172033;
+  --nav-active: #2563eb;
+  --nav-line: #26324a;
+  --nav-chip: #1e2a44;
+  --nav-chip-line: #2a3852;
+  --nav-dim: #94a3b8;
+
+  /* ---- chart ramp, derived from the ink palette ---- */
+  --chart-1: #2563eb;
+  --chart-2: #0369a1;
+  --chart-3: #22a45d;
+  --chart-4: #b45309;
+  --chart-5: #6d28d9;
+
+  /* ---- sidebar, derived from the navigation palette ---- */
+  --sidebar: #172033;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e2a44;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #26324a;
+  --sidebar-ring: #2563eb;
+}
+
+.dark {
+  /* ---- shared ---- */
+  --background: #0b1220;
+  --foreground: #f8fafc;
+  --card: #111c2e;
+  --card-foreground: #f8fafc; /* derived */
+  --popover: #111c2e; /* derived */
+  --popover-foreground: #f8fafc; /* derived */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --border: #1e293b;
+  --danger-ink: #ff8a7a;
+  --info-ink: #7dd3fc;
+
+  /* ---- shared, derived for shadcn primitives ---- */
+  --secondary: #1e293b; /* derived: = --muted */
+  --secondary-foreground: #f8fafc; /* derived: = --foreground */
+  --accent: #1e293b; /* derived: = --muted */
+  --accent-foreground: #f8fafc; /* derived: = --foreground */
+  --input: #1e293b; /* derived: = --border */
+  --ring: #2563eb; /* derived: = --primary */
+
+  /* ---- status ---- */
+  --success: #16a34a;
+  --success-foreground: #052e16;
+  --destructive: #ff8a7a; /* derived: = --danger-ink */
+  --info: #7dd3fc; /* derived: = --info-ink */
+
+  /* ---- auth-only ---- */
+  --auth-panel: #0e1b33;
+  --auth-panel-border: #1b2a44;
+  --auth-heading: #f8fafc;
+  --auth-body: #94a3b8;
+  --auth-muted: #7d8da8;
+  --auth-accent: #60a5fa;
+  --auth-glyph-bg: #2563eb33;
+  --auth-badge: #16233a;
+  --auth-badge-border: #2a3852;
+
+  /* ---- app-only ---- */
+  --primary-ink: #93c5fd;
+  --ok-ink: #4ade80;
+  --warn-ink: #ffb066;
+  --slate-ink: #b8c0cc;
+  --purple-ink: #c4b5fd;
+
+  /* ---- navigation ---- */
+  --nav-bg: #172033;
+  --nav-active: #2563eb;
+  --nav-line: #26324a;
+  --nav-chip: #1e2a44;
+  --nav-chip-line: #2a3852;
+  --nav-dim: #94a3b8;
+
+  /* ---- chart ramp, derived from the ink palette ---- */
+  --chart-1: #60a5fa;
+  --chart-2: #7dd3fc;
+  --chart-3: #4ade80;
+  --chart-4: #ffb066;
+  --chart-5: #c4b5fd;
+
+  /* ---- sidebar, derived from the navigation palette ---- */
+  --sidebar: #172033;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e2a44;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #26324a;
+  --sidebar-ring: #2563eb;
+}
+
+@theme inline {
+  /* Typography: JetBrains Mono is the primary face, Geist the secondary.
+     `--font-sans` is remapped so the body default is the primary face while
+     existing `font-sans` / `font-mono` usages keep working. */
+  --font-primary: var(--font-jetbrains-mono);
+  --font-secondary: var(--font-geist-sans);
+  --font-sans: var(--font-jetbrains-mono);
+  --font-mono: var(--font-jetbrains-mono);
+
+  /* Shared */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-danger-ink: var(--danger-ink);
+  --color-info-ink: var(--info-ink);
+
+  /* Status */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-destructive: var(--destructive);
+  --color-info: var(--info);
+
+  /* Auth-only */
+  --color-auth-panel: var(--auth-panel);
+  --color-auth-panel-border: var(--auth-panel-border);
+  --color-auth-heading: var(--auth-heading);
+  --color-auth-body: var(--auth-body);
+  --color-auth-muted: var(--auth-muted);
+  --color-auth-accent: var(--auth-accent);
+  --color-auth-glyph-bg: var(--auth-glyph-bg);
+  --color-auth-badge: var(--auth-badge);
+  --color-auth-badge-border: var(--auth-badge-border);
+
+  /* App-only */
+  --color-primary-ink: var(--primary-ink);
+  --color-ok-ink: var(--ok-ink);
+  --color-warn-ink: var(--warn-ink);
+  --color-slate-ink: var(--slate-ink);
+  --color-purple-ink: var(--purple-ink);
+
+  /* Navigation */
+  --color-nav-bg: var(--nav-bg);
+  --color-nav-active: var(--nav-active);
+  --color-nav-line: var(--nav-line);
+  --color-nav-chip: var(--nav-chip);
+  --color-nav-chip-line: var(--nav-chip-line);
+  --color-nav-dim: var(--nav-dim);
+
+  /* Chart + sidebar */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
+}
