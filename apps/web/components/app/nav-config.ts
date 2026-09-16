@@ -39,8 +39,8 @@ export const navSections: NavSection[] = [
     items: [
       { label: "Overview", icon: LayoutDashboardIcon, href: "/overview" },
       { label: "Feature Flags", icon: FlagIcon, href: "/flags" },
-      { label: "Segments", icon: LayersIcon },
-      { label: "Environments", icon: ServerIcon },
+      { label: "Segments", icon: LayersIcon, href: "/segments" },
+      { label: "Environments", icon: ServerIcon, href: "/environments" },
     ],
   },
   {

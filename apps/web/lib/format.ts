@@ -34,6 +34,22 @@ export function hoursAgo(hours: number, now: Date): string {
   return new Date(now.getTime() - hours * HOUR).toISOString();
 }
 
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+/**
+ * Format an ISO timestamp as a calendar date, e.g. `Sep 10, 2026`.
+ *
+ * Used where a relative label would be unhelpful — SDK key creation dates are
+ * quoted to an auditor, so the exact day matters.
+ */
+export function formatDate(iso: string): string {
+  return dateFormatter.format(new Date(iso));
+}
+
 const compactFormatter = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumFractionDigits: 1,

@@ -29,21 +29,39 @@ export function minLength(
     : `${label} must be at least ${length} characters.`;
 }
 
-export function isValidWorkspaceSlug(value: string): string | null {
+/**
+ * Validate a lower-case, hyphenated identifier.
+ *
+ * Shared by workspace slugs, flag keys and environment keys, which follow the
+ * same character rules but quote different minimum lengths in their messages.
+ *
+ * @param label - Noun used in the error copy, e.g. `Environment key`.
+ * @param minChars - Shortest accepted value. Environment keys can be as short
+ * as two characters (`qa`), which is shorter than a workspace slug allows.
+ */
+export function isValidSlug(
+  value: string,
+  label: string,
+  minChars = 3,
+): string | null {
   const slug = value.trim();
 
-  if (!slug) return "Workspace slug is required.";
-  if (slug.length < 3) {
-    return "Workspace slug must be at least 3 characters.";
+  if (!slug) return `${label} is required.`;
+  if (slug.length < minChars) {
+    return `${label} must be at least ${minChars} characters.`;
   }
   if (slug.length > 40) {
-    return "Workspace slug must be at most 40 characters.";
+    return `${label} must be at most 40 characters.`;
   }
   if (!WORKSPACE_SLUG_PATTERN.test(slug)) {
     return "Use lowercase letters, numbers and single hyphens only.";
   }
 
   return null;
+}
+
+export function isValidWorkspaceSlug(value: string): string | null {
+  return isValidSlug(value, "Workspace slug");
 }
 
 /**

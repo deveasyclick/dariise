@@ -1,0 +1,62 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { SegmentArchive } from "@/components/app/segments/segment-archive";
+import { SegmentDetailHeader } from "@/components/app/segments/segment-headers";
+import {
+  SegmentRuleTable,
+  SegmentUsedByFlags,
+} from "@/components/app/segments/segment-panels";
+import { SegmentLivePreview } from "@/components/app/segments/segment-preview";
+import { SegmentSummaryCard } from "@/components/app/segments/segment-summary";
+import { SegmentTabs } from "@/components/app/segments/segment-tabs";
+import { getSegment } from "@/lib/segment-data";
+
+export const dynamic = "force-dynamic";
+
+/** How many sample members the live preview shows. */
+const PREVIEW_MEMBERS = 3;
+
+export async function generateMetadata(
+  props: PageProps<"/segments/[key]">,
+): Promise<Metadata> {
+  const { key } = await props.params;
+  const segment = getSegment(key, new Date());
+
+  return {
+    title: segment ? `${segment.name} · Segments` : "Segment not found",
+    description: segment?.description,
+  };
+}
+
+/** Definition tab — the default view for a segment. */
+export default async function SegmentDefinitionPage(
+  props: PageProps<"/segments/[key]">,
+) {
+  const { key } = await props.params;
+  const segment = getSegment(key, new Date(), { memberLimit: PREVIEW_MEMBERS });
+  if (!segment) notFound();
+
+  return (
+    <>
+      <SegmentDetailHeader
+        segmentKey={segment.key}
+        name={segment.name}
+        description={segment.description}
+      />
+      <SegmentTabs segmentKey={segment.key} />
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.62fr)]">
+        <div className="space-y-4">
+          <SegmentRuleTable segment={segment} />
+          <SegmentUsedByFlags segment={segment} />
+        </div>
+
+        <div className="space-y-4">
+          <SegmentSummaryCard segment={segment} />
+          <SegmentLivePreview members={segment.members} rules={segment.rules} />
+          <SegmentArchive />
+        </div>
+      </div>
+    </>
+  );
+}
