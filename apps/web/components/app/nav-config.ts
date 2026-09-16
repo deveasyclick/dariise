@@ -1,5 +1,5 @@
 import {
-  ActivityIcon,
+  ChartColumnIcon,
   Code2Icon,
   FlagIcon,
   KeyRoundIcon,
@@ -44,10 +44,10 @@ export const navSections: NavSection[] = [
     ],
   },
   {
-    label: "Analytics",
+    label: "Insights",
     items: [
-      { label: "Activity", icon: ActivityIcon },
-      { label: "Audit Log", icon: ScrollTextIcon },
+      { label: "Analytics", icon: ChartColumnIcon, href: "/analytics" },
+      { label: "Audit Log", icon: ScrollTextIcon, href: "/audit-log" },
     ],
   },
   {

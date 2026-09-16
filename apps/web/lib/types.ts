@@ -133,6 +133,7 @@ export type AuditAction =
   | "segment.created"
   | "segment.updated"
   | "api_key.created"
+  | "api_key.rotated"
   | "api_key.revoked";
 
 export interface AuditLogEntry {
