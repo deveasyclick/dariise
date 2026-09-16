@@ -1,5 +1,7 @@
 import { API_URL } from "@/lib/env";
 import type {
+  ApiKey,
+  ApiKeyScope,
   AuditLogEntry,
   Environment,
   EvaluationResult,
@@ -214,6 +216,44 @@ export const flags = {
 export const segments = {
   list: (projectId: string, options?: RequestOptions) =>
     request<Segment[]>("GET", `/v1/projects/${projectId}/segments`, options),
+};
+
+export interface CreateApiKeyBody {
+  name: string;
+  /** `null` issues a key that is valid in every environment. */
+  environmentId: string | null;
+  scopes: ApiKeyScope[];
+  /** `null` issues a key that never expires. */
+  expiresInDays: number | null;
+}
+
+export const apiKeys = {
+  list: (projectId: string, options?: RequestOptions) =>
+    request<ApiKey[]>("GET", `/v1/projects/${projectId}/api-keys`, options),
+
+  /**
+   * Issue a key.
+   *
+   * This is the only response that carries `secret`; the dashboard shows it
+   * once and never asks for it again.
+   */
+  create: (
+    projectId: string,
+    input: CreateApiKeyBody,
+    options?: RequestOptions,
+  ) =>
+    request<ApiKey & { secret: string }>(
+      "POST",
+      `/v1/projects/${projectId}/api-keys`,
+      { ...options, body: input },
+    ),
+
+  revoke: (projectId: string, keyId: string, options?: RequestOptions) =>
+    request<void>(
+      "DELETE",
+      `/v1/projects/${projectId}/api-keys/${keyId}`,
+      options,
+    ),
 };
 
 export const audit = {

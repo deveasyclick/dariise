@@ -136,6 +136,40 @@ export type AuditAction =
   | "api_key.rotated"
   | "api_key.revoked";
 
+/**
+ * What a key is allowed to do.
+ *
+ * Scopes are `<resource>:<verb>` pairs so a key can be read-only on one resource
+ * and read-write on another. `manage` is the only verb that covers writes.
+ */
+export type ApiKeyScope =
+  | "flags:read"
+  | "flags:write"
+  | "segments:read"
+  | "webhooks:manage";
+
+/**
+ * An API key as the dashboard lists it.
+ *
+ * The secret is deliberately absent: the API returns it once, in the create
+ * response, and only ever stores a hash of it. Everything else here is
+ * non-sensitive metadata.
+ */
+export interface ApiKey {
+  id: string;
+  projectId: string;
+  /** `null` when the key is valid in every environment. */
+  environmentId: string | null;
+  name: string;
+  scopes: ApiKeyScope[];
+  /** Non-secret identifier shown in the dashboard, e.g. `ff_prod_8a2c`. */
+  prefix: string;
+  createdAt: IsoTimestamp;
+  lastUsedAt: IsoTimestamp | null;
+  expiresAt: IsoTimestamp | null;
+  revokedAt: IsoTimestamp | null;
+}
+
 export interface AuditLogEntry {
   id: string;
   projectId: string;

@@ -53,7 +53,7 @@ export const navSections: NavSection[] = [
   {
     label: "Developer",
     items: [
-      { label: "API Keys", icon: KeyRoundIcon },
+      { label: "API Keys", icon: KeyRoundIcon, href: "/api-keys" },
       { label: "SDKs", icon: Code2Icon },
       { label: "Webhooks", icon: WebhookIcon },
     ],
