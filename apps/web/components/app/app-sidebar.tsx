@@ -16,6 +16,8 @@ import type { CurrentUser } from "@/lib/dashboard-data";
 
 interface SidebarProps {
   user: CurrentUser;
+  /** Owned by the settings fixtures — see `lib/settings-data.ts`. */
+  workspaceName: string;
   environmentLabel: string;
 }
 
@@ -97,7 +99,11 @@ function UserChip({ user }: { user: CurrentUser }) {
 }
 
 /** Fixed desktop sidebar. Hidden below `lg`; `MobileNav` covers small screens. */
-export function AppSidebar({ user, environmentLabel }: SidebarProps) {
+export function AppSidebar({
+  user,
+  workspaceName,
+  environmentLabel,
+}: SidebarProps) {
   return (
     <aside className="bg-nav-bg hidden w-56 shrink-0 flex-col justify-between p-3 lg:flex">
       <div>
@@ -109,7 +115,7 @@ export function AppSidebar({ user, environmentLabel }: SidebarProps) {
         </div>
 
         <div className="bg-nav-chip border-nav-chip-line text-nav-dim mt-1 mb-4 flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11px]">
-          <span className="text-white/90">Acme Inc.</span>
+          <span className="truncate text-white/90">{workspaceName}</span>
           <span className="opacity-60">·</span>
           <span className="truncate">{environmentLabel}</span>
           <ChevronDownIcon aria-hidden="true" className="ml-auto size-3.5" />

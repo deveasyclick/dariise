@@ -6,6 +6,7 @@ import type { CurrentUser } from "@/lib/dashboard-data";
 
 interface TopbarProps {
   user: CurrentUser;
+  workspaceName: string;
   environmentLabel: string;
 }
 
@@ -16,7 +17,7 @@ interface TopbarProps {
  * Search, the environment switcher and notifications are presentational for now
  * and are marked as such rather than pretending to work.
  */
-export function Topbar({ user, environmentLabel }: TopbarProps) {
+export function Topbar({ user, workspaceName, environmentLabel }: TopbarProps) {
   return (
     <header className="bg-card flex h-12 shrink-0 items-center gap-3 border-b px-3">
       <MobileNav />
@@ -43,7 +44,7 @@ export function Topbar({ user, environmentLabel }: TopbarProps) {
           title="Project switcher — coming soon"
           className="bg-muted text-muted-foreground hidden items-center gap-2 rounded-md px-2.5 py-1.5 text-[11px] sm:flex"
         >
-          <span className="text-foreground font-medium">Acme Inc.</span>
+          <span className="text-foreground font-medium">{workspaceName}</span>
           <span className="opacity-60">·</span>
           {environmentLabel}
           <ChevronDownIcon aria-hidden="true" className="size-3.5" />
