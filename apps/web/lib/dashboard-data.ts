@@ -109,10 +109,22 @@ export interface CurrentUser {
 
 const currentUser: CurrentUser = {
   name: "Yusuf Adebayo",
-  email: "yusuf@dariise.dev",
+  // The workspace is `Acme Inc`, whose allowed email domain is `acme.io` — see
+  // `settings-data.ts` — so the signed-in user belongs to it.
+  email: "yusuf@acme.io",
   initials: "YA",
   role: "Owner",
 };
+
+/**
+ * The signed-in user.
+ *
+ * Exposed on its own because the chrome and the Profile screen need the identity
+ * without the dashboard figures that `getDashboardData` resolves.
+ */
+export function getCurrentUser(): CurrentUser {
+  return currentUser;
+}
 
 const environmentLabel = "Production";
 

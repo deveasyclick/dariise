@@ -65,6 +65,18 @@ export async function signIn(
   await simulateLatency(signal);
 }
 
+/**
+ * Sign the current user out.
+ *
+ * There is no session to end yet, so this acknowledges the round-trip and
+ * nothing else; the caller returns to the access screens. It exists here rather
+ * than as a dead control because faking this round-trip is exactly what this
+ * module is for.
+ */
+export async function signOut(signal?: AbortSignal): Promise<void> {
+  await simulateLatency(signal);
+}
+
 /** Simulates starting the OAuth handshake for a provider. */
 export async function signInWithProvider(
   _provider: OAuthProvider,

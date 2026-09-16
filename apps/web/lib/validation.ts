@@ -30,6 +30,25 @@ export function minLength(
 }
 
 /**
+ * Validate a new password.
+ *
+ * The rule the Password card states: long enough, and not letters-only or
+ * digits-only. Strength beyond that (breach lists, entropy) belongs to the API.
+ */
+export function isStrongPassword(
+  value: string,
+  label = "Password",
+): string | null {
+  if (!value) return `${label} is required.`;
+  if (value.length < 12) return `${label} must be at least 12 characters.`;
+  if (!/[A-Za-z]/.test(value) || !/\d/.test(value)) {
+    return `${label} must include both letters and numbers.`;
+  }
+
+  return null;
+}
+
+/**
  * Validate a lower-case, hyphenated identifier.
  *
  * Shared by workspace slugs, flag keys and environment keys, which follow the

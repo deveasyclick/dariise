@@ -1,6 +1,6 @@
 import { BellIcon, ChevronDownIcon, MoonIcon, SearchIcon } from "lucide-react";
+import { AccountMenu } from "@/components/app/account-menu";
 import { MobileNav } from "@/components/app/app-sidebar";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import type { CurrentUser } from "@/lib/dashboard-data";
 
@@ -65,11 +65,7 @@ export function Topbar({ user, workspaceName, environmentLabel }: TopbarProps) {
           <BellIcon aria-hidden="true" className="size-4" />
         </span>
 
-        <Avatar size="sm" title={`${user.name} — ${user.role}`}>
-          <AvatarFallback className="bg-nav-active text-[10px] text-white">
-            {user.initials}
-          </AvatarFallback>
-        </Avatar>
+        <AccountMenu user={user} />
       </div>
     </header>
   );
