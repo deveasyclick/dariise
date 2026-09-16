@@ -322,26 +322,51 @@ dariise/
 │   ├── web/
 │   │   ├── app/
 │   │   │   ├── (auth)/         # sign in, sign up, reset, create workspace
-│   │   │   ├── (app)/          # dashboard: overview and feature flags
+│   │   │   ├── (app)/          # dashboard: overview, flags, segments, environments,
+│   │   │   │                   # analytics, audit log
 │   │   │   ├── layout.tsx
 │   │   │   ├── not-found.tsx
 │   │   │   └── globals.css     # design tokens
 │   │   ├── components/
 │   │   │   ├── app/            # sidebar, topbar, dashboard cards, flags table
-│   │   │   │   └── flags/      # flag headers, tabs, create form, tab panels
+│   │   │   │   ├── flags/      # flag headers, tabs, create form, tab panels
+│   │   │   │   ├── segments/   # segment headers, tabs, list, create form
+│   │   │   │   ├── environments/ # environment headers, cards, tabs, keys, coverage
+│   │   │   │   ├── api-keys/   # key table, badges, create form, note cards
+│   │   │   │   ├── analytics/  # metric cards, evaluation chart, latency, top flags
+│   │   │   │   ├── audit-log/  # timeline, change details, filter view
+│   │   │   │   ├── settings/   # settings cards, section nav, profile, billing
+│   │   │   │   └── profile/    # personal profile, password, preferences cards
 │   │   │   ├── auth/           # auth shell, shared fields, forms
 │   │   │   ├── ui/             # shadcn/ui primitives
+│   │   │   ├── account-menu.tsx # avatar dropdown in the topbar
+│   │   │   ├── copy-button.tsx # shared copy-to-clipboard button
+│   │   │   ├── settings-card.tsx # card shared by settings and profile
+│   │   │   ├── theme-choice.tsx # shared Light/Dark/System control
 │   │   │   └── logo.tsx
 │   │   ├── lib/
+│   │   │   ├── analytics-data.ts # temporary analytics fixtures
+│   │   │   ├── api-key-data.ts # temporary API key fixtures, scopes and masking
+│   │   │   ├── api-key-stub.ts # temporary key issue stand-in + session store
 │   │   │   ├── api.ts          # typed Dariise API client
+│   │   │   ├── audit-log-data.ts # temporary audit events with derived labels
 │   │   │   ├── auth-stub.ts    # temporary stand-in until apps/api exists
+│   │   │   ├── billing-data.ts # temporary plan, usage and invoice fixtures
 │   │   │   ├── dashboard-data.ts   # temporary dashboard fixtures
+│   │   │   ├── environment-data.ts # temporary environment + flag coverage fixtures
+│   │   │   ├── environment-stub.ts # temporary environment create/settings stand-in
 │   │   │   ├── flag-detail-data.ts # temporary per-flag detail records
 │   │   │   ├── flag-stub.ts    # temporary flag create/publish stand-in
 │   │   │   ├── env.ts          # runtime configuration
-│   │   │   ├── format.ts       # relative time and number formatters
+│   │   │   ├── format.ts       # relative time, date and number formatters
+│   │   │   ├── profile-data.ts # temporary personal profile fixtures
+│   │   │   ├── profile-stub.ts # temporary profile/password/preference stand-in
+│   │   │   ├── segment-data.ts # temporary segments + sample-audience evaluator
+│   │   │   ├── segment-stub.ts # temporary segment create/archive stand-in
+│   │   │   ├── settings-data.ts # temporary workspace, security and integration fixtures
 │   │   │   ├── types.ts        # domain types shared with the API
-│   │   │   └── validation.ts   # dependency-free form validators
+│   │   │   ├── validation.ts   # dependency-free form validators
+│   │   │   └── workspace-stub.ts # temporary workspace write stand-in
 │   │   └── public/
 │   │
 │   └── api/
@@ -602,18 +627,21 @@ Secrets should never be committed to source control.
 - [x] Project setup
 - [ ] Authentication — sign in, create account, reset password, and create workspace screens are built; the API and session handling are not
 - [ ] Projects
-- [ ] Environments
+- [ ] Environments — list, create and detail screens (SDK keys, coverage, settings) are built against fixtures; SDK keys are masked sample values and nothing is wired to the API
 - [ ] Feature flag CRUD — create, detail, targeting, history and dependency screens are built against fixtures; writes are not persisted
 - [ ] Boolean flags — the create flow and configuration screens model Boolean flags; other types are selectable but not yet configurable
-- [ ] Dashboard — overview and feature flag screens are built against fixtures; not yet wired to the API
-- [ ] Audit logs
+- [ ] Dashboard — overview, feature flag, segment and environment screens are built against fixtures; not yet wired to the API
+- [ ] Audit logs — the audit log screen (filters, day-grouped timeline, change details) is built against fixtures; nothing is recorded or persisted yet
+- [ ] API keys — the list and create screens are built against fixtures, with scopes, expiration and a one-time reveal of the issued key; nothing is issued, stored or revoked
+- [ ] Settings — the workspace profile, security, integrations and billing screens are built against fixtures; nothing is saved, connected or charged, and the theme control is not wired to the tokens
+- [ ] Personal profile — the account, password, preference and notification screens plus the avatar menu are built against fixtures; signing out only returns to the access screens because there is no session
 
 ### Phase 2 — Targeting
 
 - [ ] User attributes
 - [ ] Targeting rules
 - [ ] Percentage rollouts
-- [ ] Segments
+- [ ] Segments — list, create and detail screens are built against fixtures, with member counts derived by a sample-audience evaluator; not wired to the API
 - [ ] Deterministic user bucketing
 
 ### Phase 3 — SDK & Performance
@@ -641,7 +669,7 @@ Secrets should never be committed to source control.
 - [ ] Flag evaluation metrics
 - [ ] Evaluation latency
 - [ ] Error tracking
-- [ ] Usage analytics
+- [ ] Usage analytics — the analytics screen (evaluation volume, SDK latency, per-environment split, top flags) is built against fixtures; no metrics are collected yet
 - [ ] OpenTelemetry integration
 
 ---
