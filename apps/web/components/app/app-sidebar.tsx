@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDownIcon, MenuIcon } from "lucide-react";
+import { MenuIcon, PanelLeftIcon, SettingsIcon } from "lucide-react";
 import { cn } from "cn";
 import { Logo } from "@/components/logo";
+import { EnvironmentSwitcher } from "@/components/app/environment-switcher";
 import { navSections } from "@/components/app/nav-config";
+import { ProjectSwitcher } from "@/components/app/project-switcher";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,12 +15,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { CurrentUser } from "@/lib/dashboard-data";
+import type { EnvironmentOption } from "@/lib/environment-data";
+import type { Project } from "@/lib/project-data";
 
 interface SidebarProps {
   user: CurrentUser;
-  /** Owned by the settings fixtures — see `lib/settings-data.ts`. */
-  workspaceName: string;
-  environmentLabel: string;
+  /** The project the chrome is scoped to. */
+  project: Project;
+  /** Every project in the workspace, for the switcher menu. */
+  projects: Project[];
+  /** Every environment in the project; the default is the current one. */
+  environments: EnvironmentOption[];
 }
 
 /** The shared nav list. Rendered by both the sidebar and the mobile drawer. */
@@ -46,9 +53,7 @@ function NavList() {
                     >
                       <Icon aria-hidden="true" className="size-4 shrink-0" />
                       <span className="truncate">{item.label}</span>
-                      <span className="border-nav-chip-line text-nav-dim/70 ml-auto rounded-full border px-1.5 py-px text-[9px] tracking-wide uppercase">
-                        Soon
-                      </span>
+                      <span className="sr-only">Coming soon</span>
                     </span>
                   </li>
                 );
@@ -85,15 +90,24 @@ function NavList() {
 function UserChip({ user }: { user: CurrentUser }) {
   return (
     <div className="border-nav-line flex items-center gap-2.5 border-t pt-3">
-      <span className="bg-nav-active flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white">
+      <span className="bg-nav-active flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white">
         {user.initials}
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block truncate text-[12px] font-medium text-white">
           {user.name}
         </span>
-        <span className="text-nav-dim block truncate text-[10px]">{user.role}</span>
+        <span className="text-nav-dim block truncate text-[10px]">
+          {user.email}
+        </span>
       </span>
+      <Link
+        href="/settings"
+        aria-label="Workspace settings"
+        className="text-nav-dim hover:bg-nav-chip hover:text-white flex size-7 shrink-0 items-center justify-center rounded-md transition-colors"
+      >
+        <SettingsIcon aria-hidden="true" className="size-3.5" />
+      </Link>
     </div>
   );
 }
@@ -101,27 +115,40 @@ function UserChip({ user }: { user: CurrentUser }) {
 /** Fixed desktop sidebar. Hidden below `lg`; `MobileNav` covers small screens. */
 export function AppSidebar({
   user,
-  workspaceName,
-  environmentLabel,
+  project,
+  projects,
+  environments,
 }: SidebarProps) {
   return (
     <aside className="bg-nav-bg hidden w-56 shrink-0 flex-col justify-between p-3 lg:flex">
       <div>
         <div className="flex items-center gap-2 px-1.5 py-2">
-          <Logo className="size-5 text-white" />
-          <span className="text-[13px] font-semibold tracking-tight text-white">
+          <span className="bg-nav-active flex size-7 shrink-0 items-center justify-center rounded-lg text-white">
+            <Logo className="size-4" />
+          </span>
+          <span className="text-[13px] font-semibold tracking-[0.2em] text-white uppercase">
             Dariise
+          </span>
+          <span
+            title="Collapse sidebar — coming soon"
+            aria-hidden="true"
+            className="bg-nav-chip text-nav-dim ml-auto flex size-7 shrink-0 items-center justify-center rounded-md"
+          >
+            <PanelLeftIcon className="size-3.5" />
           </span>
         </div>
 
-        <div className="bg-nav-chip border-nav-chip-line text-nav-dim mt-1 mb-4 flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11px]">
-          <span className="truncate text-white/90">{workspaceName}</span>
-          <span className="opacity-60">·</span>
-          <span className="truncate">{environmentLabel}</span>
-          <ChevronDownIcon aria-hidden="true" className="ml-auto size-3.5" />
+        <div className="mt-2">
+          <ProjectSwitcher project={project} projects={projects} />
+
+          <div className="mt-1">
+            <EnvironmentSwitcher environments={environments} />
+          </div>
         </div>
 
-        <NavList />
+        <div className="mt-5">
+          <NavList />
+        </div>
       </div>
 
       <UserChip user={user} />
@@ -159,13 +186,12 @@ export function MobileNav() {
                   <DropdownMenuItem
                     key={item.label}
                     disabled
+                    title={`${item.label} — coming soon`}
                     className="text-muted-foreground"
                   >
                     <Icon aria-hidden="true" className="size-4" />
                     {item.label}
-                    <span className="ml-auto text-[9px] tracking-wide uppercase">
-                      Soon
-                    </span>
+                    <span className="sr-only">Coming soon</span>
                   </DropdownMenuItem>
                 );
               })}

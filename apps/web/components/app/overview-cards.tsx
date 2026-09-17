@@ -1,23 +1,25 @@
+import Link from "next/link";
 import {
+  FlagIcon,
   KeyRoundIcon,
-  LayersIcon,
-  PenLineIcon,
-  ToggleRightIcon,
-  TrendingDownIcon,
-  TrendingUpIcon,
+  PercentIcon,
+  PlusIcon,
+  UsersIcon,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "cn";
-import { SectionCard } from "@/components/app/page-header";
+import { sectionActionClass, SectionCard } from "@/components/app/page-header";
 import { ProgressBar } from "@/components/app/progress-bar";
 import type {
-  ActivityKind,
   ActiveRollout,
+  ActivityKind,
   EvaluateSummary,
   FlagHealth,
   RecentActivity,
 } from "@/lib/dashboard-data";
 import { formatCompactNumber } from "@/lib/format";
+
+
 
 export function ActiveRolloutsCard({
   rollouts,
@@ -28,7 +30,9 @@ export function ActiveRolloutsCard({
     <SectionCard
       title="Active Rollouts"
       action={
-        <span className="text-muted-foreground text-[11px]">View all</span>
+        <Link href="/flags" className={sectionActionClass}>
+          View all
+        </Link>
       }
     >
       {rollouts.length === 0 ? (
@@ -36,25 +40,28 @@ export function ActiveRolloutsCard({
           No rollouts in progress.
         </p>
       ) : (
-        <ul className="space-y-3.5">
+        <ul className="space-y-4">
           {rollouts.map((rollout) => (
-            <li key={rollout.key}>
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="truncate font-mono text-[12px]">
-                  {rollout.key}
+            <li key={`${rollout.flagKey}-${rollout.environment}`}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-mono text-[12px]">
+                    {rollout.flagKey}
+                  </span>
+                  <span className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-[10px]">
+                    {rollout.environment}
+                  </span>
                 </span>
-                <span className="text-muted-foreground text-[11px] capitalize">
-                  {rollout.environment}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <ProgressBar
-                  value={rollout.percentage}
-                  label={`${rollout.key} rollout`}
-                />
-                <span className="text-muted-foreground w-8 shrink-0 text-right text-[11px]">
+                <span className="text-muted-foreground shrink-0 text-[11px]">
                   {rollout.percentage}%
                 </span>
+              </div>
+              <div className="mt-2">
+                <ProgressBar
+                  value={rollout.percentage}
+                  className="bg-primary"
+                  label={`${rollout.flagKey} rollout`}
+                />
               </div>
             </li>
           ))}
@@ -68,40 +75,32 @@ export function FlagHealthCard({ health }: { health: FlagHealth[] }) {
   return (
     <SectionCard
       title="Flag Health"
-      action={<span className="text-muted-foreground text-[11px]">Details</span>}
+      action={
+        <Link href="/environments" className={sectionActionClass}>
+          Details
+        </Link>
+      }
     >
       <ul className="space-y-4">
         {health.map((entry) => {
-          const TrendIcon = entry.delta >= 0 ? TrendingUpIcon : TrendingDownIcon;
+          const total = entry.enabled + entry.disabled;
+          const percentage =
+            total === 0 ? 0 : Math.round((entry.enabled / total) * 100);
 
           return (
             <li key={entry.environment}>
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-[12px] font-medium">
-                  {entry.environment}
-                </span>
-                <span className="text-[13px] font-semibold">
-                  {entry.percentage}%
+                <span className="text-[12px]">{entry.environment}</span>
+                <span className="text-muted-foreground text-[11px]">
+                  {entry.enabled} on · {entry.disabled} off
                 </span>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 text-[11px]",
-                    entry.delta > 0
-                      ? "text-ok-ink"
-                      : entry.delta < 0
-                        ? "text-danger-ink"
-                        : "text-muted-foreground",
-                  )}
-                >
-                  <TrendIcon aria-hidden="true" className="size-3" />
-                  {entry.delta > 0 ? "+" : ""}
-                  {entry.delta}
-                </span>
-                <span className="text-muted-foreground text-[11px]">
-                  {entry.changedFlags} of {entry.totalFlags} flags
-                </span>
+              <div className="mt-2">
+                <ProgressBar
+                  value={percentage}
+                  className="bg-success"
+                  label={`${entry.environment} flag health`}
+                />
               </div>
             </li>
           );
@@ -111,12 +110,16 @@ export function FlagHealthCard({ health }: { health: FlagHealth[] }) {
   );
 }
 
-const activityIcons: Record<ActivityKind, LucideIcon> = {
-  toggle: ToggleRightIcon,
-  rollout: TrendingUpIcon,
-  segment: LayersIcon,
-  comment: PenLineIcon,
-  key: KeyRoundIcon,
+/** Icon and tint per activity kind, matching the kind's meaning. */
+const activityPresentation: Record<
+  ActivityKind,
+  { icon: LucideIcon; tone: string }
+> = {
+  enabled: { icon: FlagIcon, tone: "bg-ok-ink/10 text-ok-ink" },
+  rollout: { icon: PercentIcon, tone: "bg-primary-ink/10 text-primary-ink" },
+  created: { icon: PlusIcon, tone: "bg-info-ink/10 text-info-ink" },
+  segment: { icon: UsersIcon, tone: "bg-purple-ink/10 text-purple-ink" },
+  key: { icon: KeyRoundIcon, tone: "bg-muted text-muted-foreground" },
 };
 
 export function RecentActivityCard({
@@ -127,19 +130,28 @@ export function RecentActivityCard({
   return (
     <SectionCard
       title="Recent Activity"
-      action={<span className="text-muted-foreground text-[11px]">View all</span>}
+      action={
+        <Link href="/audit-log" className={sectionActionClass}>
+          View all
+        </Link>
+      }
     >
       <ul className="divide-y">
         {activity.map((entry) => {
-          const Icon = activityIcons[entry.kind];
+          const { icon: Icon, tone } = activityPresentation[entry.kind];
 
           return (
             <li
               key={entry.id}
               className="flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0"
             >
-              <span className="bg-muted text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded">
-                <Icon aria-hidden="true" className="size-3" />
+              <span
+                className={cn(
+                  "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md",
+                  tone,
+                )}
+              >
+                <Icon aria-hidden="true" className="size-3.5" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-mono text-[12px]">{entry.title}</p>
@@ -163,39 +175,34 @@ export function EvaluateSummaryCard({
 }: {
   summary: EvaluateSummary;
 }) {
-  const peak = Math.max(...summary.bars, 1);
+  const latencies = [
+    { label: "p50", value: `${summary.p50Ms}ms` },
+    { label: "p95", value: `${summary.p95Ms}ms` },
+    { label: "p99", value: `${summary.p99Ms}ms` },
+  ];
 
   return (
-    <SectionCard title="Evaluation">
+    <section className="bg-card rounded-lg border p-4">
       <p className="text-2xl font-semibold tracking-tight">
-        {formatCompactNumber(summary.totalRequests)}
+        {formatCompactNumber(summary.perMinute)}
       </p>
       <p className="text-muted-foreground mt-0.5 text-[11px]">
-        Total requests · last {summary.windowHours}h
+        evaluations / minute
       </p>
 
-      {/* CSS-only bar chart — a real chart library is not justified yet. */}
-      <div
-        aria-hidden="true"
-        className="mt-4 flex h-16 items-end gap-1.5"
-      >
-        {summary.bars.map((bar, index) => (
+      <dl className="mt-4 grid grid-cols-3 gap-2">
+        {latencies.map((latency) => (
           <div
-            key={index}
-            className="bg-primary-ink/70 flex-1 rounded-sm"
-            style={{ height: `${Math.max(8, (bar / peak) * 100)}%` }}
-          />
+            key={latency.label}
+            className="bg-muted rounded-md px-2.5 py-2"
+          >
+            <dt className="text-muted-foreground text-[10px]">
+              {latency.label}
+            </dt>
+            <dd className="mt-0.5 text-[13px] font-medium">{latency.value}</dd>
+          </div>
         ))}
-      </div>
-
-      <div className="mt-4 flex items-center gap-4">
-        <span className="text-muted-foreground text-[11px]">
-          p95 <span className="text-foreground font-medium">{summary.p95Ms}ms</span>
-        </span>
-        <span className="text-muted-foreground text-[11px]">
-          p99 <span className="text-foreground font-medium">{summary.p99Ms}ms</span>
-        </span>
-      </div>
-    </SectionCard>
+      </dl>
+    </section>
   );
 }

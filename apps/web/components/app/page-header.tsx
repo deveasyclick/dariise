@@ -43,6 +43,10 @@ interface SectionCardProps {
   children: ReactNode;
 }
 
+/** Link style shared by the "View all" / "Details" actions on section cards. */
+export const sectionActionClass =
+  "text-primary text-[11px] font-medium hover:underline";
+
 /** A bordered card with a title row, used for all Overview panels. */
 export function SectionCard({
   title,

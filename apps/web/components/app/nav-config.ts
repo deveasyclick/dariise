@@ -2,11 +2,10 @@ import {
   ChartColumnIcon,
   Code2Icon,
   FlagIcon,
+  HistoryIcon,
+  HouseIcon,
   KeyRoundIcon,
   LayersIcon,
-  LayoutDashboardIcon,
-  ScrollTextIcon,
-  ServerIcon,
   SettingsIcon,
   UsersIcon,
   WebhookIcon,
@@ -18,8 +17,12 @@ import {
  *
  * Every section from the design is listed so the shell reads as a complete
  * product, but only entries with an `href` are real links. Entries without one
- * render as deliberately non-interactive, marked "Soon" — nothing in the
+ * render as deliberately non-interactive, with their state announced to
+ * assistive technology ("Coming soon") and a title on hover — nothing in the
  * sidebar leads to a route that does not exist.
+ *
+ * Environments are reached through the environment switcher in the sidebar
+ * header rather than a nav entry of their own, which is what the design shows.
  */
 export interface NavItem {
   label: string;
@@ -35,34 +38,35 @@ export interface NavSection {
 
 export const navSections: NavSection[] = [
   {
-    label: "Core",
+    label: "Overview",
+    items: [{ label: "Overview", icon: HouseIcon, href: "/overview" }],
+  },
+  {
+    label: "Configuration",
     items: [
-      { label: "Overview", icon: LayoutDashboardIcon, href: "/overview" },
       { label: "Feature Flags", icon: FlagIcon, href: "/flags" },
       { label: "Segments", icon: LayersIcon, href: "/segments" },
-      { label: "Environments", icon: ServerIcon, href: "/environments" },
     ],
   },
   {
-    label: "Insights",
+    label: "Management",
     items: [
-      { label: "Analytics", icon: ChartColumnIcon, href: "/analytics" },
-      { label: "Audit Log", icon: ScrollTextIcon, href: "/audit-log" },
+      { label: "API Keys", icon: KeyRoundIcon, href: "/api-keys" },
+      { label: "Webhooks", icon: WebhookIcon },
+      { label: "Audit Log", icon: HistoryIcon, href: "/audit-log" },
+      { label: "Team", icon: UsersIcon },
     ],
   },
   {
     label: "Developer",
-    items: [
-      { label: "API Keys", icon: KeyRoundIcon, href: "/api-keys" },
-      { label: "SDKs", icon: Code2Icon },
-      { label: "Webhooks", icon: WebhookIcon },
-    ],
+    items: [{ label: "SDKs", icon: Code2Icon }],
   },
   {
-    label: "Admin",
-    items: [
-      { label: "Settings", icon: SettingsIcon, href: "/settings" },
-      { label: "Team", icon: UsersIcon },
-    ],
+    label: "Insights",
+    items: [{ label: "Analytics", icon: ChartColumnIcon, href: "/analytics" }],
+  },
+  {
+    label: "Settings",
+    items: [{ label: "Settings", icon: SettingsIcon, href: "/settings" }],
   },
 ];

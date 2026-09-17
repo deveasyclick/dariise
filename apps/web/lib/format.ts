@@ -60,12 +60,6 @@ export function formatCompactNumber(value: number): string {
   return compactFormatter.format(value);
 }
 
-/** `+3` / `-3` / `No change`. */
-export function formatDelta(delta: number): string {
-  if (delta === 0) return "No change";
-  return `${delta > 0 ? "+" : ""}${delta} this week`;
-}
-
 const integerFormatter = new Intl.NumberFormat("en-US");
 
 /** Group a whole number, e.g. `128,940`. */

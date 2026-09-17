@@ -36,21 +36,25 @@ export interface DashboardFlag {
 }
 
 export interface ActiveRollout {
-  key: string;
+  /** Flag key the rollout belongs to. */
+  flagKey: string;
   environment: string;
   percentage: number;
 }
 
+/** A flag's on/off split in one environment, as the health panel shows it. */
 export interface FlagHealth {
   environment: string;
-  percentage: number;
-  /** Change over the last 7 days, in percentage points. */
-  delta: number;
-  changedFlags: number;
-  totalFlags: number;
+  enabled: number;
+  disabled: number;
 }
 
-export type ActivityKind = "toggle" | "rollout" | "segment" | "comment" | "key";
+export type ActivityKind =
+  | "enabled"
+  | "rollout"
+  | "created"
+  | "segment"
+  | "key";
 
 /** An activity entry as stored in the fixtures, before its label is derived. */
 export interface RecentActivitySeed {
@@ -58,35 +62,37 @@ export interface RecentActivitySeed {
   kind: ActivityKind;
   title: string;
   description: string;
+  /** Whole minutes since the change, on top of `ageHours` and `ageDays`. */
+  ageMinutes?: number;
   /** Whole hours since the change. */
   ageHours: number;
   /** Whole days since the change; added to `ageHours` when resolving. */
-  ageDays: number;
+  ageDays?: number;
   actor: string | null;
 }
 
 /** An activity entry as rendered, with its relative label resolved. */
-export interface RecentActivity extends Omit<RecentActivitySeed, "ageHours" | "ageDays"> {
+export interface RecentActivity
+  extends Omit<RecentActivitySeed, "ageMinutes" | "ageHours" | "ageDays"> {
   ageLabel: string;
 }
 
 export interface EvaluateSummary {
-  totalRequests: number;
-  windowHours: number;
+  /** Evaluations per minute over the window the card quotes. */
+  perMinute: number;
+  p50Ms: number;
   p95Ms: number;
   p99Ms: number;
-  bars: number[];
 }
 
+export type HeroStatId = "total" | "enabled" | "scheduled" | "stale";
+
 export interface HeroStat {
-  id: string;
+  id: HeroStatId;
   label: string;
   value: number;
-  /** Change over the last 7 days. */
-  delta: number;
-  /** Whether a rising number is good. A rise in "Stale" is not. */
-  positiveIsGood: boolean;
-  footnote?: string;
+  /** Note shown beside the icon, e.g. `+3 this week` or `next: Sep 28`. */
+  note: string;
 }
 
 export interface DashboardData {
@@ -239,85 +245,81 @@ const flags: DashboardFlag[] = [
   },
 ];
 
+/**
+ * Active rollouts, as the Overview panel lists them.
+ *
+ * Deliberately its own fixture rather than a projection of `flags`: the design's
+ * rollout percentages (and the environments they sit in) are stated per rollout,
+ * and a flag can be fully released in one environment while still ramping in
+ * another.
+ */
+const activeRollouts: ActiveRollout[] = [
+  { flagKey: "new-dashboard", environment: "Production", percentage: 50 },
+  { flagKey: "search-ranking", environment: "Production", percentage: 25 },
+  { flagKey: "ai-summaries", environment: "Staging", percentage: 10 },
+];
+
 /** Flag health per environment, as shown on the Overview screen. */
 const flagHealthSeed: FlagHealth[] = [
-  {
-    environment: "Production",
-    percentage: 50,
-    delta: 1,
-    changedFlags: 21,
-    totalFlags: 42,
-  },
-  {
-    environment: "Staging",
-    percentage: 26,
-    delta: -3,
-    changedFlags: 6,
-    totalFlags: 24,
-  },
-  {
-    environment: "Development",
-    percentage: 10,
-    delta: 7,
-    changedFlags: 2,
-    totalFlags: 24,
-  },
+  { environment: "Production", enabled: 31, disabled: 6 },
+  { environment: "Staging", enabled: 17, disabled: 2 },
+  { environment: "Development", enabled: 40, disabled: 0 },
 ];
 
 const recentActivity: RecentActivitySeed[] = [
   {
     id: "act_1",
-    kind: "toggle",
+    kind: "enabled",
     title: "checkout-v2",
-    description: "Enabled for all traffic",
-    ageHours: 2,
-    ageDays: 0,
-    actor: "Zainab",
+    description: "enabled in Production by Yusuf",
+    ageHours: 0,
+    ageMinutes: 2,
+    actor: "Yusuf",
   },
   {
     id: "act_2",
     kind: "rollout",
     title: "new-dashboard",
-    description: "Rollout increased from 25% to 50%",
-    ageHours: 6,
-    ageDays: 0,
+    description: "rollout changed 25% → 50%",
+    ageHours: 0,
+    ageMinutes: 18,
     actor: "Daniel",
   },
   {
     id: "act_3",
-    kind: "toggle",
+    kind: "created",
     title: "dark-mode",
-    description: "Killed by Daniel",
-    ageHours: 18,
-    ageDays: 0,
-    actor: "Daniel",
+    description: "created by Sarah Chen",
+    ageHours: 1,
+    ageMinutes: 0,
+    actor: "Sarah Chen",
   },
   {
     id: "act_4",
     kind: "segment",
     title: "beta-users",
-    description: "Segment rules updated",
-    ageHours: 0,
-    ageDays: 1,
+    description: "segment rules updated",
+    ageHours: 3,
+    ageMinutes: 0,
     actor: "Priya",
   },
   {
     id: "act_5",
     kind: "key",
-    title: "prod-server-key",
+    title: "ff_prod_8a2c",
     description: "Production SDK key rotated",
     ageHours: 0,
-    ageDays: 2,
+    ageDays: 1,
+    ageMinutes: 0,
     actor: "Tunde",
   },
 ];
 
 const evaluateSummary: EvaluateSummary = {
-  totalRequests: 182_000,
-  windowHours: 24,
-  p95Ms: 4,
-  p99Ms: 11,
-  bars: [38, 52, 44, 61, 57, 72, 66, 81, 74, 88, 79, 93],
+  perMinute: 182_000,
+  p50Ms: 4,
+  p95Ms: 11,
+  p99Ms: 24,
 };
 
 const heroStats: HeroStat[] = [
@@ -325,25 +327,21 @@ const heroStats: HeroStat[] = [
     id: "total",
     label: "Total Flags",
     value: 42,
-    delta: 3,
-    positiveIsGood: true,
-    footnote: "12 need attention",
+    note: "+3 this week",
   },
   {
-    id: "evaluated",
-    label: "Evaluated",
+    id: "enabled",
+    label: "Enabled",
     value: 31,
-    delta: 5,
-    positiveIsGood: true,
+    note: "+5 vs last week",
   },
   {
     id: "scheduled",
     label: "Scheduled",
     value: 8,
-    delta: 0,
-    positiveIsGood: true,
+    note: "next: Sep 28",
   },
-  { id: "stale", label: "Stale", value: 3, delta: 0, positiveIsGood: false },
+  { id: "stale", label: "Stale", value: 3, note: "no eval. in 30d" },
 ];
 
 /**
@@ -366,18 +364,17 @@ export function getFlagSummary(key: string): DashboardFlag | null {
 export function getDashboardData(now: Date): DashboardData {
   return {
     stats: heroStats,
-    activeRollouts: flags
-      .filter((flag) => flag.status === "rollout")
-      .map((flag) => ({
-        key: flag.key,
-        environment: flag.environment,
-        percentage: flag.rolloutPercentage,
-      })),
+    activeRollouts,
     flagHealth: flagHealthSeed,
     recentActivity: recentActivity.map((entry) => ({
       ...entry,
       ageLabel: formatRelativeTime(
-        hoursAgo(entry.ageHours + entry.ageDays * 24, now),
+        hoursAgo(
+          (entry.ageDays ?? 0) * 24 +
+            entry.ageHours +
+            (entry.ageMinutes ?? 0) / 60,
+          now,
+        ),
         now,
       ),
     })),
