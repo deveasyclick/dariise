@@ -59,7 +59,7 @@ export const navSections: NavSection[] = [
   },
   {
     label: "Developer",
-    items: [{ label: "SDKs", icon: Code2Icon }],
+    items: [{ label: "SDKs", icon: Code2Icon, href: "/sdks" }],
   },
   {
     label: "Insights",

@@ -30,6 +30,8 @@ interface CopyButtonProps {
   label: string;
   /** Render a labelled button instead of the icon-only default. */
   labelled?: boolean;
+  /** Button variant used when `labelled`, e.g. `ghost` for a code block. */
+  variant?: React.ComponentProps<typeof Button>["variant"];
   className?: string;
 }
 
@@ -43,6 +45,7 @@ export function CopyButton({
   value,
   label,
   labelled = false,
+  variant,
   className,
 }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
@@ -69,6 +72,7 @@ export function CopyButton({
     return (
       <Button
         type="button"
+        variant={variant ?? "default"}
         size="sm"
         onClick={handleCopy}
         className={cn("gap-1.5 text-[11px]", className)}
