@@ -47,7 +47,13 @@ second one and points at the existing server instead.
 | `/sign-up` | Create account | `(auth)` |
 | `/forgot-password` | Reset password | `(auth)` |
 | `/create-workspace` | Create workspace | `(auth)` |
+| `/create-project` | Create project | `(getting-started)` |
 | `/overview` | Dashboard overview | `(app)` |
+| `/projects` | Projects list | `(app)` |
+| `/projects/new` | Create a project | `(app)` |
+| `/projects/[key]` | Project detail — Environments | `(app)` |
+| `/projects/[key]/flags` | Project detail — Flags | `(app)` |
+| `/projects/[key]/members` | Project detail — Members | `(app)` |
 | `/flags` | Feature flags | `(app)` |
 | `/flags/new` | Create a flag | `(app)` |
 | `/flags/[key]` | Flag detail — Configuration | `(app)` |
@@ -66,6 +72,7 @@ second one and points at the existing server instead.
 | `/environments/[key]/settings` | Environment detail — Settings | `(app)` |
 | `/api-keys` | API keys list | `(app)` |
 | `/api-keys/new` | Create an API key | `(app)` |
+| `/sdks` | SDKs & Integration | `(app)` |
 | `/analytics` | Analytics | `(app)` |
 | `/audit-log` | Audit log | `(app)` |
 | `/settings` | Settings — General | `(app)` |
@@ -74,16 +81,21 @@ second one and points at the existing server instead.
 | `/settings/billing` | Settings — Billing | `(app)` |
 | `/profile` | Personal profile | `(app)` |
 
-Both groups are route groups, so their names never appear in a URL.
-`app/layout.tsx` remains the only root layout.
+`(auth)` and `(getting-started)` share one two-column brand/form shell
+(`AuthShell`) but not its copy: `(auth)` holds the access screens and the
+create-workspace step, while `(getting-started)` holds the create-project step,
+whose brand panel welcomes the user instead of pitching the product. `(app)`
+shares the application shell — fixed sidebar, topbar, and a scrolling content
+area — and is rendered per request so the dashboard figures and relative
+timestamps stay current.
 
-`(auth)` shares a two-column brand/form shell. `(app)` shares the application
-shell — fixed sidebar, topbar, and a scrolling content area — and is rendered per
-request so the dashboard figures and relative timestamps stay current.
+Route groups never appear in a URL, and `app/layout.tsx` remains the only root
+layout.
 
-The flag, segment and environment detail tabs are `<Link>`s rather than tab
-state, so each one is a real, addressable route. Configuration, Definition and
-SDK keys are the bare `/[key]` routes, matching each design's default tab. An
+The flag, segment, environment and project detail tabs are `<Link>`s rather
+than tab state, so each one is a real, addressable route. Configuration,
+Definition, SDK keys and Environments are the bare `/[key]` routes, matching
+each design's default tab. An
 unknown key calls `notFound()`.
 
 The Settings sections follow the same rule: `app/(app)/settings/layout.tsx`
@@ -94,24 +106,30 @@ and Billing are four routes underneath it. `/settings` is General.
 
 ```text
 app/(auth)/             # Sign in, sign up, reset, create workspace
-app/(app)/              # Dashboard: overview, flags, segments, environments,
-                        # api keys, analytics, audit log, settings
+app/(getting-started)/  # Create project (last onboarding step)
+app/(app)/              # Dashboard: overview, projects, flags, segments,
+                        # environments, api keys, analytics, audit log, settings
 app/layout.tsx          # Root layout: fonts, metadata, globals.css
 app/globals.css         # Design tokens (see below)
-components/app/         # Sidebar, topbar, nav config, dashboard cards, table
+components/app/         # Sidebar, project switcher, topbar, nav config, dashboard cards, table
+components/app/projects/ # Project headers, tabs, cards, glyph map, create form
 components/app/flags/   # Flag headers, tabs, create form, tab panels
 components/app/segments/# Segment headers, tabs, list, create form, tab panels
 components/app/environments/ # Environment headers, cards, tabs, keys, coverage
 components/app/api-keys/ # Key table, badges, create form and its note cards
 components/app/analytics/ # Metric cards, evaluation chart, latency, top flags
 components/app/audit-log/ # Timeline, change details and the filter view
+components/app/sdks/    # SDK picker, connection panel, resources card
 components/app/settings/ # Settings cards, section nav, profile, security, billing
 components/app/profile/ # Personal profile, password and preference cards
 components/app/account-menu.tsx # avatar dropdown in the topbar
 components/app/copy-button.tsx # shared copy-to-clipboard button
+components/app/environment-switcher.tsx # environment menu in the sidebar header
+components/app/health-badge.tsx # health pill shared by environments and projects
+components/app/project-switcher.tsx # project menu in the sidebar header
 components/app/settings-card.tsx # card shared by Settings and Profile
 components/app/theme-choice.tsx # shared Light/Dark/System control
-components/auth/        # Auth shell, shared fields, and the four forms
+components/auth/        # Auth shell, shared fields, step path, and the five forms
 components/ui/          # shadcn/ui primitives
 components/logo.tsx     # brand mark
 lib/analytics-data.ts   # temporary analytics fixtures (no backend yet)
@@ -128,8 +146,12 @@ lib/env.ts              # runtime configuration
 lib/flag-detail-data.ts # temporary per-flag detail records
 lib/flag-stub.ts        # temporary flag create/publish stand-in
 lib/format.ts           # relative time, date and number formatters
+lib/onboarding-data.ts  # temporary data-region options for onboarding
+lib/project-data.ts     # temporary projects, environments and flags (no backend)
+lib/project-stub.ts     # temporary project create stand-in (no backend yet)
 lib/profile-data.ts     # temporary personal profile fixtures
 lib/profile-stub.ts     # temporary profile/password/preference stand-in
+lib/sdk-data.ts         # temporary SDK snippets and evaluation scopes
 lib/segment-data.ts     # temporary segments plus the sample-audience evaluator
 lib/segment-stub.ts     # temporary segment create/archive stand-in
 lib/settings-data.ts    # temporary workspace, security and integration fixtures
@@ -142,8 +164,21 @@ lib/workspace-stub.ts   # temporary workspace write stand-in
 
 `components/app/nav-config.ts` lists every section from the design, but only an
 entry with an `href` is a real link. Entries without one render as
-non-interactive and marked **Soon** — nothing in the sidebar leads to a route
-that does not exist. To light one up, build the screen and add its `href`.
+non-interactive, dimmed, and announced to assistive technology as **Coming
+soon** — nothing in the sidebar leads to a route that does not exist. To light
+one up, build the screen and add its `href`.
+
+The sidebar header holds two switchers: the project switcher
+(`components/app/project-switcher.tsx`, fed by `lib/project-data.ts`) and the
+environment switcher (`components/app/environment-switcher.tsx`, fed by
+`lib/environment-data.ts`), which is what the design shows instead of a
+workspace name. Their rows are selectors — neither context can actually change
+until the API exists, so the rows are disabled with a title — while the footer
+actions navigate to the screens that exist: Create environment
+(`/environments/new`), Manage environments (`/environments`), Create project
+(`/projects/new`) and Manage projects (`/projects`). Environments are therefore
+reached through that switcher and the `/environments` route rather than a nav
+entry.
 
 ## Design tokens
 
@@ -181,7 +216,11 @@ Configuration is read in `lib/env.ts`. Only variables prefixed with
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Base URL of the Dariise API. Required for production builds. |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:4000` | Base URL of the Dariise API, as reached from the browser. Required for production builds. |
+| `API_INTERNAL_URL` | `http://localhost:4000` | Server-only. Used by Server Components to call the API without a round trip through the public origin. |
+
+See `docs/backend-proposal.md` for the intended cookie and origin setup: the API is
+proxied under the web origin so the session cookie stays first-party.
 
 ## Notes
 
@@ -190,10 +229,20 @@ Configuration is read in `lib/env.ts`. Only variables prefixed with
   the account menu, the flags table (for search and filtering), the audit log view
   (for search, filtering and row selection) and the API key table (for row menus
   and the session's newly issued key).
-- `lib/api.ts` is a library only — no page calls it yet.
+- `lib/api.ts` is a library only — **no page calls it yet**. `apps/api` does not
+  exist, so every screen still reads a `lib/*-data.ts` fixture module and every
+  write goes through a `lib/*-stub.ts` stand-in. Its flag routes are also stale:
+  they bind a flag to one environment, while `lib/project-data.ts` and the
+  project screens treat a flag as project-scoped with per-environment
+  configuration. `docs/backend-proposal.md` §8 supersedes those routes; do not
+  treat the current `/v1/.../environments/:environmentId/flags` shape as the
+  target contract.
 - `lib/auth-stub.ts` fakes the round-trip to the API so the forms' pending and
   success states are real. Nothing is persisted, no session exists, and no route
   is protected. It is the single swap point once `apps/api` lands.
+- `lib/project-stub.ts` does the same for project creation, including the
+  onboarding step's reduced form. `lib/onboarding-data.ts` supplies the
+  data-region options that step offers; the region is chosen but not stored.
 - `lib/dashboard-data.ts` holds the dashboard fixtures, shaped like the API
   responses. `getDashboardData(now)` takes the current instant so relative
   timestamps are derived rather than stored, which keeps server output and
@@ -245,10 +294,12 @@ Configuration is read in `lib/env.ts`. Only variables prefixed with
   SDK key chips and the API key screens both use it; the menu item that cannot be
   a button calls its `writeToClipboard` helper directly.
 - `lib/settings-data.ts` holds the workspace, security and integration fixtures.
-  The workspace name is owned here rather than in the chrome: `app/(app)/layout.tsx`
-  passes it to the sidebar and topbar, so the General tab and the chip in the
-  corner cannot disagree. The workspace URL is a projection of the immutable slug
-  rather than a second stored value.
+  The workspace name is read by the Settings → General tab and the account card on
+  the Profile screen; it is deliberately **not** shown in the chrome, which is
+  scoped to a project and an environment instead. The workspace URL is a
+  projection of the immutable slug rather than a second stored value — note that
+  with projects in the model, a slug and a project key must be unique *per
+  workspace*, not globally.
 - `lib/billing-data.ts` derives the renewal and invoice dates from a caller-supplied
   `now` (next month, and this month plus the two before it), so the Billing tab
   never goes stale, and reads the environment count from `environment-data.ts` so

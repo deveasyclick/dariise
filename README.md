@@ -83,7 +83,8 @@ This makes it easier to release features safely, test changes with smaller group
                                     │
                                     ▼
                          ┌──────────────────────┐
-                         │       FastAPI        │
+                         │  Hono 4 on Node.js   │
+                         │   modular monolith   │
                          │                      │
                          │  Projects            │
                          │  Environments        │
@@ -290,20 +291,20 @@ Response:
 
 ### Backend
 
-- Python
-- FastAPI
-- Pydantic
-- SQLAlchemy
-- Alembic
+- Node.js
+- TypeScript
+- Hono 4
+- Drizzle ORM
+- Better Auth
 
 ### Data
 
-- PostgreSQL
-- Redis
+- PostgreSQL — the source of truth
+- Redis — configuration cache only, never on the critical path
 
 ### Testing
 
-- pytest
+- Vitest
 - API integration tests
 
 ### Infrastructure
@@ -322,6 +323,7 @@ dariise/
 │   ├── web/
 │   │   ├── app/
 │   │   │   ├── (auth)/         # sign in, sign up, reset, create workspace
+│   │   │   ├── (getting-started)/ # create project (last onboarding step)
 │   │   │   ├── (app)/          # dashboard: overview, flags, segments, environments,
 │   │   │   │                   # analytics, audit log
 │   │   │   ├── layout.tsx
@@ -330,17 +332,20 @@ dariise/
 │   │   ├── components/
 │   │   │   ├── app/            # sidebar, topbar, dashboard cards, flags table
 │   │   │   │   ├── flags/      # flag headers, tabs, create form, tab panels
+│   │   │   │   ├── projects/   # project headers, tabs, cards, actions menu
 │   │   │   │   ├── segments/   # segment headers, tabs, list, create form
 │   │   │   │   ├── environments/ # environment headers, cards, tabs, keys, coverage
 │   │   │   │   ├── api-keys/   # key table, badges, create form, note cards
 │   │   │   │   ├── analytics/  # metric cards, evaluation chart, latency, top flags
 │   │   │   │   ├── audit-log/  # timeline, change details, filter view
+│   │   │   │   ├── sdks/       # SDK picker, connection panel, resources card
 │   │   │   │   ├── settings/   # settings cards, section nav, profile, billing
 │   │   │   │   └── profile/    # personal profile, password, preferences cards
-│   │   │   ├── auth/           # auth shell, shared fields, forms
+│   │   │   ├── auth/           # auth shell, step path, shared fields, forms
 │   │   │   ├── ui/             # shadcn/ui primitives
 │   │   │   ├── account-menu.tsx # avatar dropdown in the topbar
 │   │   │   ├── copy-button.tsx # shared copy-to-clipboard button
+│   │   │   ├── health-badge.tsx # health pill shared by environments and projects
 │   │   │   ├── settings-card.tsx # card shared by settings and profile
 │   │   │   ├── theme-choice.tsx # shared Light/Dark/System control
 │   │   │   └── logo.tsx
@@ -359,8 +364,12 @@ dariise/
 │   │   │   ├── flag-stub.ts    # temporary flag create/publish stand-in
 │   │   │   ├── env.ts          # runtime configuration
 │   │   │   ├── format.ts       # relative time, date and number formatters
+│   │   │   ├── onboarding-data.ts # temporary data-region options for onboarding
 │   │   │   ├── profile-data.ts # temporary personal profile fixtures
 │   │   │   ├── profile-stub.ts # temporary profile/password/preference stand-in
+│   │   │   ├── project-data.ts # temporary projects, environments and flags
+│   │   │   ├── project-stub.ts # temporary project create stand-in
+│   │   │   ├── sdk-data.ts     # temporary SDK snippets and evaluation scopes
 │   │   │   ├── segment-data.ts # temporary segments + sample-audience evaluator
 │   │   │   ├── segment-stub.ts # temporary segment create/archive stand-in
 │   │   │   ├── settings-data.ts # temporary workspace, security and integration fixtures
@@ -370,26 +379,30 @@ dariise/
 │   │   └── public/
 │   │
 │   └── api/
-│       ├── app/
-│       │   ├── api/
-│       │   ├── core/
-│       │   ├── models/
-│       │   ├── schemas/
-│       │   ├── services/
-│       │   ├── repositories/
-│       │   └── evaluation/
+│       ├── src/
+│       │   ├── modules/       # workspace, projects, project-members,
+│       │   │                  # environments, flags, segments, api-keys,
+│       │   │                  # audit-log, analytics, evaluation
+│       │   │   └── <module>/  # routes, validator, service, repository,
+│       │   │                  # mapper, errors, index
+│       │   ├── shared/        # config, db, cache, errors, logger, middleware
+│       │   ├── auth.ts        # Better Auth instance
+│       │   ├── app.ts         # Hono app composition
+│       │   └── server.ts      # process entry point
 │       │
+│       ├── drizzle/           # generated SQL migrations
 │       └── tests/
 │
 ├── packages/
-│   └── sdk/
+│   └── contracts/             # zod schemas + inferred types shared with apps/web
 │
-├── migrations/
+├── docs/
+│   ├── backend-proposal.md
+│   └── adr/
 │
 ├── docker-compose.yml
 ├── package.json
 ├── pnpm-workspace.yaml
-├── .env.example
 └── README.md
 ```
 
@@ -403,7 +416,6 @@ Make sure you have:
 
 - Node.js 24+
 - pnpm 10+
-- Python 3.12+
 - PostgreSQL 17+
 - Redis 8+
 - Docker
@@ -424,62 +436,41 @@ docker compose up -d postgres redis
 
 ### Backend
 
-Create a virtual environment:
+`apps/api` is part of the same pnpm workspace, so its dependencies are installed
+from the repository root:
 
 ```bash
-cd apps/api
-
-python -m venv .venv
-```
-
-Activate it:
-
-**macOS/Linux**
-
-```bash
-source .venv/bin/activate
-```
-
-**Windows**
-
-```bash
-.venv\Scripts\activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
+pnpm install
 ```
 
 Create your environment file:
 
 ```bash
-cp .env.example .env
+cp apps/api/.env.example apps/api/.env
 ```
 
 Run migrations:
 
 ```bash
-alembic upgrade head
+pnpm --filter api db:migrate
 ```
 
 Start the API:
 
 ```bash
-uvicorn app.main:app --reload
+pnpm --filter api dev
 ```
 
 The API will be available at:
 
 ```text
-http://localhost:8000
+http://localhost:4000
 ```
 
-API documentation:
+The OpenAPI document is served at:
 
 ```text
-http://localhost:8000/docs
+http://localhost:4000/v1/openapi.json
 ```
 
 ### Frontend
@@ -524,11 +515,13 @@ pnpm typecheck    # tsc --noEmit
 Backend (`apps/api/.env`):
 
 ```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/dariise
+DATABASE_URL=postgresql://postgres:postgres@localhost:5442/dariise
 
-REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://localhost:6389
 
-SECRET_KEY=your-secret-key
+BETTER_AUTH_SECRET=your-secret-key
+
+BETTER_AUTH_URL=http://localhost:4000
 
 CORS_ORIGINS=http://localhost:3000
 ```
@@ -536,11 +529,14 @@ CORS_ORIGINS=http://localhost:3000
 Frontend (`apps/web/.env.local`):
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:4000
+
+API_INTERNAL_URL=http://localhost:4000
 ```
 
 See `apps/web/.env.example`. Only `NEXT_PUBLIC_` variables are exposed to the
-browser.
+browser. `API_INTERNAL_URL` is server-only and is used by Server Components, which
+call the API directly rather than through the browser.
 
 ---
 
@@ -625,12 +621,12 @@ Secrets should never be committed to source control.
 ### Phase 1 — Core
 
 - [x] Project setup
-- [ ] Authentication — sign in, create account, reset password, and create workspace screens are built; the API and session handling are not
-- [ ] Projects
+- [ ] Authentication — sign in, create account, reset password, create workspace and create project screens are built as one three-step onboarding flow; the API and session handling are not
+- [ ] Projects — the onboarding step and the dashboard's create-project screen both name a project, and the projects list plus each project's Environments, Flags and Members screens are built against fixtures; nothing is saved, renamed, archived or switched
 - [ ] Environments — list, create and detail screens (SDK keys, coverage, settings) are built against fixtures; SDK keys are masked sample values and nothing is wired to the API
 - [ ] Feature flag CRUD — create, detail, targeting, history and dependency screens are built against fixtures; writes are not persisted
 - [ ] Boolean flags — the create flow and configuration screens model Boolean flags; other types are selectable but not yet configurable
-- [ ] Dashboard — overview, feature flag, segment and environment screens are built against fixtures; not yet wired to the API
+- [ ] Dashboard — the overview screen (stat cards, active rollouts, flag health, recent activity, evaluation latency) and the feature flag, segment and environment screens are built against fixtures; not yet wired to the API
 - [ ] Audit logs — the audit log screen (filters, day-grouped timeline, change details) is built against fixtures; nothing is recorded or persisted yet
 - [ ] API keys — the list and create screens are built against fixtures, with scopes, expiration and a one-time reveal of the issued key; nothing is issued, stored or revoked
 - [ ] Settings — the workspace profile, security, integrations and billing screens are built against fixtures; nothing is saved, connected or charged, and the theme control is not wired to the tokens
@@ -646,7 +642,7 @@ Secrets should never be committed to source control.
 
 ### Phase 3 — SDK & Performance
 
-- [ ] JavaScript/TypeScript SDK
+- [ ] JavaScript/TypeScript SDK — the SDKs & Integration screen documents install, initialize and evaluate snippets for eight SDKs against fixtures; no SDK package is published yet
 - [ ] Python SDK
 - [ ] Go SDK
 - [ ] Local caching
