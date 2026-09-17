@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { AlertCircleIcon, EyeIcon, EyeOffIcon } from "lucide-react";
+import { cn } from "cn";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -10,6 +11,8 @@ interface FieldProps extends Omit<React.ComponentProps<"input">, "id"> {
   label: string;
   /** Rendered on the right-hand side of the label row, e.g. a link. */
   labelSuffix?: ReactNode;
+  /** Explanatory copy shown under the control, e.g. how the value is used. */
+  hint?: ReactNode;
   error?: string | null;
 }
 
@@ -23,6 +26,7 @@ export function Field({
   id,
   label,
   labelSuffix,
+  hint,
   error,
   className,
   ...props
@@ -42,9 +46,69 @@ export function Field({
         className={className}
         {...props}
       />
+      {hint ? <FieldHint>{hint}</FieldHint> : null}
       {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </div>
   );
+}
+
+interface PrefixedFieldProps extends Omit<React.ComponentProps<"input">, "id"> {
+  id: string;
+  label: string;
+  /** Static text shown inside the field, before the value, e.g. `acme.dev/`. */
+  prefix: string;
+  hint?: ReactNode;
+  error?: string | null;
+}
+
+/**
+ * Input whose value is completed by a fixed prefix.
+ *
+ * The prefix is a static part of the address rather than an editable value, so
+ * it sits inside the same border as the input and is never submitted.
+ */
+export function PrefixedField({
+  id,
+  label,
+  prefix,
+  hint,
+  error,
+  className,
+  ...props
+}: PrefixedFieldProps) {
+  const errorId = `${id}-error`;
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <div
+        className={cn(
+          "flex h-8 w-full min-w-0 items-center rounded-lg border border-input bg-transparent px-2.5 text-base transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 md:text-sm dark:bg-input/30",
+          error &&
+            "border-destructive ring-3 ring-destructive/20 dark:border-destructive/50 dark:ring-destructive/40",
+          className,
+        )}
+      >
+        <span className="text-muted-foreground shrink-0 select-none">
+          {prefix}
+        </span>
+        <input
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          className="placeholder:text-muted-foreground h-full min-w-0 flex-1 bg-transparent outline-none disabled:pointer-events-none disabled:cursor-not-allowed"
+          {...props}
+        />
+      </div>
+      {hint ? <FieldHint>{hint}</FieldHint> : null}
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
+    </div>
+  );
+}
+
+/** Explanatory copy shown under a control. */
+export function FieldHint({ children }: { children: ReactNode }) {
+  return <p className="text-muted-foreground text-xs leading-5">{children}</p>;
 }
 
 interface FieldErrorProps {

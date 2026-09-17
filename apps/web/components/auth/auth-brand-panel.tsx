@@ -1,12 +1,43 @@
-import Link from "next/link";
-import { CheckIcon, GlobeIcon, MoonIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { Logo } from "@/components/logo";
 
 const highlights = [
   "Progressive rollouts and instant kill switches",
   "Audit-ready history for every flag change",
-  "SDKs for many languages and runtimes",
+  "SDKs for every language and runtime",
 ] as const;
+
+/** Compliance badges shown next to the copyright in the panel footer. */
+const complianceBadges = ["SOC 2", "GDPR"] as const;
+
+export type AuthPanelVariant = "product" | "getting-started";
+
+interface PanelCopy {
+  eyebrow: string;
+  heading: string;
+  body: string;
+}
+
+const panelCopy: Record<AuthPanelVariant, PanelCopy> = {
+  product: {
+    eyebrow: "Feature management",
+    heading: "Ship features with confidence.",
+    body: "Give your team fine-grained control over every release — no redeploys, no guesswork.",
+  },
+  "getting-started": {
+    eyebrow: "Getting started",
+    heading: "Welcome to Dariise.",
+    body: "Let's set up your first project — one project, one environment, and you're ready to ship.",
+  },
+};
+
+interface AuthBrandPanelProps {
+  /**
+   * Which copy the panel shows. The last onboarding step welcomes the user to
+   * the product instead of pitching it; every other screen keeps the pitch.
+   */
+  variant?: AuthPanelVariant;
+}
 
 /**
  * The branding panel shown alongside every authentication form.
@@ -15,71 +46,57 @@ const highlights = [
  * the auth token group, so the panel follows the theme rather than hard-coding
  * a single light appearance.
  */
-export function AuthBrandPanel() {
+export function AuthBrandPanel({ variant = "product" }: AuthBrandPanelProps) {
+  const { eyebrow, heading, body } = panelCopy[variant];
+
   return (
     <aside className="bg-auth-panel border-auth-panel-border hidden flex-col justify-between border-r p-10 lg:flex">
+      <div className="flex items-center gap-2">
+        <span className="bg-auth-glyph-bg text-auth-accent flex size-8 items-center justify-center rounded-lg">
+          <Logo className="size-4" />
+        </span>
+        <span className="text-auth-heading text-[13px] font-semibold tracking-[0.2em] uppercase">
+          Dariise
+        </span>
+      </div>
+
       <div>
-        <div className="flex items-center gap-2">
-          <span className="bg-auth-glyph-bg text-auth-accent flex size-8 items-center justify-center rounded-lg">
-            <Logo className="size-4" />
-          </span>
-          <span className="text-auth-heading text-sm font-semibold tracking-tight">
-            Dariise
-          </span>
-        </div>
-
-        <nav aria-label="Account and workspace" className="mt-5 flex gap-2">
-          <Link
-            href="/"
-            aria-current="page"
-            className="bg-auth-badge border-auth-badge-border text-auth-heading rounded-full border px-3 py-1 text-xs font-medium"
-          >
-            Access
-          </Link>
-          <Link
-            href="/create-workspace"
-            className="border-auth-badge-border text-auth-muted hover:text-auth-heading rounded-full border border-dashed px-3 py-1 text-xs font-medium transition-colors"
-          >
-            Workspace
-          </Link>
-        </nav>
-
-        <div className="mt-16">
-          <p className="text-auth-accent font-mono text-[11px] font-medium tracking-[0.18em] uppercase">
-            Feature management
-          </p>
-          <p className="text-auth-heading mt-3 max-w-xs text-3xl leading-tight font-semibold tracking-tight">
-            Ship features with confidence.
-          </p>
-          <p className="text-auth-body mt-4 max-w-sm text-sm leading-6">
-            Give your team fine-grained control over every release — no
-            redeploys, no guesswork.
-          </p>
-          <ul className="mt-8 space-y-3">
-            {highlights.map((highlight) => (
-              <li
-                key={highlight}
-                className="text-auth-body flex items-start gap-2.5 text-sm leading-6"
-              >
+        <p className="text-auth-accent font-mono text-[11px] font-medium tracking-[0.18em] uppercase">
+          {eyebrow}
+        </p>
+        <p className="text-auth-heading mt-3 max-w-xs text-3xl leading-tight font-semibold tracking-tight">
+          {heading}
+        </p>
+        <p className="text-auth-body mt-4 max-w-sm text-sm leading-6">{body}</p>
+        <ul className="mt-8 space-y-3">
+          {highlights.map((highlight) => (
+            <li
+              key={highlight}
+              className="text-auth-body flex items-start gap-2.5 text-sm leading-6"
+            >
+              <span className="bg-auth-accent/10 mt-1 flex size-4 shrink-0 items-center justify-center rounded-full">
                 <CheckIcon
                   aria-hidden="true"
-                  className="text-auth-accent mt-1 size-3.5 shrink-0"
+                  className="text-auth-accent size-2.5"
                 />
-                <span>{highlight}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+              </span>
+              <span>{highlight}</span>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="text-auth-muted flex items-center justify-between text-xs">
         <p>&copy; 2026 Dariise, Inc.</p>
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5">
-            <GlobeIcon aria-hidden="true" className="size-3.5" />
-            EN
-          </span>
-          <MoonIcon aria-hidden="true" className="size-3.5" />
+        <div className="flex items-center gap-2">
+          {complianceBadges.map((badge) => (
+            <span
+              key={badge}
+              className="bg-auth-badge border-auth-badge-border text-auth-accent rounded-full border px-2.5 py-1 text-[10px] font-medium"
+            >
+              {badge}
+            </span>
+          ))}
         </div>
       </div>
     </aside>

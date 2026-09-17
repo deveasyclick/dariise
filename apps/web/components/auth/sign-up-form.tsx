@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { LoaderCircleIcon } from "lucide-react";
 import { AuthCard } from "@/components/auth/auth-card";
-import { AccessTabs } from "@/components/auth/access-tabs";
+import { OnboardingSteps } from "@/components/auth/onboarding-steps";
 import { GitHubIcon, GoogleIcon } from "@/components/auth/brand-icons";
 import {
   Field,
@@ -106,6 +106,7 @@ export function SignUpForm() {
   if (created) {
     return (
       <AuthCard
+        steps={<OnboardingSteps current="workspace" />}
         title="Account created"
         description="Your account is ready. Creating a workspace is the next step."
       >
@@ -123,9 +124,9 @@ export function SignUpForm() {
 
   return (
     <AuthCard
+      steps={<OnboardingSteps current="account" />}
       title="Create your account"
-      description="Set up your Dariise account. You can create a workspace next."
-      backLink={<AccessTabs current="access" />}
+      description="Set up your Dariise account. Next you'll create a workspace and your first project."
     >
       <div className="space-y-3">
         <Button

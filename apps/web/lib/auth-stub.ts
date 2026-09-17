@@ -50,9 +50,12 @@ export interface SignUpInput {
 
 export interface CreateWorkspaceInput {
   name: string;
+  /** Workspace slug, appended to the `dariise.dev/` dashboard host. */
   slug: string;
-  website: string;
-  receiveProductUpdates: boolean;
+  /** Region key from `lib/onboarding-data.ts`, e.g. `us-east-1`. */
+  region: string;
+  /** Teammate emails parsed out of the comma-separated invite field. */
+  invites: string[];
 }
 
 /** Providers offered by the OAuth buttons on the access screens. */
@@ -105,3 +108,4 @@ export async function createWorkspace(
 ): Promise<void> {
   await simulateLatency(signal);
 }
+

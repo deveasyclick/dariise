@@ -2,16 +2,33 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { InfoIcon, LoaderCircleIcon } from "lucide-react";
+import { ArrowRightIcon, LoaderCircleIcon } from "lucide-react";
 import { AuthCard } from "@/components/auth/auth-card";
-import { AccessTabs } from "@/components/auth/access-tabs";
-import { Field, FieldError, FieldRow } from "@/components/auth/field";
+import { OnboardingSteps } from "@/components/auth/onboarding-steps";
+import {
+  Field,
+  FieldError,
+  FieldHint,
+  PrefixedField,
+} from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createWorkspace } from "@/lib/auth-stub";
 import {
+  defaultDataRegion,
+  type DataRegionOption,
+} from "@/lib/onboarding-data";
+import { workspaceHost } from "@/lib/settings-data";
+import {
   isRequired,
-  isValidOptionalUrl,
+  isValidOptionalEmailList,
   isValidWorkspaceSlug,
   toWorkspaceSlug,
 } from "@/lib/validation";
@@ -19,15 +36,19 @@ import {
 interface CreateWorkspaceErrors {
   form?: string;
   name?: string;
-  website?: string;
   slug?: string;
+  invites?: string;
 }
 
-export function CreateWorkspaceForm() {
+export function CreateWorkspaceForm({
+  regions,
+}: {
+  regions: DataRegionOption[];
+}) {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
-  const [website, setWebsite] = useState("");
-  const [receiveProductUpdates, setReceiveProductUpdates] = useState(false);
+  const [region, setRegion] = useState(defaultDataRegion);
+  const [invites, setInvites] = useState("");
   const [editedSlug, setEditedSlug] = useState(false);
   const [errors, setErrors] = useState<CreateWorkspaceErrors>({});
   const [pending, setPending] = useState(false);
@@ -52,10 +73,10 @@ export function CreateWorkspaceForm() {
     const nextErrors: CreateWorkspaceErrors = {
       name: isRequired(name, "Workspace name") ?? undefined,
       slug: isValidWorkspaceSlug(slug) ?? undefined,
-      website: isValidOptionalUrl(website) ?? undefined,
+      invites: isValidOptionalEmailList(invites) ?? undefined,
     };
 
-    if (nextErrors.name || nextErrors.slug || nextErrors.website) {
+    if (nextErrors.name || nextErrors.slug || nextErrors.invites) {
       setErrors(nextErrors);
       return;
     }
@@ -71,8 +92,11 @@ export function CreateWorkspaceForm() {
         {
           name: name.trim(),
           slug: slug.trim(),
-          website: website.trim(),
-          receiveProductUpdates,
+          region,
+          invites: invites
+            .split(",")
+            .map((invite) => invite.trim())
+            .filter(Boolean),
         },
         controller.signal,
       );
@@ -88,15 +112,16 @@ export function CreateWorkspaceForm() {
   if (created) {
     return (
       <AuthCard
+        steps={<OnboardingSteps current="project" />}
         title="Workspace created"
-        description="Your workspace is ready. The dashboard is not wired to the API yet — this is a preview of the onboarding flow."
+        description="Your workspace is ready. Add the first project your flags and environments will live in."
       >
         <div className="space-y-3">
           <Button asChild className="w-full">
-            <Link href="/overview">View dashboard</Link>
+            <Link href="/create-project">Create a project</Link>
           </Button>
           <Button asChild variant="outline" className="w-full">
-            <Link href="/">Back to sign in</Link>
+            <Link href="/overview">Skip to dashboard</Link>
           </Button>
         </div>
       </AuthCard>
@@ -105,9 +130,9 @@ export function CreateWorkspaceForm() {
 
   return (
     <AuthCard
+      steps={<OnboardingSteps current="workspace" />}
       title="Create your workspace"
-      description="Your workspace is where your projects and feature flags live. You can rename it later."
-      backLink={<AccessTabs current="workspace" />}
+      description="Workspaces group your flags, environments, and teammates."
     >
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <Field
@@ -122,76 +147,74 @@ export function CreateWorkspaceForm() {
           onChange={(event) => handleNameChange(event.target.value)}
         />
 
-        <Field
-          id="create-workspace-website"
-          label="Website (optional)"
-          name="website"
-          autoComplete="url"
-          placeholder="https://acme.com"
-          value={website}
-          error={errors.website}
+        <PrefixedField
+          id="create-workspace-url"
+          label="Workspace URL"
+          name="slug"
+          prefix={`${workspaceHost}/`}
+          placeholder="acme"
+          required
+          value={slug}
+          error={errors.slug}
+          hint="This becomes your dashboard URL. You can change it later."
           onChange={(event) => {
-            setWebsite(event.target.value);
-            clearError("website");
+            setEditedSlug(true);
+            setSlug(event.target.value);
+            clearError("slug");
           }}
         />
 
         <div className="space-y-2">
-          <Field
-            id="create-workspace-slug"
-            label="Workspace slug"
-            name="slug"
-            placeholder="acme"
-            required
-            value={slug}
-            error={errors.slug}
-            onChange={(event) => {
-              setEditedSlug(true);
-              setSlug(event.target.value);
-              clearError("slug");
-            }}
-          />
-          <p className="text-muted-foreground text-xs">
-            {slug.trim()
-              ? `${slug.trim()}.dariise.dev`
-              : "Used in your workspace URL."}
-          </p>
+          <Label htmlFor="create-workspace-region">Data region</Label>
+          <Select value={region} onValueChange={setRegion}>
+            <SelectTrigger id="create-workspace-region" className="w-full">
+              <SelectValue placeholder="Select a region" />
+            </SelectTrigger>
+            <SelectContent>
+              {regions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FieldHint>
+            Where your evaluation data is stored and processed.
+          </FieldHint>
         </div>
 
-        <div className="border-info-ink/30 bg-info-ink/5 flex items-start gap-2.5 rounded-lg border p-3">
-          <InfoIcon
-            aria-hidden="true"
-            className="text-info-ink mt-0.5 size-4 shrink-0"
-          />
-          <p className="text-muted-foreground text-xs leading-5">
-            We&apos;ll verify your workspace before you can publish domains or
-            invite teammates.
-          </p>
-        </div>
-
-        <FieldRow
-          htmlFor="create-workspace-updates"
-          control={
-            <Checkbox
-              id="create-workspace-updates"
-              name="receiveProductUpdates"
-              checked={receiveProductUpdates}
-              onCheckedChange={(checked) =>
-                setReceiveProductUpdates(checked === true)
-              }
-            />
-          }
-        >
-          Send me occasional product updates. You can opt out at any time.
-        </FieldRow>
+        <Field
+          id="create-workspace-invites"
+          label="Invite teammates (optional)"
+          name="invites"
+          type="email"
+          multiple
+          autoComplete="off"
+          placeholder="sarah@acme.io, daniel@acme.io"
+          value={invites}
+          error={errors.invites}
+          hint="Separate multiple emails with commas. They'll join as Engineers."
+          onChange={(event) => {
+            setInvites(event.target.value);
+            clearError("invites");
+          }}
+        />
 
         {errors.form ? <FieldError>{errors.form}</FieldError> : null}
 
         <Button type="submit" className="w-full" disabled={pending}>
           {pending ? <LoaderCircleIcon className="animate-spin" /> : null}
           {pending ? "Creating workspace…" : "Create workspace"}
+          {pending ? null : (
+            <ArrowRightIcon aria-hidden="true" className="size-3.5" />
+          )}
         </Button>
       </form>
+
+      <p className="text-muted-foreground mt-6 text-center text-xs leading-5">
+        You can invite more teammates, rename the workspace, or switch regions
+        later in Settings.
+      </p>
     </AuthCard>
   );
 }

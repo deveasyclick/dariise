@@ -6,6 +6,8 @@ interface AuthCardProps {
   description?: ReactNode;
   /** Rendered above the card, e.g. a "Back to sign in" link. */
   backLink?: ReactNode;
+  /** Rendered at the top of the card, e.g. the onboarding step path. */
+  steps?: ReactNode;
   className?: string;
   children: ReactNode;
 }
@@ -18,6 +20,7 @@ export function AuthCard({
   title,
   description,
   backLink,
+  steps,
   className,
   children,
 }: AuthCardProps) {
@@ -30,6 +33,7 @@ export function AuthCard({
           className,
         )}
       >
+        {steps ? <div className="mb-6">{steps}</div> : null}
         <header className="space-y-1.5">
           <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
           {description ? (

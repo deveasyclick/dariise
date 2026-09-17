@@ -19,6 +19,24 @@ export function isEmail(value: string): string | null {
     : "Enter a valid email address.";
 }
 
+/**
+ * Validate an optional, comma-separated list of invitee emails.
+ *
+ * The create-workspace step collects several addresses in one field, so every
+ * entry is checked and the first invalid one is named in the message. An empty
+ * field is valid — the invitees are optional.
+ */
+export function isValidOptionalEmailList(value: string): string | null {
+  const entries = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  const invalid = entries.find((entry) => !EMAIL_PATTERN.test(entry));
+
+  return invalid ? `"${invalid}" is not a valid email address.` : null;
+}
+
 export function minLength(
   value: string,
   length: number,
