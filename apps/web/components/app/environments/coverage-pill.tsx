@@ -1,6 +1,16 @@
 import { Badge } from "@/components/ui/badge";
 import type { FlagCoverageState } from "@/lib/environment-data";
 
+interface CoverageStatePillProps {
+  state: FlagCoverageState;
+  /**
+   * `short` (the default) suits dense coverage tables — `ON` / `OFF`. `long`
+   * spells the state out (`Enabled` / `Disabled`) for the project flag lists,
+   * where there is room for it.
+   */
+  label?: "short" | "long";
+}
+
 /**
  * Effective state of one flag in one environment.
  *
@@ -10,14 +20,13 @@ import type { FlagCoverageState } from "@/lib/environment-data";
  */
 export function CoverageStatePill({
   state,
-}: {
-  state: FlagCoverageState;
-}) {
+  label = "short",
+}: CoverageStatePillProps) {
   if (state.kind === "on") {
     return (
       <Badge variant="ok" className="gap-1.5">
         <span aria-hidden="true" className="bg-ok-ink size-1.5 rounded-full" />
-        ON
+        {label === "long" ? "Enabled" : "ON"}
       </Badge>
     );
   }
@@ -37,7 +46,7 @@ export function CoverageStatePill({
         aria-hidden="true"
         className="bg-muted-foreground size-1.5 rounded-full"
       />
-      OFF
+      {label === "long" ? "Disabled" : "OFF"}
     </Badge>
   );
 }

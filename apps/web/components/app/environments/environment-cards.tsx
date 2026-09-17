@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "cn";
+import { HealthBadge } from "@/components/app/health-badge";
 import { EnvironmentMenu } from "@/components/app/environments/environment-menu";
 import {
   environmentColorSwatch,
@@ -17,7 +18,6 @@ import {
 } from "@/components/app/environments/environment-colors";
 import { SdkKeyChip } from "@/components/app/environments/environment-keys";
 import { SectionCard } from "@/components/app/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type {
   EnvironmentCounts,
@@ -39,18 +39,7 @@ export function EnvironmentStatusBadge({
 }: {
   status: EnvironmentStatus;
 }) {
-  return (
-    <Badge variant={status === "healthy" ? "ok" : "warn"} className="gap-1.5">
-      <span
-        aria-hidden="true"
-        className={cn(
-          "size-1.5 rounded-full",
-          status === "healthy" ? "bg-ok-ink" : "bg-warn-ink",
-        )}
-      />
-      {status === "healthy" ? "Healthy" : "Degraded"}
-    </Badge>
-  );
+  return <HealthBadge status={status} />;
 }
 
 /** Flag totals as three tiles — the unit both the cards and health card use. */
