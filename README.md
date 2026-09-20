@@ -503,9 +503,15 @@ http://localhost:3000
 Other workspace commands:
 
 ```bash
+pnpm dev          # run the dashboard and the API together
+pnpm dev:web      # dashboard only
+pnpm dev:api      # API only
 pnpm build        # production build of apps/web
-pnpm lint         # ESLint
-pnpm typecheck    # tsc --noEmit
+pnpm lint         # ESLint (apps/web)
+pnpm typecheck    # tsc --noEmit across contracts, api and web
+pnpm test         # API tests
+pnpm db:generate  # generate a Drizzle migration
+pnpm db:migrate   # apply migrations
 ```
 
 ---
