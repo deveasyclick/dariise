@@ -1,0 +1,40 @@
+{
+  "name": "api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dariise API — Hono on Node.js, Drizzle over PostgreSQL, Better Auth for sessions.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:migrate": "drizzle-kit migrate",
+    "auth:generate": "pnpm dlx @better-auth/cli@latest generate --config src/auth.ts --output src/db/auth-schema.generated.ts"
+  },
+  "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.7.5",
+    "@dariise/contracts": "workspace:*",
+    "@hono/node-server": "^2.1.1",
+    "better-auth": "^1.7.5",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.13.8",
+    "pg": "^8.23.0",
+    "pino": "^10.1.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/node": "^20",
+    "@types/pg": "^8.15.6",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.13",
+    "typescript": "^5",
+    "vitest": "^5.0.1"
+  }
+}

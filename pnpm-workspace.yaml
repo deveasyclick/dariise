@@ -15,3 +15,7 @@ allowBuilds:
   # sharp is optional: Next.js only needs it for optimized production images.
   # Nothing renders next/image yet, so its build stays blocked.
   sharp: false
+  # esbuild backs `tsx` (the API's dev runner) and `drizzle-kit` (migrations).
+  # Its install script selects the platform-specific binary; without it neither
+  # tool can start.
+  esbuild: true
