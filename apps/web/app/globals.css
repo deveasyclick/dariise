@@ -170,12 +170,7 @@
 }
 
 @theme inline {
-  /* Typography: JetBrains Mono is the primary face, Geist the secondary.
-     `--font-sans` is remapped so the body default is the primary face while
-     existing `font-sans` / `font-mono` usages keep working. */
-  --font-primary: var(--font-jetbrains-mono);
-  --font-secondary: var(--font-geist-sans);
-  --font-sans: var(--font-jetbrains-mono);
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-jetbrains-mono);
 
   /* Shared */
@@ -259,6 +254,6 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   }
 }
