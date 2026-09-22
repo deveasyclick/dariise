@@ -46,6 +46,10 @@ import { SegmentsController } from "./modules/segments/segments.controller.js";
 import { SegmentsRepository } from "./modules/segments/segments.repository.js";
 import { createSegmentsRoutes } from "./modules/segments/segments.routes.js";
 import { SegmentsService } from "./modules/segments/segments.service.js";
+import { WorkspaceController } from "./modules/workspace/workspace.controller.js";
+import { WorkspaceRepository } from "./modules/workspace/workspace.repository.js";
+import { createWorkspaceRoutes } from "./modules/workspace/workspace.routes.js";
+import { WorkspaceService } from "./modules/workspace/workspace.service.js";
 import { env } from "./config/index.js";
 import { createConfiguredEmailTransport } from "./shared/email/email.config.js";
 import { EmailService } from "./shared/email/email.service.js";
@@ -72,6 +76,7 @@ const apiKeysRepository = new ApiKeysRepository();
 const auditLogRepository = new AuditLogRepository();
 const accountRepository = new AccountRepository();
 const projectMembersRepository = new ProjectMembersRepository();
+const workspaceRepository = new WorkspaceRepository();
 
 const projectAccessService = new ProjectAccessService(projectAccessRepository);
 const environmentsService = new EnvironmentsService(
@@ -96,6 +101,7 @@ const projectsService = new ProjectsService(
   (tx, projectId, name) => environmentsService.createDefault(tx, projectId, name),
   projectAccessService,
 );
+const workspaceService = new WorkspaceService(workspaceRepository);
 // Injected so the flags module never imports the segments module.
 const flagsService = new FlagsService(
   flagsRepository,
@@ -129,6 +135,7 @@ const accountController = new AccountController(accountService);
 const projectMembersController = new ProjectMembersController(
   projectMembersService,
 );
+const workspaceController = new WorkspaceController(workspaceService);
 
 // One instance shared by both routers, so a request resolves its session once.
 const sessionMiddleware = createSessionMiddleware((headers) =>
@@ -142,6 +149,10 @@ const authRoutes = createAuthRoutes({
 });
 const projectRoutes = createProjectsRoutes({
   controller: projectsController,
+  sessionMiddleware,
+});
+const workspaceRoutes = createWorkspaceRoutes({
+  controller: workspaceController,
   sessionMiddleware,
 });
 // Mounted at `/`: the module owns both the project-scoped paths and `/v1/flags`.
@@ -223,6 +234,7 @@ app.route("/v1/projects", apiKeyRoutes);
 app.route("/", auditLogRoutes);
 app.route("/", accountRoutes);
 app.route("/v1/projects", projectMemberRoutes);
+app.route("/", workspaceRoutes);
 app.route("/", flagRoutes);
 
 app.notFound((c) =>
