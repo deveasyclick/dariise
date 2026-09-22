@@ -7,14 +7,15 @@
     "dev": "pnpm --parallel --recursive dev",
     "dev:web": "pnpm --filter web dev",
     "dev:api": "pnpm --filter api dev",
-    "build": "pnpm --filter web build",
+    "build": "pnpm --recursive build",
     "start": "pnpm --filter web start",
-    "lint": "pnpm --filter web lint",
+    "lint": "pnpm --recursive lint",
     "typecheck": "pnpm --recursive typecheck",
+    "test": "pnpm --recursive test",
+    "check": "pnpm --recursive typecheck && pnpm --recursive lint && pnpm --recursive test",
     "db:generate": "pnpm --filter api db:generate",
     "db:push": "pnpm --filter api db:push",
-    "db:migrate": "pnpm --filter api db:migrate",
-    "test": "pnpm --filter api test"
+    "db:migrate": "pnpm --filter api db:migrate"
   },
   "packageManager": "pnpm@12.4.1",
   "engines": {
