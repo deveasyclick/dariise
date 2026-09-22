@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 
+import { env } from "./config/index.js";
 import { pool } from "./db/client.js";
 import { createSessionMiddleware } from "./middleware/authorization.js";
 import { ApiKeysController } from "./modules/api-keys/api-keys.controller.js";
@@ -28,16 +29,20 @@ import { EnvironmentsController } from "./modules/environments/environments.cont
 import { EnvironmentsRepository } from "./modules/environments/environments.repository.js";
 import { createEnvironmentsRoutes } from "./modules/environments/environments.routes.js";
 import { EnvironmentsService } from "./modules/environments/environments.service.js";
-import { ProjectsController } from "./modules/projects/projects.controller.js";
-import { ProjectsRepository } from "./modules/projects/projects.repository.js";
-import { createProjectsRoutes } from "./modules/projects/projects.routes.js";
-import { ProjectsService } from "./modules/projects/projects.service.js";
+import { EvaluationController } from "./modules/evaluation/evaluation.controller.js";
+import { EvaluationRepository } from "./modules/evaluation/evaluation.repository.js";
+import { createEvaluationRoutes } from "./modules/evaluation/evaluation.routes.js";
+import { EvaluationService } from "./modules/evaluation/evaluation.service.js";
 import { FlagsController } from "./modules/flags/flags.controller.js";
 import { FlagsRepository } from "./modules/flags/flags.repository.js";
 import { createFlagsRoutes } from "./modules/flags/flags.routes.js";
 import { FlagsService } from "./modules/flags/flags.service.js";
 import { ProjectAccessRepository } from "./modules/project-access/project-access.repository.js";
 import { ProjectAccessService } from "./modules/project-access/project-access.service.js";
+import { ProjectsController } from "./modules/projects/projects.controller.js";
+import { ProjectsRepository } from "./modules/projects/projects.repository.js";
+import { createProjectsRoutes } from "./modules/projects/projects.routes.js";
+import { ProjectsService } from "./modules/projects/projects.service.js";
 import { ProjectMembersController } from "./modules/project-members/project-members.controller.js";
 import { ProjectMembersRepository } from "./modules/project-members/project-members.repository.js";
 import { createProjectMembersRoutes } from "./modules/project-members/project-members.routes.js";
@@ -50,7 +55,6 @@ import { WorkspaceController } from "./modules/workspace/workspace.controller.js
 import { WorkspaceRepository } from "./modules/workspace/workspace.repository.js";
 import { createWorkspaceRoutes } from "./modules/workspace/workspace.routes.js";
 import { WorkspaceService } from "./modules/workspace/workspace.service.js";
-import { env } from "./config/index.js";
 import { createConfiguredEmailTransport } from "./shared/email/email.config.js";
 import { EmailService } from "./shared/email/email.service.js";
 import { errorResponse } from "./shared/http/errors.js";
@@ -76,6 +80,7 @@ const apiKeysRepository = new ApiKeysRepository();
 const auditLogRepository = new AuditLogRepository();
 const accountRepository = new AccountRepository();
 const projectMembersRepository = new ProjectMembersRepository();
+const evaluationRepository = new EvaluationRepository();
 const workspaceRepository = new WorkspaceRepository();
 
 const projectAccessService = new ProjectAccessService(projectAccessRepository);
@@ -123,6 +128,7 @@ const projectMembersService = new ProjectMembersService(
   projectMembersRepository,
   projectAccessService,
 );
+const evaluationService = new EvaluationService(evaluationRepository);
 
 const authController = new AuthController(authService);
 const projectsController = new ProjectsController(projectsService);
@@ -135,6 +141,7 @@ const accountController = new AccountController(accountService);
 const projectMembersController = new ProjectMembersController(
   projectMembersService,
 );
+const evaluationController = new EvaluationController(evaluationService);
 const workspaceController = new WorkspaceController(workspaceService);
 
 // One instance shared by both routers, so a request resolves its session once.
@@ -149,10 +156,6 @@ const authRoutes = createAuthRoutes({
 });
 const projectRoutes = createProjectsRoutes({
   controller: projectsController,
-  sessionMiddleware,
-});
-const workspaceRoutes = createWorkspaceRoutes({
-  controller: workspaceController,
   sessionMiddleware,
 });
 // Mounted at `/`: the module owns both the project-scoped paths and `/v1/flags`.
@@ -185,6 +188,15 @@ const accountRoutes = createAccountRoutes({
 });
 const projectMemberRoutes = createProjectMembersRoutes({
   controller: projectMembersController,
+  sessionMiddleware,
+});
+// Mounted at `/`: `/v1/evaluate` sits outside any project path.
+const evaluationRoutes = createEvaluationRoutes({
+  controller: evaluationController,
+  sessionMiddleware,
+});
+const workspaceRoutes = createWorkspaceRoutes({
+  controller: workspaceController,
   sessionMiddleware,
 });
 
@@ -234,6 +246,7 @@ app.route("/v1/projects", apiKeyRoutes);
 app.route("/", auditLogRoutes);
 app.route("/", accountRoutes);
 app.route("/v1/projects", projectMemberRoutes);
+app.route("/", evaluationRoutes);
 app.route("/", workspaceRoutes);
 app.route("/", flagRoutes);
 
