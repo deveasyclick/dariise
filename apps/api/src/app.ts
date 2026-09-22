@@ -13,6 +13,10 @@ import { ProjectsController } from "./modules/projects/projects.controller.js";
 import { ProjectsRepository } from "./modules/projects/projects.repository.js";
 import { createProjectsRoutes } from "./modules/projects/projects.routes.js";
 import { ProjectsService } from "./modules/projects/projects.service.js";
+import { FlagsController } from "./modules/flags/flags.controller.js";
+import { FlagsRepository } from "./modules/flags/flags.repository.js";
+import { createFlagsRoutes } from "./modules/flags/flags.routes.js";
+import { FlagsService } from "./modules/flags/flags.service.js";
 import { ProjectAccessRepository } from "./modules/project-access/project-access.repository.js";
 import { ProjectAccessService } from "./modules/project-access/project-access.service.js";
 import { SegmentsController } from "./modules/segments/segments.controller.js";
@@ -25,6 +29,7 @@ import { errorResponse } from "./shared/http/errors.js";
 const authRepository = new AuthRepository();
 const projectAccessRepository = new ProjectAccessRepository();
 const projectsRepository = new ProjectsRepository();
+const flagsRepository = new FlagsRepository();
 const segmentsRepository = new SegmentsRepository();
 
 const projectAccessService = new ProjectAccessService(projectAccessRepository);
@@ -33,6 +38,12 @@ const segmentsService = new SegmentsService(
   projectAccessService,
 );
 const projectsService = new ProjectsService(projectsRepository);
+// Injected so the flags module never imports the segments module.
+const flagsService = new FlagsService(
+  flagsRepository,
+  projectAccessService,
+  (projectId, keys) => segmentsService.findUnknownKeys(projectId, keys),
+);
 
 const authService = new AuthService(authRepository, (organizationId) =>
   projectsService.hasProject(organizationId),
@@ -40,6 +51,7 @@ const authService = new AuthService(authRepository, (organizationId) =>
 
 const authController = new AuthController(authService);
 const projectsController = new ProjectsController(projectsService);
+const flagsController = new FlagsController(flagsService);
 const segmentsController = new SegmentsController(segmentsService);
 
 // One instance shared by both routers, so a request resolves its session once.
@@ -53,6 +65,11 @@ const authRoutes = createAuthRoutes({
 });
 const projectRoutes = createProjectsRoutes({
   controller: projectsController,
+  sessionMiddleware,
+});
+// Mounted at `/`: the module owns both the project-scoped paths and `/v1/flags`.
+const flagRoutes = createFlagsRoutes({
+  controller: flagsController,
   sessionMiddleware,
 });
 const segmentRoutes = createSegmentsRoutes({
@@ -101,6 +118,7 @@ app.get("/readyz", async (c) => {
 app.route("/", authRoutes);
 app.route("/v1/projects", projectRoutes);
 app.route("/v1/projects", segmentRoutes);
+app.route("/", flagRoutes);
 
 app.notFound((c) =>
   c.json(
