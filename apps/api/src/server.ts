@@ -1,12 +1,12 @@
 import { serve } from "@hono/node-server";
 
 import { app } from "./app.js";
+import { env } from "./config/index.js";
 import { closeDatabase } from "./db/client.js";
-import { env } from "./shared/config.js";
 
-const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+const server = serve({ fetch: app.fetch, port: env.port }, (info) => {
   console.info(
-    `[api] listening on http://localhost:${info.port} (${env.NODE_ENV})`,
+    `[api] listening on http://localhost:${info.port} (${env.nodeEnv})`,
   );
 });
 

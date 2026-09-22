@@ -38,6 +38,10 @@ export class ApiError extends Error {
   static notFound(message: string): ApiError {
     return new ApiError(404, ERROR_CODE.notFound, message);
   }
+
+  static conflict(message: string, details?: unknown): ApiError {
+    return new ApiError(409, ERROR_CODE.conflict, message, details);
+  }
 }
 
 export function errorResponse(c: Context, error: unknown) {

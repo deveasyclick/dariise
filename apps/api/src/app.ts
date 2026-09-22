@@ -13,7 +13,7 @@ import { ProjectsController } from "./modules/projects/projects.controller.js";
 import { ProjectsRepository } from "./modules/projects/projects.repository.js";
 import { createProjectsRoutes } from "./modules/projects/projects.routes.js";
 import { ProjectsService } from "./modules/projects/projects.service.js";
-import { env } from "./shared/config.js";
+import { env } from "./config/index.js";
 import { errorResponse } from "./shared/http/errors.js";
 
 const authRepository = new AuthRepository();
@@ -50,7 +50,7 @@ app.use("*", logger());
 app.use("*", (c, next) =>
   cors({
     origin: (origin) =>
-      env.CORS_ORIGINS.includes(origin) ? origin : undefined,
+      env.corsOrigins.includes(origin) ? origin : undefined,
     credentials: true,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
