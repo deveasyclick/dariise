@@ -13,10 +13,8 @@ export type SessionResolver = (
   headers: Headers,
 ) => Promise<RequestContext | null>;
 
-/**
- * Builds the session middleware around the resolver the composition root wired
- * up, so this file imports no module instance or service class.
- */
+// Takes the resolver the composition root wired up, so this file imports no module
+// instance or service class.
 export function createSessionMiddleware(
   resolve: SessionResolver,
 ): MiddlewareHandler {
