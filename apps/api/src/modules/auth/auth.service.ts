@@ -1,7 +1,8 @@
-import { enabledProviders } from "../../shared/config.js";
-import { auth } from "./auth.config.js";
+import { enabledProviders } from "../../shared/constants.js";
 import type { AuthRepository } from "./auth.repository.js";
 import type {
+  AuthCredentialApi,
+  GetSession,
   ProjectExistenceChecker,
   RequestContext,
 } from "./auth.types.js";
@@ -10,12 +11,14 @@ export class AuthService {
   constructor(
     private readonly repository: AuthRepository,
     private readonly projectExists: ProjectExistenceChecker,
+    private readonly getSession: GetSession,
+    private readonly credentials: AuthCredentialApi,
   ) {}
 
   async resolveRequestContext(
     headers: Headers,
   ): Promise<RequestContext | null> {
-    const result = await auth.api.getSession({ headers });
+    const result = await this.getSession({ headers });
 
     if (!result) return null;
 
@@ -48,6 +51,23 @@ export class AuthService {
       Object.keys(enabledProviders) as Array<keyof typeof enabledProviders>
     ).filter((provider) => enabledProviders[provider]);
   }
-}
 
-export const authHandler = auth.handler;
+  /** Delegates to Better Auth so the hashing and the account row stay its job. */
+  async updateDisplayName(headers: Headers, name: string): Promise<void> {
+    await this.credentials.updateUser({ body: { name }, headers });
+  }
+
+  async changePassword(
+    headers: Headers,
+    input: { currentPassword: string; newPassword: string },
+  ): Promise<void> {
+    await this.credentials.changePassword({
+      body: {
+        currentPassword: input.currentPassword,
+        newPassword: input.newPassword,
+        revokeOtherSessions: false,
+      },
+      headers,
+    });
+  }
+}

@@ -12,99 +12,98 @@ import {
   user,
   verification,
 } from "../../db/schema/index.js";
-import { env, isProduction, enabledProviders } from "../../shared/config.js";
+import { env, isProduction } from "../../config/index.js";
+import { enabledProviders } from "../../shared/constants.js";
+import type { EmailService } from "../../shared/email/email.service.js";
+import { RESET_TOKEN_TTL_SECONDS } from "./auth.types.js";
 
 const socialProviders = {
   ...(enabledProviders.github
     ? {
         github: {
-          clientId: env.GITHUB_CLIENT_ID as string,
-          clientSecret: env.GITHUB_CLIENT_SECRET as string,
+          clientId: env.githubClientId as string,
+          clientSecret: env.githubClientSecret as string,
         },
       }
     : {}),
   ...(enabledProviders.google
     ? {
         google: {
-          clientId: env.GOOGLE_CLIENT_ID as string,
-          clientSecret: env.GOOGLE_CLIENT_SECRET as string,
+          clientId: env.googleClientId as string,
+          clientSecret: env.googleClientSecret as string,
         },
       }
     : {}),
 };
 
-export const auth = betterAuth({
-  appName: "Dariise",
-  baseURL: env.BETTER_AUTH_URL,
-  basePath: "/api/auth",
-  secret: env.BETTER_AUTH_SECRET,
+// A factory, not a module-level singleton, so the mail transport arrives through
+// the composition root in `app.ts` like every other collaborator.
+export function createAuthConfig(emailService: EmailService) {
+  return betterAuth({
+    appName: "Dariise",
+    baseURL: env.betterAuthUrl,
+    basePath: "/api/auth",
+    secret: env.betterAuthSecret,
 
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema: {
-      user,
-      session,
-      account,
-      verification,
-      organization,
-      member,
-      invitation,
-    },
-    usePlural: false,
-  }),
+    database: drizzleAdapter(db, {
+      provider: "pg",
+      schema: {
+        user,
+        session,
+        account,
+        verification,
+        organization,
+        member,
+        invitation,
+      },
+      usePlural: false,
+    }),
 
-  trustedOrigins: env.CORS_ORIGINS,
+    trustedOrigins: env.corsOrigins,
 
-  emailAndPassword: {
-    enabled: true,
-    minPasswordLength: 8,
-    maxPasswordLength: 128,
-    requireEmailVerification: false,
-    // TODO: add email transport
-    sendResetPassword: async ({ user, url, token }) => {
-      const webOrigin = env.CORS_ORIGINS[0] ?? env.BETTER_AUTH_URL;
-      const link = `${webOrigin}/reset-password?token=${encodeURIComponent(token)}`;
-
-      if (isProduction) {
-        console.warn(
-          `[auth] password reset requested for ${user.email}, but no mail transport is configured — the link was not delivered`,
-        );
-        return;
-      }
-
-      console.info(
-        [
-          "",
-          "  ── password reset ─────────────────────────────────────────",
-          `  to:   ${user.email}`,
-          `  link: ${link}`,
-          "  ────────────────────────────────────────────────────────────",
-          "",
-        ].join("\n"),
-      );
-    },
-  },
-
-  ...(Object.keys(socialProviders).length > 0 ? { socialProviders } : {}),
-
-  session: {
-    expiresIn: 60 * 60 * 24 * 7,
-    updateAge: 60 * 60 * 24,
-    cookieCache: {
+    emailAndPassword: {
       enabled: true,
-      maxAge: 60 * 5,
+      minPasswordLength: 8,
+      maxPasswordLength: 128,
+      requireEmailVerification: false,
+      // Kept in step with the "expires in 30 minutes" copy the dashboard shows.
+      resetPasswordTokenExpiresIn: RESET_TOKEN_TTL_SECONDS,
+      // Better Auth's `url` validates the token, then redirects to the dashboard
+      // with `?token=…`. Rewriting it here would skip that exchange and hand the
+      // reset page a token it cannot use, so it is forwarded untouched.
+      sendResetPassword: async ({ user, url }) => {
+        await emailService.sendPasswordReset({
+          to: user.email,
+          name: user.name,
+          url,
+          expiresInMinutes: RESET_TOKEN_TTL_SECONDS / 60,
+        });
+      },
     },
-  },
 
-  advanced: {
-    defaultCookieAttributes: {
-      sameSite: "lax",
-      secure: isProduction,
-      httpOnly: true,
+    ...(Object.keys(socialProviders).length > 0 ? { socialProviders } : {}),
+
+    session: {
+      expiresIn: 60 * 60 * 24 * 7,
+      updateAge: 60 * 60 * 24,
+      // Deliberately off: the cached cookie would keep serving the old name and
+      // email for up to five minutes after PATCH /v1/me, and a profile screen
+      // that appears to ignore a save is worse than one extra session read.
+      cookieCache: {
+        enabled: false,
+      },
     },
-  },
 
-  plugins: [organizationPlugin()],
-});
+    advanced: {
+      defaultCookieAttributes: {
+        sameSite: "lax",
+        secure: isProduction,
+        httpOnly: true,
+      },
+    },
 
-export type Auth = typeof auth;
+    plugins: [organizationPlugin()],
+  });
+}
+
+export type Auth = ReturnType<typeof createAuthConfig>;

@@ -1,21 +1,19 @@
 import { Hono, type MiddlewareHandler } from "hono";
 
 import type { AuthController } from "./auth.controller.js";
-import { authHandler } from "./auth.service.js";
-import type { SessionEnv } from "./auth.types.js";
+import type { AuthHandler, SessionEnv } from "./auth.types.js";
 
 export interface AuthRoutesDeps {
   controller: AuthController;
   sessionMiddleware: MiddlewareHandler;
+  authHandler: AuthHandler;
 }
 
-/**
- * Owns every path the auth module serves. Construction and mounting are owned
- * by `app.ts`.
- */
+// Owns every path the auth module serves; `app.ts` owns construction and mounting.
 export function createAuthRoutes({
   controller,
   sessionMiddleware,
+  authHandler,
 }: AuthRoutesDeps): Hono<SessionEnv> {
   const routes = new Hono<SessionEnv>();
 

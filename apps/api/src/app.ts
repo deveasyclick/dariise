@@ -13,10 +13,13 @@ import { AuditLogController } from "./modules/audit-log/audit-log.controller.js"
 import { AuditLogRepository } from "./modules/audit-log/audit-log.repository.js";
 import { createAuditLogRoutes } from "./modules/audit-log/audit-log.routes.js";
 import { AuditLogService } from "./modules/audit-log/audit-log.service.js";
-import { AuthController } from "./modules/auth/auth.controller.js";
-import { AuthRepository } from "./modules/auth/auth.repository.js";
-import { createAuthRoutes } from "./modules/auth/auth.routes.js";
-import { AuthService } from "./modules/auth/auth.service.js";
+import {
+  AuthController,
+  AuthRepository,
+  AuthService,
+  createAuthConfig,
+  createAuthRoutes,
+} from "./modules/auth/index.js";
 import { EnvironmentsController } from "./modules/environments/environments.controller.js";
 import { EnvironmentsRepository } from "./modules/environments/environments.repository.js";
 import { createEnvironmentsRoutes } from "./modules/environments/environments.routes.js";
@@ -40,8 +43,21 @@ import { SegmentsRepository } from "./modules/segments/segments.repository.js";
 import { createSegmentsRoutes } from "./modules/segments/segments.routes.js";
 import { SegmentsService } from "./modules/segments/segments.service.js";
 import { env } from "./config/index.js";
+import { createConfiguredEmailTransport } from "./shared/email/email.config.js";
+import { EmailService } from "./shared/email/email.service.js";
 import { errorResponse } from "./shared/http/errors.js";
 
+// Mail is optional: with no Brevo credentials the service reports `skipped` and
+// the auth module keeps its development console fallback.
+const emailService = new EmailService(createConfiguredEmailTransport());
+
+console.info(
+  emailService.enabled
+    ? `[email] Brevo transport configured, sending from ${env.emailFrom}`
+    : "[email] no transport configured — reset links are printed to this console",
+);
+
+const auth = createAuthConfig(emailService);
 const authRepository = new AuthRepository();
 const projectAccessRepository = new ProjectAccessRepository();
 const projectsRepository = new ProjectsRepository();
@@ -82,8 +98,14 @@ const flagsService = new FlagsService(
   (projectId, keys) => segmentsService.findUnknownKeys(projectId, keys),
 );
 
-const authService = new AuthService(authRepository, (organizationId) =>
-  projectsService.hasProject(organizationId),
+const authService = new AuthService(
+  authRepository,
+  (organizationId) => projectsService.hasProject(organizationId),
+  auth.api.getSession,
+  {
+    updateUser: auth.api.updateUser,
+    changePassword: auth.api.changePassword,
+  },
 );
 const projectMembersService = new ProjectMembersService(
   projectMembersRepository,
@@ -109,6 +131,7 @@ const sessionMiddleware = createSessionMiddleware((headers) =>
 const authRoutes = createAuthRoutes({
   controller: authController,
   sessionMiddleware,
+  authHandler: auth.handler,
 });
 const projectRoutes = createProjectsRoutes({
   controller: projectsController,
