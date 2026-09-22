@@ -15,6 +15,8 @@ export const auditLog = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** The project the action belongs to; null for workspace-level events. */
+    projectId: text("project_id"),
     environmentId: text("environment_id"),
     action: text("action").notNull(),
     /** Free-form actor identifier: a user id or an API key id. */
@@ -31,5 +33,9 @@ export const auditLog = pgTable(
       table.createdAt,
     ),
     index("audit_log_action_idx").on(table.action),
+    index("audit_log_project_created_idx").on(
+      table.projectId,
+      table.createdAt,
+    ),
   ],
 );

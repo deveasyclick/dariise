@@ -17,6 +17,9 @@ export const userPreferences = pgTable("user_preferences", {
     .default(true),
   /** Weekly digest opt-in, shown on the profile screen. */
   notifyWeeklyDigest: boolean("notify_weekly_digest").notNull().default(false),
+  notifyIncidentAlerts: boolean("notify_incident_alerts")
+    .notNull()
+    .default(true),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

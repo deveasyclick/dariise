@@ -13,6 +13,7 @@ export async function writeAuditLog(
   await tx.insert(auditLog).values({
     id: randomUUID(),
     organizationId: entry.organizationId,
+    projectId: entry.projectId ?? null,
     environmentId: entry.environmentId ?? null,
     action: entry.action,
     actor: entry.actor,

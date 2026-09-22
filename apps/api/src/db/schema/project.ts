@@ -16,18 +16,18 @@ export const project = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    /**
-     * Slug used in API paths, e.g. `checkout-platform`.
-     *
-     * Unique **per workspace**, not globally: two tenants may both have a
-     * project called `web-app`. See ADR-0003.
-     */
+    // Slug used in API paths, e.g. `checkout-platform`. Unique per workspace, not
+    // globally: two tenants may both have a project called `web-app`. See ADR-0003.
     key: text("key").notNull(),
     name: text("name").notNull(),
     description: text("description"),
-    // The one environment onboarding creates. Deliberately a plain column, not an
-    // FK, until the environments table lands.
+    color: text("color"),
+    ownerTeam: text("owner_team"),
+    // Onboarding's first environment. Plain text, not a foreign key: the
+    // environments table references the project, and a second link back would
+    // make the two mutually dependent.
     environmentName: text("environment_name").notNull().default("Development"),
+    defaultEnvironmentId: text("default_environment_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
