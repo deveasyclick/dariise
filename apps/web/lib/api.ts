@@ -1,20 +1,61 @@
-import { API_URL } from "@/lib/env";
 import type {
+  AddProjectMemberInput,
   ApiKey,
-  ApiKeyScope,
   AuditLogEntry,
-  Environment,
+  AuditLogQuery,
+  ChangePasswordInput,
+  CreateApiKeyInput,
+  CreateEnvironmentInput,
+  CreateFlagInput,
+  CreateSegmentInput,
+  CreatedApiKey,
+  EnvironmentDetail,
+  EnvironmentSummary,
+  EnvironmentSettings,
+  EvaluateRequest,
   EvaluationResult,
-  EvaluationUserContext,
-  FeatureFlag,
+  FlagCoveragePage,
+  FlagDependencyGraph,
+  FlagDetail,
+  FlagEnvironmentConfig,
+  FlagIndividualTarget,
+  FlagListQuery,
+  FlagSummary,
+  FlagVersion,
   Project,
-  Segment,
-} from "@/lib/types";
+  ProjectMember,
+  ReplaceIndividualTargetsInput,
+  ReplaceTargetingRulesInput,
+  SegmentDetail,
+  SegmentFlag,
+  SegmentSummary,
+  SessionUser,
+  TargetingRule,
+  UpdateEnvironmentSettingsInput,
+  UpdateFlagConfigInput,
+  UpdateFlagInput,
+  UpdateNotificationsInput,
+  UpdatePreferencesInput,
+  UpdateProfileInput,
+  UpdateProjectInput,
+  UpdateSegmentInput,
+  UpdateWorkspaceInput,
+  UpdateWorkspaceSecurityInput,
+  UserPreferences,
+  WorkspaceFlagListQuery,
+  WorkspaceFlagSummary,
+  WorkspaceProfile,
+  WorkspaceSecuritySettings,
+} from "@dariise/contracts";
+import env from "shared/env";
 
 /**
  * Thin typed client for the Dariise API. It intentionally has no data-fetching
  * framework attached: Server Components call the resource functions directly,
  * and Client Components can call them for mutations.
+ *
+ * Types come from `@dariise/contracts`, so this file cannot drift from the wire
+ * contract the API validates against.
  */
 
 export class ApiError extends Error {
@@ -35,6 +76,12 @@ export class ApiError extends Error {
  */
 export type QueryParams = Record<string, unknown>;
 
+/** Mirrors the `{ data, nextCursor }` envelope every list endpoint returns. */
+export interface ApiPage<T> {
+  data: T[];
+  nextCursor: string | null;
+}
+
 export interface RequestOptions {
   /**
    * Seconds a Server Component may reuse the response for. Omit to opt out of
@@ -44,14 +91,14 @@ export interface RequestOptions {
   /** Set for non-GET requests. */
   body?: unknown;
   signal?: AbortSignal;
-  /** Extra headers, e.g. a management API key for mutations. */
+  /** Extra headers, e.g. the forwarded session cookie. */
   headers?: Record<string, string>;
 }
 
 export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 function buildUrl(path: string, query?: QueryParams): string {
-  const url = new URL(`${API_URL}${path}`);
+  const url = new URL(`${env.apiUrl}${path}`);
 
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value === undefined || value === null) continue;
@@ -72,23 +119,20 @@ async function parseBody(response: Response): Promise<unknown> {
   }
 }
 
+/** Reads the contracted `{ error: { code, message, details? } }` envelope. */
 function errorMessage(payload: unknown, status: number): string {
   if (typeof payload === "string" && payload.trim()) return payload;
 
-  if (payload && typeof payload === "object" && "detail" in payload) {
-    const detail = (payload as { detail: unknown }).detail;
-    if (typeof detail === "string") return detail;
-    // FastAPI validation errors arrive as a list of {loc, msg, type}.
-    if (Array.isArray(detail)) {
-      const messages = detail
-        .map((item) =>
-          item && typeof item === "object" && "msg" in item
-            ? String((item as { msg: unknown }).msg)
-            : null,
-        )
-        .filter((message): message is string => Boolean(message));
+  if (payload && typeof payload === "object" && "error" in payload) {
+    const error = (payload as { error: unknown }).error;
 
-      if (messages.length > 0) return messages.join("; ");
+    if (
+      error &&
+      typeof error === "object" &&
+      "message" in error &&
+      typeof (error as { message: unknown }).message === "string"
+    ) {
+      return (error as { message: string }).message;
     }
   }
 
@@ -119,154 +163,449 @@ export async function request<T>(
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
-      ...(revalidate === undefined ? { cache: "no-store" as const } : { next: { revalidate } }),
+      ...(revalidate === undefined
+        ? { cache: "no-store" as const }
+        : { next: { revalidate } }),
     });
   } catch (cause) {
-    throw new ApiError(
-      `Could not reach the Dariise API at ${API_URL}.`,
-      0,
-      cause,
-    );
+    throw new ApiError(`Could not reach the Dariise API at ${env.apiUrl}.`, 0, cause);
   }
 
   const payload = await parseBody(response);
 
   if (!response.ok) {
-    throw new ApiError(errorMessage(payload, response.status), response.status, payload);
+    throw new ApiError(
+      errorMessage(payload, response.status),
+      response.status,
+      payload,
+    );
   }
 
   return payload as T;
 }
 
-export type FlagListFilters = QueryParams & {
-  /** Case-insensitive match on flag key or name. */
-  search?: string;
-  status?: FeatureFlag["status"];
-};
-
 export const projects = {
-  list: (options?: RequestOptions) => request<Project[]>("GET", "/v1/projects", options),
-  get: (projectId: string, options?: RequestOptions) =>
-    request<Project>("GET", `/v1/projects/${projectId}`, options),
+  list: (query: { search?: string } = {}, options?: RequestOptions) =>
+    request<Project[]>("GET", "/v1/projects", { ...options, query }),
+
+  get: (projectKey: string, options?: RequestOptions) =>
+    request<Project>("GET", `/v1/projects/${projectKey}`, options),
+
+  create: (
+    input: { name: string; environmentName: string },
+    options?: RequestOptions,
+  ) =>
+    request<Project>("POST", "/v1/projects", { ...options, body: input }),
+
+  update: (
+    projectKey: string,
+    input: UpdateProjectInput,
+    options?: RequestOptions,
+  ) =>
+    request<Project>("PATCH", `/v1/projects/${projectKey}`, {
+      ...options,
+      body: input,
+    }),
 };
 
 export const environments = {
-  list: (projectId: string, options?: RequestOptions) =>
-    request<Environment[]>("GET", `/v1/projects/${projectId}/environments`, options),
-  get: (projectId: string, environmentId: string, options?: RequestOptions) =>
-    request<Environment>(
+  list: (projectKey: string, options?: RequestOptions) =>
+    request<ApiPage<EnvironmentSummary>>(
       "GET",
-      `/v1/projects/${projectId}/environments/${environmentId}`,
+      `/v1/projects/${projectKey}/environments`,
+      options,
+    ),
+
+  get: (projectKey: string, environmentKey: string, options?: RequestOptions) =>
+    request<EnvironmentDetail>(
+      "GET",
+      `/v1/projects/${projectKey}/environments/${environmentKey}`,
+      options,
+    ),
+
+  create: (
+    projectKey: string,
+    input: CreateEnvironmentInput,
+    options?: RequestOptions,
+  ) =>
+    request<EnvironmentDetail>(
+      "POST",
+      `/v1/projects/${projectKey}/environments`,
+      { ...options, body: input },
+    ),
+
+  updateSettings: (
+    projectKey: string,
+    environmentKey: string,
+    input: UpdateEnvironmentSettingsInput,
+    options?: RequestOptions,
+  ) =>
+    request<EnvironmentDetail>(
+      "PATCH",
+      `/v1/projects/${projectKey}/environments/${environmentKey}/settings`,
+      { ...options, body: input },
+    ),
+
+  coverage: (projectKey: string, options?: RequestOptions) =>
+    request<FlagCoveragePage>(
+      "GET",
+      `/v1/projects/${projectKey}/coverage`,
       options,
     ),
 };
 
 export const flags = {
   list: (
-    projectId: string,
-    environmentId: string,
-    filters: FlagListFilters = {},
+    projectKey: string,
+    query: Partial<FlagListQuery> = {},
     options?: RequestOptions,
   ) =>
-    request<FeatureFlag[]>(
-      "GET",
-      `/v1/projects/${projectId}/environments/${environmentId}/flags`,
-      { ...options, query: filters },
-    ),
+    request<ApiPage<FlagSummary>>("GET", `/v1/projects/${projectKey}/flags`, {
+      ...options,
+      query,
+    }),
 
-  get: (
-    projectId: string,
-    environmentId: string,
-    flagKey: string,
+  create: (
+    projectKey: string,
+    input: CreateFlagInput,
     options?: RequestOptions,
   ) =>
-    request<FeatureFlag>(
+    request<FlagDetail>("POST", `/v1/projects/${projectKey}/flags`, {
+      ...options,
+      body: input,
+    }),
+
+  get: (projectKey: string, flagKey: string, options?: RequestOptions) =>
+    request<FlagDetail>(
       "GET",
-      `/v1/projects/${projectId}/environments/${environmentId}/flags/${flagKey}`,
+      `/v1/projects/${projectKey}/flags/${flagKey}`,
       options,
     ),
 
-  create: (
-    projectId: string,
-    environmentId: string,
-    input: Pick<FeatureFlag, "key" | "name"> &
-      Partial<Pick<FeatureFlag, "description" | "defaultVariation">>,
+  update: (
+    projectKey: string,
+    flagKey: string,
+    input: UpdateFlagInput,
     options?: RequestOptions,
   ) =>
-    request<FeatureFlag>(
-      "POST",
-      `/v1/projects/${projectId}/environments/${environmentId}/flags`,
+    request<FlagDetail>(
+      "PATCH",
+      `/v1/projects/${projectKey}/flags/${flagKey}`,
       { ...options, body: input },
     ),
 
-  update: (
-    projectId: string,
-    environmentId: string,
-    flagKey: string,
-    input: Partial<FeatureFlag>,
+  archive: (projectKey: string, flagKey: string, options?: RequestOptions) =>
+    request<{ key: string; status: string }>(
+      "DELETE",
+      `/v1/projects/${projectKey}/flags/${flagKey}`,
+      options,
+    ),
+
+  /** The workspace-wide screen; flag keys collide across projects. */
+  listWorkspace: (
+    query: Partial<WorkspaceFlagListQuery> = {},
     options?: RequestOptions,
   ) =>
-    request<FeatureFlag>(
+    request<ApiPage<WorkspaceFlagSummary>>("GET", "/v1/flags", {
+      ...options,
+      query,
+    }),
+
+  resolve: (flagKey: string, projectKey: string, options?: RequestOptions) =>
+    request<FlagDetail>("GET", `/v1/flags/${flagKey}`, {
+      ...options,
+      query: { projectKey },
+    }),
+
+  environmentConfig: (
+    projectKey: string,
+    flagKey: string,
+    environmentKey: string,
+    options?: RequestOptions,
+  ) =>
+    request<FlagEnvironmentConfig>(
+      "GET",
+      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}`,
+      options,
+    ),
+
+  updateEnvironmentConfig: (
+    projectKey: string,
+    flagKey: string,
+    environmentKey: string,
+    input: UpdateFlagConfigInput,
+    options?: RequestOptions,
+  ) =>
+    request<FlagEnvironmentConfig>(
       "PATCH",
-      `/v1/projects/${projectId}/environments/${environmentId}/flags/${flagKey}`,
+      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}`,
       { ...options, body: input },
+    ),
+
+  rules: (
+    projectKey: string,
+    flagKey: string,
+    environmentKey: string,
+    options?: RequestOptions,
+  ) =>
+    request<TargetingRule[]>(
+      "GET",
+      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}/rules`,
+      options,
+    ),
+
+  replaceRules: (
+    projectKey: string,
+    flagKey: string,
+    environmentKey: string,
+    input: ReplaceTargetingRulesInput,
+    options?: RequestOptions,
+  ) =>
+    request<TargetingRule[]>(
+      "PUT",
+      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}/rules`,
+      { ...options, body: input },
+    ),
+
+  targets: (
+    projectKey: string,
+    flagKey: string,
+    environmentKey: string,
+    options?: RequestOptions,
+  ) =>
+    request<FlagIndividualTarget[]>(
+      "GET",
+      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}/targets`,
+      options,
+    ),
+
+  replaceTargets: (
+    projectKey: string,
+    flagKey: string,
+    environmentKey: string,
+    input: ReplaceIndividualTargetsInput,
+    options?: RequestOptions,
+  ) =>
+    request<FlagIndividualTarget[]>(
+      "PUT",
+      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}/targets`,
+      { ...options, body: input },
+    ),
+
+  dependencies: (projectKey: string, flagKey: string, options?: RequestOptions) =>
+    request<FlagDependencyGraph>(
+      "GET",
+      `/v1/projects/${projectKey}/flags/${flagKey}/dependencies`,
+      options,
+    ),
+
+  versions: (projectKey: string, flagKey: string, options?: RequestOptions) =>
+    request<ApiPage<FlagVersion>>(
+      "GET",
+      `/v1/projects/${projectKey}/flags/${flagKey}/versions`,
+      options,
     ),
 };
 
 export const segments = {
-  list: (projectId: string, options?: RequestOptions) =>
-    request<Segment[]>("GET", `/v1/projects/${projectId}/segments`, options),
-};
+  list: (projectKey: string, query: { search?: string } = {}, options?: RequestOptions) =>
+    request<ApiPage<SegmentSummary>>(
+      "GET",
+      `/v1/projects/${projectKey}/segments`,
+      { ...options, query },
+    ),
 
-export interface CreateApiKeyBody {
-  name: string;
-  /** `null` issues a key that is valid in every environment. */
-  environmentId: string | null;
-  scopes: ApiKeyScope[];
-  /** `null` issues a key that never expires. */
-  expiresInDays: number | null;
-}
-
-export const apiKeys = {
-  list: (projectId: string, options?: RequestOptions) =>
-    request<ApiKey[]>("GET", `/v1/projects/${projectId}/api-keys`, options),
-
-  /**
-   * Issue a key.
-   *
-   * This is the only response that carries `secret`; the dashboard shows it
-   * once and never asks for it again.
-   */
   create: (
-    projectId: string,
-    input: CreateApiKeyBody,
+    projectKey: string,
+    input: CreateSegmentInput,
     options?: RequestOptions,
   ) =>
-    request<ApiKey & { secret: string }>(
-      "POST",
-      `/v1/projects/${projectId}/api-keys`,
+    request<SegmentDetail>("POST", `/v1/projects/${projectKey}/segments`, {
+      ...options,
+      body: input,
+    }),
+
+  get: (projectKey: string, segmentKey: string, options?: RequestOptions) =>
+    request<SegmentDetail>(
+      "GET",
+      `/v1/projects/${projectKey}/segments/${segmentKey}`,
+      options,
+    ),
+
+  update: (
+    projectKey: string,
+    segmentKey: string,
+    input: UpdateSegmentInput,
+    options?: RequestOptions,
+  ) =>
+    request<SegmentDetail>(
+      "PATCH",
+      `/v1/projects/${projectKey}/segments/${segmentKey}`,
       { ...options, body: input },
     ),
 
-  revoke: (projectId: string, keyId: string, options?: RequestOptions) =>
-    request<void>(
+  archive: (projectKey: string, segmentKey: string, options?: RequestOptions) =>
+    request<{ key: string; archivedAt: string }>(
       "DELETE",
-      `/v1/projects/${projectId}/api-keys/${keyId}`,
+      `/v1/projects/${projectKey}/segments/${segmentKey}`,
+      options,
+    ),
+
+  flags: (projectKey: string, segmentKey: string, options?: RequestOptions) =>
+    request<SegmentFlag[]>(
+      "GET",
+      `/v1/projects/${projectKey}/segments/${segmentKey}/flags`,
+      options,
+    ),
+};
+
+export const apiKeys = {
+  list: (
+    projectKey: string,
+    query: { includeRevoked?: boolean } = {},
+    options?: RequestOptions,
+  ) =>
+    request<ApiPage<ApiKey>>("GET", `/v1/projects/${projectKey}/api-keys`, {
+      ...options,
+      query,
+    }),
+
+  /**
+   * Issue a key. This is the only response that carries `secret`; the dashboard
+   * shows it once and never asks for it again.
+   */
+  create: (
+    projectKey: string,
+    input: CreateApiKeyInput,
+    options?: RequestOptions,
+  ) =>
+    request<CreatedApiKey>("POST", `/v1/projects/${projectKey}/api-keys`, {
+      ...options,
+      body: input,
+    }),
+
+  revoke: (projectKey: string, keyId: string, options?: RequestOptions) =>
+    request<ApiKey>(
+      "DELETE",
+      `/v1/projects/${projectKey}/api-keys/${keyId}`,
       options,
     ),
 };
 
 export const audit = {
-  list: (
-    projectId: string,
-    filters: { environmentId?: string; limit?: number } = {},
+  listForProject: (
+    projectKey: string,
+    query: Partial<AuditLogQuery> = {},
     options?: RequestOptions,
   ) =>
-    request<AuditLogEntry[]>("GET", `/v1/projects/${projectId}/audit-logs`, {
+    request<ApiPage<AuditLogEntry>>(
+      "GET",
+      `/v1/projects/${projectKey}/audit-logs`,
+      { ...options, query },
+    ),
+
+  /** The global screen renders outside a project, so it spans the workspace. */
+  listForWorkspace: (
+    query: Partial<AuditLogQuery> = {},
+    options?: RequestOptions,
+  ) =>
+    request<ApiPage<AuditLogEntry>>("GET", "/v1/audit-logs", {
       ...options,
-      query: filters,
+      query,
     }),
 };
+
+export const members = {
+  list: (projectKey: string, options?: RequestOptions) =>
+    request<ProjectMember[]>(
+      "GET",
+      `/v1/projects/${projectKey}/members`,
+      options,
+    ),
+
+  add: (
+    projectKey: string,
+    input: AddProjectMemberInput,
+    options?: RequestOptions,
+  ) =>
+    request<ProjectMember>("POST", `/v1/projects/${projectKey}/members`, {
+      ...options,
+      body: input,
+    }),
+
+  updateRole: (
+    projectKey: string,
+    userId: string,
+    role: ProjectMember["role"],
+    options?: RequestOptions,
+  ) =>
+    request<ProjectMember>(
+      "PATCH",
+      `/v1/projects/${projectKey}/members/${userId}`,
+      { ...options, body: { role } },
+    ),
+
+  remove: (projectKey: string, userId: string, options?: RequestOptions) =>
+    request<{ userId: string; removed: true }>(
+      "DELETE",
+      `/v1/projects/${projectKey}/members/${userId}`,
+      options,
+    ),
+};
+
+export const me = {
+  updateProfile: (input: UpdateProfileInput, options?: RequestOptions) =>
+    request<SessionUser>("PATCH", "/v1/me", { ...options, body: input }),
+
+  changePassword: (input: ChangePasswordInput, options?: RequestOptions) =>
+    request<{ status: string }>("POST", "/v1/me/password", {
+      ...options,
+      body: input,
+    }),
+
+  updatePreferences: (
+    input: UpdatePreferencesInput,
+    options?: RequestOptions,
+  ) =>
+    request<UserPreferences>("PATCH", "/v1/me/preferences", {
+      ...options,
+      body: input,
+    }),
+
+  updateNotifications: (
+    input: UpdateNotificationsInput,
+    options?: RequestOptions,
+  ) =>
+    request<UserPreferences>("PATCH", "/v1/me/notifications", {
+      ...options,
+      body: input,
+    }),
+};
+
+export const workspace = {
+  get: (options?: RequestOptions) =>
+    request<WorkspaceProfile>("GET", "/v1/workspace", options),
+
+  update: (input: UpdateWorkspaceInput, options?: RequestOptions) =>
+    request<WorkspaceProfile>("PATCH", "/v1/workspace", {
+      ...options,
+      body: input,
+    }),
+
+  getSecurity: (options?: RequestOptions) =>
+    request<WorkspaceSecuritySettings>("GET", "/v1/workspace/security", options),
+
+  updateSecurity: (
+    input: UpdateWorkspaceSecurityInput,
+    options?: RequestOptions,
+  ) =>
+    request<WorkspaceSecuritySettings>("PATCH", "/v1/workspace/security", {
+      ...options,
+      body: input,
+    }),
+};
+
+export type { EnvironmentSettings };
 
 /**
  * Evaluate a flag for a user.
@@ -275,11 +614,7 @@ export const audit = {
  * debug why a user received a particular variation.
  */
 export function evaluate(
-  input: {
-    flag: string;
-    environment: string;
-    user: EvaluationUserContext;
-  },
+  input: EvaluateRequest,
   options?: RequestOptions,
 ): Promise<EvaluationResult> {
   return request<EvaluationResult>("POST", "/v1/evaluate", {
