@@ -13,12 +13,25 @@ import { ProjectsController } from "./modules/projects/projects.controller.js";
 import { ProjectsRepository } from "./modules/projects/projects.repository.js";
 import { createProjectsRoutes } from "./modules/projects/projects.routes.js";
 import { ProjectsService } from "./modules/projects/projects.service.js";
+import { ProjectAccessRepository } from "./modules/project-access/project-access.repository.js";
+import { ProjectAccessService } from "./modules/project-access/project-access.service.js";
+import { SegmentsController } from "./modules/segments/segments.controller.js";
+import { SegmentsRepository } from "./modules/segments/segments.repository.js";
+import { createSegmentsRoutes } from "./modules/segments/segments.routes.js";
+import { SegmentsService } from "./modules/segments/segments.service.js";
 import { env } from "./config/index.js";
 import { errorResponse } from "./shared/http/errors.js";
 
 const authRepository = new AuthRepository();
+const projectAccessRepository = new ProjectAccessRepository();
 const projectsRepository = new ProjectsRepository();
+const segmentsRepository = new SegmentsRepository();
 
+const projectAccessService = new ProjectAccessService(projectAccessRepository);
+const segmentsService = new SegmentsService(
+  segmentsRepository,
+  projectAccessService,
+);
 const projectsService = new ProjectsService(projectsRepository);
 
 const authService = new AuthService(authRepository, (organizationId) =>
@@ -27,6 +40,7 @@ const authService = new AuthService(authRepository, (organizationId) =>
 
 const authController = new AuthController(authService);
 const projectsController = new ProjectsController(projectsService);
+const segmentsController = new SegmentsController(segmentsService);
 
 // One instance shared by both routers, so a request resolves its session once.
 const sessionMiddleware = createSessionMiddleware((headers) =>
@@ -39,6 +53,10 @@ const authRoutes = createAuthRoutes({
 });
 const projectRoutes = createProjectsRoutes({
   controller: projectsController,
+  sessionMiddleware,
+});
+const segmentRoutes = createSegmentsRoutes({
+  controller: segmentsController,
   sessionMiddleware,
 });
 
@@ -82,6 +100,7 @@ app.get("/readyz", async (c) => {
 
 app.route("/", authRoutes);
 app.route("/v1/projects", projectRoutes);
+app.route("/v1/projects", segmentRoutes);
 
 app.notFound((c) =>
   c.json(
