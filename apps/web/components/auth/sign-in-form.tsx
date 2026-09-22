@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { LoaderCircleIcon } from "lucide-react";
 import { AuthCard } from "@/components/auth/auth-card";
 import { GitHubIcon, GoogleIcon } from "@/components/auth/brand-icons";
@@ -14,7 +15,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { signIn, signInWithProvider, type OAuthProvider } from "@/lib/auth-stub";
+import {
+  AuthError,
+  signIn,
+  signInWithProvider,
+  type OAuthProvider,
+} from "@/lib/auth";
 import { isEmail, isRequired } from "@/lib/validation";
 
 type Action = OAuthProvider | "credentials";
@@ -25,17 +31,32 @@ interface SignInErrors {
   password?: string;
 }
 
-export function SignInForm() {
+interface SignInFormProps {
+  enabledProviders: OAuthProvider[];
+  /** An error handed back by the OAuth callback, if any. */
+  initialError?: string;
+}
+
+export function SignInForm({
+  enabledProviders,
+  initialError,
+}: SignInFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
-  const [errors, setErrors] = useState<SignInErrors>({});
+  const [errors, setErrors] = useState<SignInErrors>(
+    initialError ? { form: initialError } : {},
+  );
   const [pending, setPending] = useState<Action | null>(null);
-  const [signedIn, setSignedIn] = useState(false);
+  const router = useRouter();
   const controllerRef = useRef<AbortController | null>(null);
 
   function clearError(field: keyof SignInErrors) {
-    setErrors((previous) => ({ ...previous, form: undefined, [field]: undefined }));
+    setErrors((previous) => ({
+      ...previous,
+      form: undefined,
+      [field]: undefined,
+    }));
   }
 
   async function run(
@@ -51,9 +72,30 @@ export function SignInForm() {
 
     try {
       await task(controller.signal);
-      setSignedIn(true);
+
+      /**
+       * `refresh()` before `push()`, because the session cookie was just set on
+       * the API origin.
+       *
+       * The destination — whether the user has a workspace, what the sidebar
+       * shows — is resolved on the server from that cookie. `push()` alone would
+       * navigate against a Router Cache populated while signed out, so the shell
+       * would render as a signed-out user; `refresh()` discards that cache and
+       * re-renders the current tree from the server first.
+       */
+      router.refresh();
+      router.push("/overview");
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
+
+      if (error instanceof AuthError) {
+        setErrors((previous) => ({
+          ...previous,
+          ...(error.fieldErrors as SignInErrors),
+        }));
+        return;
+      }
+
       setErrors((previous) => ({
         ...previous,
         form: "Something went wrong. Please try again.",
@@ -90,24 +132,6 @@ export function SignInForm() {
     );
   }
 
-  if (signedIn) {
-    return (
-      <AuthCard
-        title="You are signed in"
-        description="Authentication is not wired up yet — this is a preview of the sign-in screen."
-      >
-        <div className="space-y-3">
-          <Button asChild className="w-full">
-            <Link href="/overview">View dashboard</Link>
-          </Button>
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/">Back to sign in</Link>
-          </Button>
-        </div>
-      </AuthCard>
-    );
-  }
-
   return (
     <AuthCard
       title="Sign in to Dariise"
@@ -118,7 +142,12 @@ export function SignInForm() {
           type="button"
           variant="outline"
           className="w-full"
-          disabled={pending !== null}
+          disabled={pending !== null || !enabledProviders.includes("github")}
+          title={
+            enabledProviders.includes("github")
+              ? undefined
+              : "GitHub sign-in is not configured on this deployment"
+          }
           onClick={() => handleProvider("github")}
         >
           {pending === "github" ? (
@@ -126,13 +155,18 @@ export function SignInForm() {
           ) : (
             <GitHubIcon className="size-4" />
           )}
-          Continue with GitHub
+          {pending === "github" ? "Redirecting…" : "Continue with GitHub"}
         </Button>
         <Button
           type="button"
           variant="outline"
           className="w-full"
-          disabled={pending !== null}
+          disabled={pending !== null || !enabledProviders.includes("google")}
+          title={
+            enabledProviders.includes("google")
+              ? undefined
+              : "Google sign-in is not configured on this deployment"
+          }
           onClick={() => handleProvider("google")}
         >
           {pending === "google" ? (
@@ -140,7 +174,7 @@ export function SignInForm() {
           ) : (
             <GoogleIcon className="size-4" />
           )}
-          Continue with Google
+          {pending === "google" ? "Redirecting…" : "Continue with Google"}
         </Button>
       </div>
 
@@ -216,7 +250,10 @@ export function SignInForm() {
 
       <p className="text-muted-foreground mt-6 text-center text-sm">
         Don&apos;t have an account?{" "}
-        <Link href="/sign-up" className="text-primary font-medium hover:underline">
+        <Link
+          href="/sign-up"
+          className="text-primary font-medium hover:underline"
+        >
           Create one
         </Link>
       </p>

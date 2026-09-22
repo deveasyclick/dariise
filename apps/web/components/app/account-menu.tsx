@@ -18,17 +18,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { signOut } from "@/lib/auth-stub";
+import { signOut } from "@/lib/auth";
 import type { CurrentUser } from "@/lib/dashboard-data";
 
-/**
- * The account menu on the avatar in the topbar.
- *
- * A Client Component because a dropdown needs state, and because signing out
- * runs through the auth stub. There is no session yet, so signing out
- * acknowledges the round-trip and returns to the sign-in screen — the same
- * treatment `signIn` gets.
- */
 export function AccountMenu({ user }: { user: CurrentUser }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);

@@ -6,7 +6,7 @@ import { ArrowLeftIcon, LoaderCircleIcon } from "lucide-react";
 import { AuthCard } from "@/components/auth/auth-card";
 import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
-import { requestPasswordReset } from "@/lib/auth-stub";
+import { requestPasswordReset } from "@/lib/auth";
 import { isEmail, isRequired } from "@/lib/validation";
 
 interface ForgotPasswordErrors {

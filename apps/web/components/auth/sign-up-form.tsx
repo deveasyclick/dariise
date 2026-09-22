@@ -2,9 +2,9 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { LoaderCircleIcon } from "lucide-react";
 import { AuthCard } from "@/components/auth/auth-card";
-import { OnboardingSteps } from "@/components/auth/onboarding-steps";
 import { GitHubIcon, GoogleIcon } from "@/components/auth/brand-icons";
 import {
   Field,
@@ -15,7 +15,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { signInWithProvider, signUp, type OAuthProvider } from "@/lib/auth-stub";
+import {
+  AuthError,
+  signInWithProvider,
+  signUp,
+  type OAuthProvider,
+} from "@/lib/auth";
 import { isEmail, isRequired } from "@/lib/validation";
 
 type Action = OAuthProvider | "credentials";
@@ -28,18 +33,33 @@ interface SignUpErrors {
   terms?: string;
 }
 
-export function SignUpForm() {
+interface SignUpFormProps {
+  enabledProviders: OAuthProvider[];
+  /** An error handed back by the OAuth callback, if any. */
+  initialError?: string;
+}
+
+export function SignUpForm({
+  enabledProviders,
+  initialError,
+}: SignUpFormProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [errors, setErrors] = useState<SignUpErrors>({});
+  const [errors, setErrors] = useState<SignUpErrors>(
+    initialError ? { form: initialError } : {},
+  );
   const [pending, setPending] = useState<Action | null>(null);
-  const [created, setCreated] = useState(false);
+  const router = useRouter();
   const controllerRef = useRef<AbortController | null>(null);
 
   function clearError(field: keyof SignUpErrors) {
-    setErrors((previous) => ({ ...previous, form: undefined, [field]: undefined }));
+    setErrors((previous) => ({
+      ...previous,
+      form: undefined,
+      [field]: undefined,
+    }));
   }
 
   async function run(
@@ -55,9 +75,17 @@ export function SignUpForm() {
 
     try {
       await task(controller.signal);
-      setCreated(true);
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
+
+      if (error instanceof AuthError) {
+        setErrors((previous) => ({
+          ...previous,
+          ...(error.fieldErrors as SignUpErrors),
+        }));
+        return;
+      }
+
       setErrors((previous) => ({
         ...previous,
         form: "Something went wrong. Please try again.",
@@ -98,33 +126,19 @@ export function SignUpForm() {
     }
 
     setErrors({});
-    void run("credentials", (signal) =>
-      signUp({ name: name.trim(), email: email.trim(), password }, signal),
-    );
-  }
+    void run("credentials", async (signal) => {
+      await signUp(
+        { name: name.trim(), email: email.trim(), password },
+        signal,
+      );
 
-  if (created) {
-    return (
-      <AuthCard
-        steps={<OnboardingSteps current="workspace" />}
-        title="Account created"
-        description="Your account is ready. Creating a workspace is the next step."
-      >
-        <div className="space-y-3">
-          <Button asChild className="w-full">
-            <Link href="/create-workspace">Create a workspace</Link>
-          </Button>
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/">Back to sign in</Link>
-          </Button>
-        </div>
-      </AuthCard>
-    );
+      router.refresh();
+      router.push("/create-workspace");
+    });
   }
 
   return (
     <AuthCard
-      steps={<OnboardingSteps current="account" />}
       title="Create your account"
       description="Set up your Dariise account. Next you'll create a workspace and your first project."
     >
@@ -133,7 +147,12 @@ export function SignUpForm() {
           type="button"
           variant="outline"
           className="w-full"
-          disabled={pending !== null}
+          disabled={pending !== null || !enabledProviders.includes("github")}
+          title={
+            enabledProviders.includes("github")
+              ? undefined
+              : "GitHub sign-in is not configured on this deployment"
+          }
           onClick={() => handleProvider("github")}
         >
           {pending === "github" ? (
@@ -141,13 +160,18 @@ export function SignUpForm() {
           ) : (
             <GitHubIcon className="size-4" />
           )}
-          Continue with GitHub
+          {pending === "github" ? "Redirecting…" : "Continue with GitHub"}
         </Button>
         <Button
           type="button"
           variant="outline"
           className="w-full"
-          disabled={pending !== null}
+          disabled={pending !== null || !enabledProviders.includes("google")}
+          title={
+            enabledProviders.includes("google")
+              ? undefined
+              : "Google sign-in is not configured on this deployment"
+          }
           onClick={() => handleProvider("google")}
         >
           {pending === "google" ? (
@@ -155,7 +179,7 @@ export function SignUpForm() {
           ) : (
             <GoogleIcon className="size-4" />
           )}
-          Continue with Google
+          {pending === "google" ? "Redirecting…" : "Continue with Google"}
         </Button>
       </div>
 
