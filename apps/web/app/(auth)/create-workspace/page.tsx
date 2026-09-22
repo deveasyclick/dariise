@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+
 import { CreateWorkspaceForm } from "@/components/auth/create-workspace-form";
-import { getDataRegions } from "@/lib/onboarding-data";
 
 export const metadata: Metadata = {
   title: "Create workspace",
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function CreateWorkspacePage() {
-  return <CreateWorkspaceForm regions={getDataRegions()} />;
+  return <CreateWorkspaceForm />;
 }

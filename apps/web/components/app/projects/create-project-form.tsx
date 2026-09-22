@@ -23,7 +23,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { EnvironmentColor } from "@/lib/environment-data";
 import { environmentPresets, getProjectKeys } from "@/lib/project-data";
-import { createProject, type InitialFlagState } from "@/lib/project-stub";
+import { AuthError, createProject, type InitialFlagState } from "@/lib/auth";
 import { isRequired, isValidSlug, toWorkspaceSlug } from "@/lib/validation";
 
 const initialFlagStateOptions: Array<{
@@ -50,14 +50,6 @@ interface CreateProjectErrors {
   key?: string;
 }
 
-/**
- * Create-project form for the dashboard.
- *
- * Every section of the design sits on one screen, so the step path in the
- * header is a progress path rather than a wizard: the sections below are named
- * in the order it lists them. Writes go through the project stub, which
- * simulates the round-trip so the pending and success states are real.
- */
 export function CreateProjectForm() {
   const defaultPreset = environmentPresets[0];
   const [name, setName] = useState("");
@@ -140,18 +132,22 @@ export function CreateProjectForm() {
       await createProject(
         {
           name: name.trim(),
-          key: key.trim(),
-          color,
-          preset,
-          initialFlagState,
-          defaultEnvironment,
-          setAsDefault,
+          environmentName: environments[0] ?? "Development",
         },
         controller.signal,
       );
       setCreated(true);
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
+
+      if (error instanceof AuthError) {
+        setErrors((previous) => ({
+          ...previous,
+          ...(error.fieldErrors as CreateProjectErrors),
+        }));
+        return;
+      }
+
       setErrors({ form: "Something went wrong. Please try again." });
     } finally {
       setPending(false);
@@ -168,8 +164,9 @@ export function CreateProjectForm() {
           {name.trim() || key.trim()} created
         </h2>
         <p className="text-muted-foreground mt-1 max-w-md text-[13px]">
-          The project exists in this preview only — the API is not wired up yet,
-          so nothing was saved and no environments or keys were issued.
+          Your project and its first environment are saved. Environments, SDK
+          keys and colour are not configurable yet, so those choices were not
+          applied.
         </p>
         <div className="mt-5 flex items-center gap-2">
           <Button asChild size="sm">
@@ -311,7 +308,9 @@ export function CreateProjectForm() {
                   htmlFor={`create-project-flags-${option.value}`}
                   className={cn(
                     "flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 font-normal transition-colors",
-                    active ? "border-primary bg-primary/5" : "hover:bg-muted/50",
+                    active
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-muted/50",
                   )}
                 >
                   <RadioGroupItem

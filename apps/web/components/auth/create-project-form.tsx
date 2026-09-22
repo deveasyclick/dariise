@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowRightIcon,
   CornerDownRightIcon,
@@ -12,7 +12,7 @@ import { AuthCard } from "@/components/auth/auth-card";
 import { OnboardingSteps } from "@/components/auth/onboarding-steps";
 import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
-import { createProject } from "@/lib/project-stub";
+import { AuthError, createProject } from "@/lib/auth";
 import { isRequired } from "@/lib/validation";
 
 /** The environment every project is created with, and its fallback label. */
@@ -24,22 +24,20 @@ interface CreateProjectErrors {
   environment?: string;
 }
 
-/**
- * Last onboarding step: name the first project and its default environment.
- *
- * The summary card is a live preview of what the submit will create, so it
- * reads from the same state the form validates.
- */
 export function CreateProjectForm() {
   const [name, setName] = useState("");
   const [environment, setEnvironment] = useState(defaultEnvironmentName);
   const [errors, setErrors] = useState<CreateProjectErrors>({});
   const [pending, setPending] = useState(false);
-  const [created, setCreated] = useState(false);
+  const router = useRouter();
   const controllerRef = useRef<AbortController | null>(null);
 
   function clearError(field: keyof CreateProjectErrors) {
-    setErrors((previous) => ({ ...previous, form: undefined, [field]: undefined }));
+    setErrors((previous) => ({
+      ...previous,
+      form: undefined,
+      [field]: undefined,
+    }));
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -67,31 +65,24 @@ export function CreateProjectForm() {
         { name: name.trim(), environmentName: environment.trim() },
         controller.signal,
       );
-      setCreated(true);
+
+      router.refresh();
+      router.push("/overview");
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
+
+      if (error instanceof AuthError) {
+        setErrors((previous) => ({
+          ...previous,
+          ...(error.fieldErrors as CreateProjectErrors),
+        }));
+        return;
+      }
+
       setErrors({ form: "Something went wrong. Please try again." });
     } finally {
       setPending(false);
     }
-  }
-
-  if (created) {
-    return (
-      <AuthCard
-        title="Project created"
-        description="Your project and its first environment are ready. The dashboard is not wired to the API yet — this is a preview of the onboarding flow."
-      >
-        <div className="space-y-3">
-          <Button asChild className="w-full">
-            <Link href="/overview">Go to dashboard</Link>
-          </Button>
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/">Back to sign in</Link>
-          </Button>
-        </div>
-      </AuthCard>
-    );
   }
 
   return (
@@ -160,7 +151,6 @@ interface ProjectSummaryCardProps {
   environmentName: string;
 }
 
-/** Preview of the project and default environment the submit will create. */
 function ProjectSummaryCard({
   projectName,
   environmentName,

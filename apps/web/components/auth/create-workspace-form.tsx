@@ -1,30 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRightIcon, LoaderCircleIcon } from "lucide-react";
 import { AuthCard } from "@/components/auth/auth-card";
 import { OnboardingSteps } from "@/components/auth/onboarding-steps";
-import {
-  Field,
-  FieldError,
-  FieldHint,
-  PrefixedField,
-} from "@/components/auth/field";
+import { Field, FieldError, PrefixedField } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { createWorkspace } from "@/lib/auth-stub";
-import {
-  defaultDataRegion,
-  type DataRegionOption,
-} from "@/lib/onboarding-data";
+import { AuthError, createWorkspace } from "@/lib/auth";
 import { workspaceHost } from "@/lib/settings-data";
 import {
   isRequired,
@@ -40,23 +23,22 @@ interface CreateWorkspaceErrors {
   invites?: string;
 }
 
-export function CreateWorkspaceForm({
-  regions,
-}: {
-  regions: DataRegionOption[];
-}) {
+export function CreateWorkspaceForm() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
-  const [region, setRegion] = useState(defaultDataRegion);
   const [invites, setInvites] = useState("");
   const [editedSlug, setEditedSlug] = useState(false);
   const [errors, setErrors] = useState<CreateWorkspaceErrors>({});
   const [pending, setPending] = useState(false);
-  const [created, setCreated] = useState(false);
+  const router = useRouter();
   const controllerRef = useRef<AbortController | null>(null);
 
   function clearError(field: keyof CreateWorkspaceErrors) {
-    setErrors((previous) => ({ ...previous, form: undefined, [field]: undefined }));
+    setErrors((previous) => ({
+      ...previous,
+      form: undefined,
+      [field]: undefined,
+    }));
   }
 
   function handleNameChange(value: string) {
@@ -92,7 +74,6 @@ export function CreateWorkspaceForm({
         {
           name: name.trim(),
           slug: slug.trim(),
-          region,
           invites: invites
             .split(",")
             .map((invite) => invite.trim())
@@ -100,32 +81,24 @@ export function CreateWorkspaceForm({
         },
         controller.signal,
       );
-      setCreated(true);
+
+      router.refresh();
+      router.push("/create-project");
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
+
+      if (error instanceof AuthError) {
+        setErrors((previous) => ({
+          ...previous,
+          ...(error.fieldErrors as CreateWorkspaceErrors),
+        }));
+        return;
+      }
+
       setErrors({ form: "Something went wrong. Please try again." });
     } finally {
       setPending(false);
     }
-  }
-
-  if (created) {
-    return (
-      <AuthCard
-        steps={<OnboardingSteps current="project" />}
-        title="Workspace created"
-        description="Your workspace is ready. Add the first project your flags and environments will live in."
-      >
-        <div className="space-y-3">
-          <Button asChild className="w-full">
-            <Link href="/create-project">Create a project</Link>
-          </Button>
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/overview">Skip to dashboard</Link>
-          </Button>
-        </div>
-      </AuthCard>
-    );
   }
 
   return (
@@ -164,25 +137,6 @@ export function CreateWorkspaceForm({
           }}
         />
 
-        <div className="space-y-2">
-          <Label htmlFor="create-workspace-region">Data region</Label>
-          <Select value={region} onValueChange={setRegion}>
-            <SelectTrigger id="create-workspace-region" className="w-full">
-              <SelectValue placeholder="Select a region" />
-            </SelectTrigger>
-            <SelectContent>
-              {regions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <FieldHint>
-            Where your evaluation data is stored and processed.
-          </FieldHint>
-        </div>
-
         <Field
           id="create-workspace-invites"
           label="Invite teammates (optional)"
@@ -212,8 +166,7 @@ export function CreateWorkspaceForm({
       </form>
 
       <p className="text-muted-foreground mt-6 text-center text-xs leading-5">
-        You can invite more teammates, rename the workspace, or switch regions
-        later in Settings.
+        You can invite more teammates or rename the workspace later in Settings.
       </p>
     </AuthCard>
   );
