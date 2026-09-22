@@ -9,6 +9,10 @@ import { ApiKeysController } from "./modules/api-keys/api-keys.controller.js";
 import { ApiKeysRepository } from "./modules/api-keys/api-keys.repository.js";
 import { createApiKeysRoutes } from "./modules/api-keys/api-keys.routes.js";
 import { ApiKeysService } from "./modules/api-keys/api-keys.service.js";
+import { AuditLogController } from "./modules/audit-log/audit-log.controller.js";
+import { AuditLogRepository } from "./modules/audit-log/audit-log.repository.js";
+import { createAuditLogRoutes } from "./modules/audit-log/audit-log.routes.js";
+import { AuditLogService } from "./modules/audit-log/audit-log.service.js";
 import { AuthController } from "./modules/auth/auth.controller.js";
 import { AuthRepository } from "./modules/auth/auth.repository.js";
 import { createAuthRoutes } from "./modules/auth/auth.routes.js";
@@ -41,6 +45,7 @@ const flagsRepository = new FlagsRepository();
 const environmentsRepository = new EnvironmentsRepository();
 const segmentsRepository = new SegmentsRepository();
 const apiKeysRepository = new ApiKeysRepository();
+const auditLogRepository = new AuditLogRepository();
 
 const projectAccessService = new ProjectAccessService(projectAccessRepository);
 const environmentsService = new EnvironmentsService(
@@ -53,6 +58,10 @@ const segmentsService = new SegmentsService(
 );
 const apiKeysService = new ApiKeysService(
   apiKeysRepository,
+  projectAccessService,
+);
+const auditLogService = new AuditLogService(
+  auditLogRepository,
   projectAccessService,
 );
 // Injected so the projects module never reaches into environments itself.
@@ -78,6 +87,7 @@ const flagsController = new FlagsController(flagsService);
 const environmentsController = new EnvironmentsController(environmentsService);
 const segmentsController = new SegmentsController(segmentsService);
 const apiKeysController = new ApiKeysController(apiKeysService);
+const auditLogController = new AuditLogController(auditLogService);
 
 // One instance shared by both routers, so a request resolves its session once.
 const sessionMiddleware = createSessionMiddleware((headers) =>
@@ -108,6 +118,11 @@ const segmentRoutes = createSegmentsRoutes({
 });
 const apiKeyRoutes = createApiKeysRoutes({
   controller: apiKeysController,
+  sessionMiddleware,
+});
+// Mounted at `/`: it serves both `/v1/audit-logs` and the project-scoped list.
+const auditLogRoutes = createAuditLogRoutes({
+  controller: auditLogController,
   sessionMiddleware,
 });
 
@@ -154,6 +169,7 @@ app.route("/v1/projects", projectRoutes);
 app.route("/v1/projects", environmentRoutes);
 app.route("/v1/projects", segmentRoutes);
 app.route("/v1/projects", apiKeyRoutes);
+app.route("/", auditLogRoutes);
 app.route("/", flagRoutes);
 
 app.notFound((c) =>
