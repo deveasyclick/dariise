@@ -9,6 +9,10 @@ import { AuthController } from "./modules/auth/auth.controller.js";
 import { AuthRepository } from "./modules/auth/auth.repository.js";
 import { createAuthRoutes } from "./modules/auth/auth.routes.js";
 import { AuthService } from "./modules/auth/auth.service.js";
+import { EnvironmentsController } from "./modules/environments/environments.controller.js";
+import { EnvironmentsRepository } from "./modules/environments/environments.repository.js";
+import { createEnvironmentsRoutes } from "./modules/environments/environments.routes.js";
+import { EnvironmentsService } from "./modules/environments/environments.service.js";
 import { ProjectsController } from "./modules/projects/projects.controller.js";
 import { ProjectsRepository } from "./modules/projects/projects.repository.js";
 import { createProjectsRoutes } from "./modules/projects/projects.routes.js";
@@ -30,14 +34,24 @@ const authRepository = new AuthRepository();
 const projectAccessRepository = new ProjectAccessRepository();
 const projectsRepository = new ProjectsRepository();
 const flagsRepository = new FlagsRepository();
+const environmentsRepository = new EnvironmentsRepository();
 const segmentsRepository = new SegmentsRepository();
 
 const projectAccessService = new ProjectAccessService(projectAccessRepository);
+const environmentsService = new EnvironmentsService(
+  environmentsRepository,
+  projectAccessService,
+);
 const segmentsService = new SegmentsService(
   segmentsRepository,
   projectAccessService,
 );
-const projectsService = new ProjectsService(projectsRepository);
+// Injected so the projects module never reaches into environments itself.
+const projectsService = new ProjectsService(
+  projectsRepository,
+  (tx, projectId, name) => environmentsService.createDefault(tx, projectId, name),
+  projectAccessService,
+);
 // Injected so the flags module never imports the segments module.
 const flagsService = new FlagsService(
   flagsRepository,
@@ -52,6 +66,7 @@ const authService = new AuthService(authRepository, (organizationId) =>
 const authController = new AuthController(authService);
 const projectsController = new ProjectsController(projectsService);
 const flagsController = new FlagsController(flagsService);
+const environmentsController = new EnvironmentsController(environmentsService);
 const segmentsController = new SegmentsController(segmentsService);
 
 // One instance shared by both routers, so a request resolves its session once.
@@ -70,6 +85,11 @@ const projectRoutes = createProjectsRoutes({
 // Mounted at `/`: the module owns both the project-scoped paths and `/v1/flags`.
 const flagRoutes = createFlagsRoutes({
   controller: flagsController,
+  sessionMiddleware,
+});
+// A second router under `/v1/projects`, for the environment sub-resources.
+const environmentRoutes = createEnvironmentsRoutes({
+  controller: environmentsController,
   sessionMiddleware,
 });
 const segmentRoutes = createSegmentsRoutes({
@@ -117,6 +137,7 @@ app.get("/readyz", async (c) => {
 
 app.route("/", authRoutes);
 app.route("/v1/projects", projectRoutes);
+app.route("/v1/projects", environmentRoutes);
 app.route("/v1/projects", segmentRoutes);
 app.route("/", flagRoutes);
 

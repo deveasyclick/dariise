@@ -8,10 +8,7 @@ export interface ProjectsRoutesDeps {
   sessionMiddleware: MiddlewareHandler;
 }
 
-/**
- * Owns every path the projects module serves. Construction and mounting are
- * owned by `app.ts`.
- */
+// Owns every path the projects module serves; `app.ts` owns construction and mounting.
 export function createProjectsRoutes({
   controller,
   sessionMiddleware,
@@ -21,7 +18,10 @@ export function createProjectsRoutes({
   routes.use("*", sessionMiddleware);
 
   // Mounted at `/v1/projects` in `app.ts`; the router owns the paths below it.
+  routes.get("/", (c) => controller.list(c));
   routes.post("/", (c) => controller.create(c));
+  routes.get("/:projectKey", (c) => controller.get(c));
+  routes.patch("/:projectKey", (c) => controller.update(c));
 
   return routes;
 }
