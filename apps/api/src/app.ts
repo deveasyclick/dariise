@@ -31,6 +31,10 @@ import { createFlagsRoutes } from "./modules/flags/flags.routes.js";
 import { FlagsService } from "./modules/flags/flags.service.js";
 import { ProjectAccessRepository } from "./modules/project-access/project-access.repository.js";
 import { ProjectAccessService } from "./modules/project-access/project-access.service.js";
+import { ProjectMembersController } from "./modules/project-members/project-members.controller.js";
+import { ProjectMembersRepository } from "./modules/project-members/project-members.repository.js";
+import { createProjectMembersRoutes } from "./modules/project-members/project-members.routes.js";
+import { ProjectMembersService } from "./modules/project-members/project-members.service.js";
 import { SegmentsController } from "./modules/segments/segments.controller.js";
 import { SegmentsRepository } from "./modules/segments/segments.repository.js";
 import { createSegmentsRoutes } from "./modules/segments/segments.routes.js";
@@ -46,6 +50,7 @@ const environmentsRepository = new EnvironmentsRepository();
 const segmentsRepository = new SegmentsRepository();
 const apiKeysRepository = new ApiKeysRepository();
 const auditLogRepository = new AuditLogRepository();
+const projectMembersRepository = new ProjectMembersRepository();
 
 const projectAccessService = new ProjectAccessService(projectAccessRepository);
 const environmentsService = new EnvironmentsService(
@@ -80,6 +85,10 @@ const flagsService = new FlagsService(
 const authService = new AuthService(authRepository, (organizationId) =>
   projectsService.hasProject(organizationId),
 );
+const projectMembersService = new ProjectMembersService(
+  projectMembersRepository,
+  projectAccessService,
+);
 
 const authController = new AuthController(authService);
 const projectsController = new ProjectsController(projectsService);
@@ -88,6 +97,9 @@ const environmentsController = new EnvironmentsController(environmentsService);
 const segmentsController = new SegmentsController(segmentsService);
 const apiKeysController = new ApiKeysController(apiKeysService);
 const auditLogController = new AuditLogController(auditLogService);
+const projectMembersController = new ProjectMembersController(
+  projectMembersService,
+);
 
 // One instance shared by both routers, so a request resolves its session once.
 const sessionMiddleware = createSessionMiddleware((headers) =>
@@ -123,6 +135,10 @@ const apiKeyRoutes = createApiKeysRoutes({
 // Mounted at `/`: it serves both `/v1/audit-logs` and the project-scoped list.
 const auditLogRoutes = createAuditLogRoutes({
   controller: auditLogController,
+  sessionMiddleware,
+});
+const projectMemberRoutes = createProjectMembersRoutes({
+  controller: projectMembersController,
   sessionMiddleware,
 });
 
@@ -170,6 +186,7 @@ app.route("/v1/projects", environmentRoutes);
 app.route("/v1/projects", segmentRoutes);
 app.route("/v1/projects", apiKeyRoutes);
 app.route("/", auditLogRoutes);
+app.route("/v1/projects", projectMemberRoutes);
 app.route("/", flagRoutes);
 
 app.notFound((c) =>
