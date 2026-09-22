@@ -5,6 +5,10 @@ import { secureHeaders } from "hono/secure-headers";
 
 import { pool } from "./db/client.js";
 import { createSessionMiddleware } from "./middleware/authorization.js";
+import { ApiKeysController } from "./modules/api-keys/api-keys.controller.js";
+import { ApiKeysRepository } from "./modules/api-keys/api-keys.repository.js";
+import { createApiKeysRoutes } from "./modules/api-keys/api-keys.routes.js";
+import { ApiKeysService } from "./modules/api-keys/api-keys.service.js";
 import { AuthController } from "./modules/auth/auth.controller.js";
 import { AuthRepository } from "./modules/auth/auth.repository.js";
 import { createAuthRoutes } from "./modules/auth/auth.routes.js";
@@ -36,6 +40,7 @@ const projectsRepository = new ProjectsRepository();
 const flagsRepository = new FlagsRepository();
 const environmentsRepository = new EnvironmentsRepository();
 const segmentsRepository = new SegmentsRepository();
+const apiKeysRepository = new ApiKeysRepository();
 
 const projectAccessService = new ProjectAccessService(projectAccessRepository);
 const environmentsService = new EnvironmentsService(
@@ -44,6 +49,10 @@ const environmentsService = new EnvironmentsService(
 );
 const segmentsService = new SegmentsService(
   segmentsRepository,
+  projectAccessService,
+);
+const apiKeysService = new ApiKeysService(
+  apiKeysRepository,
   projectAccessService,
 );
 // Injected so the projects module never reaches into environments itself.
@@ -68,6 +77,7 @@ const projectsController = new ProjectsController(projectsService);
 const flagsController = new FlagsController(flagsService);
 const environmentsController = new EnvironmentsController(environmentsService);
 const segmentsController = new SegmentsController(segmentsService);
+const apiKeysController = new ApiKeysController(apiKeysService);
 
 // One instance shared by both routers, so a request resolves its session once.
 const sessionMiddleware = createSessionMiddleware((headers) =>
@@ -94,6 +104,10 @@ const environmentRoutes = createEnvironmentsRoutes({
 });
 const segmentRoutes = createSegmentsRoutes({
   controller: segmentsController,
+  sessionMiddleware,
+});
+const apiKeyRoutes = createApiKeysRoutes({
+  controller: apiKeysController,
   sessionMiddleware,
 });
 
@@ -139,6 +153,7 @@ app.route("/", authRoutes);
 app.route("/v1/projects", projectRoutes);
 app.route("/v1/projects", environmentRoutes);
 app.route("/v1/projects", segmentRoutes);
+app.route("/v1/projects", apiKeyRoutes);
 app.route("/", flagRoutes);
 
 app.notFound((c) =>
