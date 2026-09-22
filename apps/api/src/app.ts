@@ -9,6 +9,10 @@ import { ApiKeysController } from "./modules/api-keys/api-keys.controller.js";
 import { ApiKeysRepository } from "./modules/api-keys/api-keys.repository.js";
 import { createApiKeysRoutes } from "./modules/api-keys/api-keys.routes.js";
 import { ApiKeysService } from "./modules/api-keys/api-keys.service.js";
+import { AccountController } from "./modules/account/account.controller.js";
+import { AccountRepository } from "./modules/account/account.repository.js";
+import { createAccountRoutes } from "./modules/account/account.routes.js";
+import { AccountService } from "./modules/account/account.service.js";
 import { AuditLogController } from "./modules/audit-log/audit-log.controller.js";
 import { AuditLogRepository } from "./modules/audit-log/audit-log.repository.js";
 import { createAuditLogRoutes } from "./modules/audit-log/audit-log.routes.js";
@@ -66,6 +70,7 @@ const environmentsRepository = new EnvironmentsRepository();
 const segmentsRepository = new SegmentsRepository();
 const apiKeysRepository = new ApiKeysRepository();
 const auditLogRepository = new AuditLogRepository();
+const accountRepository = new AccountRepository();
 const projectMembersRepository = new ProjectMembersRepository();
 
 const projectAccessService = new ProjectAccessService(projectAccessRepository);
@@ -107,6 +112,7 @@ const authService = new AuthService(
     changePassword: auth.api.changePassword,
   },
 );
+const accountService = new AccountService(accountRepository, authService);
 const projectMembersService = new ProjectMembersService(
   projectMembersRepository,
   projectAccessService,
@@ -119,6 +125,7 @@ const environmentsController = new EnvironmentsController(environmentsService);
 const segmentsController = new SegmentsController(segmentsService);
 const apiKeysController = new ApiKeysController(apiKeysService);
 const auditLogController = new AuditLogController(auditLogService);
+const accountController = new AccountController(accountService);
 const projectMembersController = new ProjectMembersController(
   projectMembersService,
 );
@@ -158,6 +165,11 @@ const apiKeyRoutes = createApiKeysRoutes({
 // Mounted at `/`: it serves both `/v1/audit-logs` and the project-scoped list.
 const auditLogRoutes = createAuditLogRoutes({
   controller: auditLogController,
+  sessionMiddleware,
+});
+// Mounted at `/`: `GET /v1/me` stays with the auth module, the writes live here.
+const accountRoutes = createAccountRoutes({
+  controller: accountController,
   sessionMiddleware,
 });
 const projectMemberRoutes = createProjectMembersRoutes({
@@ -209,6 +221,7 @@ app.route("/v1/projects", environmentRoutes);
 app.route("/v1/projects", segmentRoutes);
 app.route("/v1/projects", apiKeyRoutes);
 app.route("/", auditLogRoutes);
+app.route("/", accountRoutes);
 app.route("/v1/projects", projectMemberRoutes);
 app.route("/", flagRoutes);
 
