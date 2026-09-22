@@ -1,17 +1,28 @@
-import { AuthShell } from "@/components/auth/auth-shell";
+import { redirect } from "next/navigation";
 
-/**
- * Shell for the last onboarding step, which welcomes the user instead of
- * pitching the product — see `AuthBrandPanel`'s `getting-started` variant.
- *
- * The create-project route lives outside `(auth)` because the two groups share
- * the same column geometry but not the same panel copy; the geometry itself is
- * owned once by `AuthShell`.
- */
-export default function GettingStartedLayout({
+import { AuthShell } from "@/components/auth/auth-shell";
+import { getSession } from "@/lib/session";
+
+export const dynamic = "force-dynamic";
+
+export default async function GettingStartedLayout({
   children,
 }: {
-  children: React.ReactNode;
+  readonly children: React.ReactNode;
 }) {
+  const session = await getSession();
+
+  if (!session) {
+    redirect("/");
+  }
+
+  if (!session.workspace) {
+    redirect("/create-workspace");
+  }
+
+  if (session.hasProject) {
+    redirect("/overview");
+  }
+
   return <AuthShell variant="getting-started">{children}</AuthShell>;
 }
