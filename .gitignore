@@ -24,6 +24,11 @@ dist/
 # typescript
 *.tsbuildinfo
 
+# generated
+# Better Auth's expected schema. `pnpm --filter api auth:generate` writes it only to
+# diff against the hand-written tables in apps/api/src/db/schema/.
+apps/api/src/db/auth-schema.generated.ts
+
 # testing
 coverage/
 
@@ -38,3 +43,5 @@ venv/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.agents/
+.agent-teams/

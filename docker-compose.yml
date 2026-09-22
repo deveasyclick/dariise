@@ -1,0 +1,43 @@
+# Local development infrastructure for Dariise.
+#
+# Ports are deliberately non-default: this machine already runs an unrelated
+# PostgreSQL on 5432/5435 and Redis on 6379/6380, and reusing those would mean
+# either sharing credentials with another project or silently connecting to it.
+#
+#   docker compose up -d
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: dariise-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dariise
+    ports:
+      - "5442:5432"
+    volumes:
+      - dariise-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dariise"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8
+    container_name: dariise-redis
+    restart: unless-stopped
+    # Cache-only. No volume: nothing here needs to survive a restart, and
+    # treating it as durable would invite depending on it (ADR-0002).
+    ports:
+      - "6389:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dariise-postgres-data:
