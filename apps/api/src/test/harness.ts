@@ -1,0 +1,232 @@
+import { randomUUID } from "node:crypto";
+import { readFile, readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+
+import { Client } from "pg";
+
+/**
+ * Route/integration harness.
+ *
+ * Every helper here assumes `loadTestEnv()` ran before the first import of
+ * `src/config/index.ts`, which validates its environment at module load. Use
+ * the dynamic-import pattern in `harness.test.ts` rather than static imports of
+ * `../app.js` or `../db/client.js`.
+ *
+ * Isolation is by truncation rather than a rolled-back transaction: the app's
+ * `db` is a module-level pool and services open their own transactions, so a
+ * single wrapping transaction cannot be injected without restructuring the
+ * composition root. `vitest.config.ts` runs files sequentially because they
+ * share one test database.
+ */
+
+const DEFAULT_TEST_DATABASE_URL =
+  "postgresql://postgres:postgres@localhost:5442/dariise_test";
+
+const ADMIN_DATABASE_URL =
+  process.env.TEST_ADMIN_DATABASE_URL ??
+  "postgresql://postgres:postgres@localhost:5442/postgres";
+
+export const TEST_PASSWORD = "test-password-123";
+
+export interface TestSession {
+  cookie: string;
+  userId: string;
+  email: string;
+}
+
+/** Any Hono app: avoids threading the router's Variables type through tests. */
+export interface TestApp {
+  request(
+    input: string,
+    init?: RequestInit,
+  ): Response | Promise<Response>;
+}
+
+export function loadTestEnv(): void {
+  process.env.NODE_ENV ??= "test";
+  process.env.DATABASE_URL ??= DEFAULT_TEST_DATABASE_URL;
+  process.env.BETTER_AUTH_SECRET ??=
+    "test-secret-that-is-at-least-32-chars-long";
+  process.env.BETTER_AUTH_URL ??= "http://localhost:4000";
+  process.env.CORS_ORIGINS ??= "http://localhost:3000";
+}
+
+function testDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL;
+
+  if (!url) {
+    throw new Error("DATABASE_URL is not set for the test run.");
+  }
+
+  const name = new URL(url).pathname.replace(/^\//, "");
+
+  // Guards the `drop schema` below: a developer whose shell exports the
+  // development database must not have it wiped by the test suite.
+  if (!name.endsWith("_test")) {
+    throw new Error(
+      `Refusing to reset the non-test database "${name}". Point DATABASE_URL at a database whose name ends in _test.`,
+    );
+  }
+
+  return url;
+}
+
+/** Creates the test database when absent, then applies every migration. */
+export async function resetTestDatabase(): Promise<void> {
+  loadTestEnv();
+
+  const url = testDatabaseUrl();
+  const name = new URL(url).pathname.replace(/^\//, "");
+
+  const admin = new Client({ connectionString: ADMIN_DATABASE_URL });
+  await admin.connect();
+
+  const existing = await admin.query(
+    "select 1 from pg_database where datname = $1",
+    [name],
+  );
+
+  if (existing.rowCount === 0) {
+    await admin.query(`create database "${name}"`);
+  }
+
+  await admin.end();
+
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  await client.query("drop schema if exists public cascade; create schema public;");
+
+  const directory = fileURLToPath(new URL("../../drizzle", import.meta.url));
+  const files = (await readdir(directory))
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
+
+  for (const file of files) {
+    const sql = await readFile(`${directory}/${file}`, "utf8");
+
+    for (const statement of sql.split("--> statement-breakpoint")) {
+      const trimmed = statement.trim();
+
+      if (trimmed.length > 0) {
+        await client.query(trimmed);
+      }
+    }
+  }
+
+  await client.end();
+}
+
+/** Empties every table so one test cannot observe another's rows. */
+export async function truncateAll(): Promise<void> {
+  const { pool } = await import("../db/client.js");
+  const { rows } = await pool.query<{ tablename: string }>(
+    "select tablename from pg_tables where schemaname = 'public'",
+  );
+
+  if (rows.length === 0) return;
+
+  const tables = rows.map((row) => `"${row.tablename}"`).join(", ");
+
+  await pool.query(`truncate table ${tables} restart identity cascade`);
+}
+
+export async function closeTestDatabase(): Promise<void> {
+  const { closeDatabase } = await import("../db/client.js");
+  await closeDatabase();
+}
+
+export async function loadApp() {
+  loadTestEnv();
+
+  const { app } = await import("../app.js");
+
+  return app;
+}
+
+/**
+ * Registers a user through Better Auth's own endpoint, so the cookie the tests
+ * carry is one the session gate actually issued.
+ */
+export async function signUp(
+  app: TestApp,
+  name = "Test User",
+): Promise<TestSession> {
+  const email = `test-${randomUUID()}@example.com`;
+
+  const response = await app.request("/api/auth/sign-up/email", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, email, password: TEST_PASSWORD }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Sign-up failed with ${response.status}: ${await response.text()}`,
+    );
+  }
+
+  const cookies = readSetCookie(response);
+  const body = (await response.json()) as { user?: { id?: string } };
+
+  return { cookie: cookies, userId: body.user?.id ?? "", email };
+}
+
+/**
+ * Inserts a workspace and the caller's membership directly. The gate resolves
+ * membership from this table on every request, so the rows are the real thing.
+ */
+export async function seedWorkspace(
+  userId: string,
+  role = "owner",
+): Promise<{ organizationId: string; slug: string }> {
+  const { db } = await import("../db/client.js");
+  const { member, organization } = await import("../db/schema/index.js");
+
+  const organizationId = randomUUID();
+  const slug = `test-${organizationId.slice(0, 8)}`;
+
+  await db
+    .insert(organization)
+    .values({ id: organizationId, name: "Test Workspace", slug });
+  await db
+    .insert(member)
+    .values({ id: randomUUID(), organizationId, userId, role });
+
+  return { organizationId, slug };
+}
+
+export async function seedProject(
+  organizationId: string,
+  name = "Test Project",
+): Promise<{ projectId: string; key: string }> {
+  const { db } = await import("../db/client.js");
+  const { project } = await import("../db/schema/index.js");
+
+  const projectId = randomUUID();
+  const key = `project-${projectId.slice(0, 8)}`;
+
+  await db
+    .insert(project)
+    .values({ id: projectId, organizationId, key, name });
+
+  return { projectId, key };
+}
+
+export function authHeaders(session: TestSession): Record<string, string> {
+  return { cookie: session.cookie };
+}
+
+function readSetCookie(response: Response): string {
+  const withHelper = response.headers as Headers & {
+    getSetCookie?: () => string[];
+  };
+
+  const values = withHelper.getSetCookie?.() ?? [
+    response.headers.get("set-cookie") ?? "",
+  ];
+
+  return values
+    .map((value) => value.split(";")[0] ?? "")
+    .filter((value) => value.length > 0)
+    .join("; ");
+}
