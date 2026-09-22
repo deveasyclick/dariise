@@ -20,21 +20,11 @@ import {
 import type { Project } from "@/lib/project-data";
 
 interface ProjectSwitcherProps {
-  /** The project the chrome is scoped to. */
   project: Project;
   /** Every project in the workspace, in the order the menu lists them. */
   projects: Project[];
 }
 
-/**
- * Project switcher in the sidebar header.
- *
- * A Client Component because Radix needs to own the trigger's ref. Switching is
- * not wired to anything yet, so the rows are selectors, disabled with a title
- * rather than pretending to load another project's flags. The footer actions
- * navigate: "Create project" opens the dashboard create screen and "Manage
- * projects" opens the projects list.
- */
 export function ProjectSwitcher({ project, projects }: ProjectSwitcherProps) {
   const Glyph = projectGlyphs[project.glyph];
 

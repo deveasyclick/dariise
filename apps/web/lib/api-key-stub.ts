@@ -1,18 +1,3 @@
-/**
- * TEMPORARY STAND-IN — not a real implementation.
- *
- * `apps/api` does not exist yet, so this module simulates the round-trip that
- * issues an API key, so that the create screen's pending state is genuine
- * rather than instantaneous. Nothing is persisted: the credential is invented in
- * the browser, no request is made, and a reload discards it.
- *
- * `createApiKey` also keeps the key it just issued in memory. That is how the
- * list screen can honour the design's promise that a key is *shown once* — it
- * renders the secret for the session that created it, and never again after a
- * reload. When the API lands, replace every body here with the corresponding
- * call from `@/lib/api`'s `apiKeys` resource and delete this module.
- */
-
 import {
   apiKeyExpirations,
   type ApiKeyExpiration,
@@ -20,7 +5,6 @@ import {
 } from "@/lib/api-key-data";
 import type { ApiKeyScope } from "@/lib/types";
 
-/** Simulated network latency, in milliseconds. */
 const SIMULATED_LATENCY_MS = 700;
 
 function simulateLatency(signal?: AbortSignal): Promise<void> {
@@ -68,9 +52,9 @@ function generateSecret(environmentKey: string): string {
   const segment = keySegments[environmentKey] ?? "ff_key";
   const bytes = new Uint8Array(10);
   crypto.getRandomValues(bytes);
-  const id = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-    "",
-  );
+  const id = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 
   return `${segment}_${id}`;
 }
@@ -93,7 +77,6 @@ export function subscribeToCreatedApiKey(listener: () => void): () => void {
   };
 }
 
-/** Issue a key from the create screen. */
 export async function createApiKey(
   input: CreateApiKeyInput,
   signal?: AbortSignal,

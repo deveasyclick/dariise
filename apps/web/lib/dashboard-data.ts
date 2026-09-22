@@ -23,20 +23,17 @@ export interface DashboardFlag {
   description: string;
   owner: string;
   status: "active" | "rollout" | "disabled";
-  /** Environment key this row is scoped to. */
   environment: string;
   /** Whole percentage, 0-100. Boolean flags sit at 0 or 100. */
   rolloutPercentage: number;
   /** Who last changed the flag. Maps to the audit log `actor`. */
   changeOwner: string;
-  /** Short description of the last change. */
   changeNote: string;
   /** Age in hours, resolved against `now` — see module header. */
   updatedHoursAgo: number;
 }
 
 export interface ActiveRollout {
-  /** Flag key the rollout belongs to. */
   flagKey: string;
   environment: string;
   percentage: number;

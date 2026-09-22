@@ -6,14 +6,6 @@ import { isWriteScope, scopeLabel } from "@/lib/api-key-data";
 import type { EnvironmentColor } from "@/lib/environment-data";
 import type { ApiKeyScope } from "@/lib/types";
 
-/**
- * Presentational pieces of an API key row.
- *
- * Server-safe on purpose: the list's interactivity lives in the table, and none
- * of these need state.
- */
-
-/** Icon tile for a key, tinted per environment. */
 export function KeyGlyph({
   color,
   className,
@@ -73,9 +65,7 @@ export function ScopePills({ scopes }: { scopes: ApiKeyScope[] }) {
         <Badge
           key={scope}
           variant="secondary"
-          className={cn(
-            isWriteScope(scope) && "bg-info-ink/10 text-info-ink",
-          )}
+          className={cn(isWriteScope(scope) && "bg-info-ink/10 text-info-ink")}
         >
           {scopeLabel(scope)}
         </Badge>

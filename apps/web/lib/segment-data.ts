@@ -214,7 +214,6 @@ export function matchesSegment(
   return rules.every((rule) => matchesRule(user, rule));
 }
 
-/** The sample users satisfying a rule set. */
 export function matchingUsers(
   rules: SegmentRule[],
   limit?: number,

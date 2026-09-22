@@ -15,10 +15,7 @@ import {
   environmentColorTone,
 } from "@/components/app/environments/environment-colors";
 import { CoverageStatePill } from "@/components/app/environments/coverage-pill";
-import {
-  sectionActionClass,
-  SectionCard,
-} from "@/components/app/page-header";
+import { sectionActionClass, SectionCard } from "@/components/app/page-header";
 import { projectGlyphs } from "@/components/app/projects/project-glyphs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,18 +34,15 @@ import type {
   ProjectMember,
   ProjectRecord,
 } from "@/lib/project-data";
-import { getProjectFlagCount, getProjectUpdatedLabel } from "@/lib/project-data";
+import {
+  getProjectFlagCount,
+  getProjectUpdatedLabel,
+} from "@/lib/project-data";
 
-/**
- * Read-only project panels.
- *
- * Deliberately free of `"use client"` so they stay Server Components; the few
- * genuinely interactive pieces (the tabs, the actions menu) are imported client
- * components.
- */
-
-/** Effective state of a flag in a project environment. */
-function flagState(flag: ProjectFlag): { kind: "on" | "off" | "percentage"; percentage?: number } {
+function flagState(flag: ProjectFlag): {
+  kind: "on" | "off" | "percentage";
+  percentage?: number;
+} {
   if (flag.rollout >= 100) return { kind: "on" };
   if (flag.rollout <= 0) return { kind: "off" };
 
@@ -68,9 +62,9 @@ function EnvironmentPills({
   environments,
   limit,
 }: {
-  environments: ProjectEnvironment[];
+  readonly environments: ProjectEnvironment[];
   /** Show this many, then a `+N` chip. Omit to show them all. */
-  limit?: number;
+  readonly limit?: number;
 }) {
   const shown = limit ? environments.slice(0, limit) : environments;
   const hidden = environments.length - shown.length;
@@ -243,7 +237,9 @@ export function ProjectsOverviewCard({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className={cn(tableHeadClass, "pl-4")}>Project</TableHead>
+            <TableHead className={cn(tableHeadClass, "pl-4")}>
+              Project
+            </TableHead>
             <TableHead className={tableHeadClass}>Environments</TableHead>
             <TableHead className={tableHeadClass}>Flags</TableHead>
             <TableHead className={tableHeadClass}>SDK keys</TableHead>
@@ -291,9 +287,7 @@ export function ProjectsOverviewCard({
                 <TableCell className="text-[12px]">
                   {getProjectFlagCount(project)}
                 </TableCell>
-                <TableCell className="text-[12px]">
-                  {project.sdkKeys}
-                </TableCell>
+                <TableCell className="text-[12px]">{project.sdkKeys}</TableCell>
                 <TableCell className="text-muted-foreground text-[11px]">
                   {getProjectUpdatedLabel(project, now)}
                 </TableCell>
@@ -444,9 +438,7 @@ export function ProjectSummaryCard({
       <dl className="grid grid-cols-2 gap-2">
         {tiles.map((tile) => (
           <div key={tile.label} className="bg-muted rounded-lg px-3 py-2.5">
-            <dt className="text-muted-foreground text-[10px]">
-              {tile.label}
-            </dt>
+            <dt className="text-muted-foreground text-[10px]">{tile.label}</dt>
             <dd className="mt-1 text-[15px] font-semibold">{tile.value}</dd>
           </div>
         ))}
@@ -544,11 +536,7 @@ export function ArchiveProjectCard() {
 }
 
 /** The project's team, owner first. */
-export function ProjectMembersCard({
-  members,
-}: {
-  members: ProjectMember[];
-}) {
+export function ProjectMembersCard({ members }: { members: ProjectMember[] }) {
   return (
     <SectionCard
       title="Members"

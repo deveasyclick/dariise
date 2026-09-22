@@ -10,15 +10,6 @@ const steps = [
 
 export type OnboardingStep = (typeof steps)[number]["key"];
 
-/**
- * Progress path across the three onboarding steps, rendered at the top of the
- * card on every step.
- *
- * A step already passed shows a check, the step in view shows its number on the
- * accent colour, and the steps still to come are muted. Purely presentational:
- * onboarding screens are reached by completing the form on the previous step,
- * so the steps are not links.
- */
 export function OnboardingSteps({ current }: { current: OnboardingStep }) {
   const currentIndex = steps.findIndex((step) => step.key === current);
 
@@ -31,7 +22,10 @@ export function OnboardingSteps({ current }: { current: OnboardingStep }) {
         return (
           <Fragment key={step.key}>
             {index > 0 ? (
-              <li aria-hidden="true" className="bg-border h-px min-w-4 flex-1" />
+              <li
+                aria-hidden="true"
+                className="bg-border h-px min-w-4 flex-1"
+              />
             ) : null}
             <li className="flex shrink-0 items-center gap-1.5">
               <span

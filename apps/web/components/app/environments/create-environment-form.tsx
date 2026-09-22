@@ -202,7 +202,6 @@ export function CreateEnvironmentForm({
     );
   }
 
-  /** The state each flag would start in, given the chosen option. */
   function previewState(flag: CoverageFlag): FlagCoverageState {
     if (initialStatus === "all-on") return { kind: "on" };
     if (initialStatus === "all-off") return { kind: "off" };

@@ -85,7 +85,6 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
   const [created, setCreated] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
 
-  /** Live reach: the sample users satisfying the current rules. */
   const reach = useMemo(() => matchingUsers(rules).length, [rules]);
 
   function clearError(field: keyof CreateSegmentErrors) {

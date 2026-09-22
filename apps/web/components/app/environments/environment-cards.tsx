@@ -326,7 +326,6 @@ export function WhatYouGetCard() {
   );
 }
 
-/** Note explaining what marking an environment protected does. */
 export function ProtectedEnvironmentsNote() {
   return (
     <aside className="border-info-ink/20 bg-info-ink/5 rounded-lg border p-4">

@@ -12,7 +12,6 @@
 
 import type { SecuritySettings } from "@/lib/settings-data";
 
-/** Simulated network latency, in milliseconds. */
 const SIMULATED_LATENCY_MS = 700;
 
 function simulateLatency(signal?: AbortSignal): Promise<void> {
@@ -42,7 +41,6 @@ export interface UpdateWorkspaceProfileInput {
   timezone: string;
 }
 
-/** Save the General tab's workspace profile. */
 export async function updateWorkspaceProfile(
   _input: UpdateWorkspaceProfileInput,
   signal?: AbortSignal,

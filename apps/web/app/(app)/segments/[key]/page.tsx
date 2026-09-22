@@ -13,7 +13,6 @@ import { getSegment } from "@/lib/segment-data";
 
 export const dynamic = "force-dynamic";
 
-/** How many sample members the live preview shows. */
 const PREVIEW_MEMBERS = 3;
 
 export async function generateMetadata(

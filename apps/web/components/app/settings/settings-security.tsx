@@ -2,10 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CheckIcon, PlusIcon } from "lucide-react";
-import {
-  SettingsCard,
-  SettingsRowLabel,
-} from "@/components/app/settings-card";
+import { SettingsCard, SettingsRowLabel } from "@/components/app/settings-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,22 +21,9 @@ import {
 } from "@/lib/settings-data";
 import { updateWorkspaceSecurity } from "@/lib/workspace-stub";
 
-/** How long the acknowledgement stays on screen, in milliseconds. */
 const SAVED_HINT_MS = 2_000;
 
-/**
- * Sign-in and access-control settings.
- *
- * The design has no Save button here, so each control applies as soon as it
- * changes: the change goes through the stub and the card header acknowledges it
- * briefly. Nothing is persisted, and the acknowledgement is honest about that by
- * disappearing rather than implying a stored preference.
- */
-export function SettingsSecurity({
-  settings,
-}: {
-  settings: SecuritySettings;
-}) {
+export function SettingsSecurity({ settings }: { settings: SecuritySettings }) {
   const [current, setCurrent] = useState<SecuritySettings>(settings);
   const [saved, setSaved] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
@@ -123,9 +107,7 @@ export function SettingsSecurity({
             />
             <Switch
               checked={current.twoFactorEnabled}
-              onCheckedChange={(value) =>
-                apply({ twoFactorEnabled: value })
-              }
+              onCheckedChange={(value) => apply({ twoFactorEnabled: value })}
               aria-label="Require two-factor authentication"
               className="shrink-0"
             />

@@ -8,11 +8,7 @@ import { CopyButton } from "@/components/app/copy-button";
 import { SectionCard } from "@/components/app/page-header";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  defaultSdkKey,
-  getSdkOptions,
-  type SdkKey,
-} from "@/lib/sdk-data";
+import { defaultSdkKey, getSdkOptions, type SdkKey } from "@/lib/sdk-data";
 
 /** Connection values the screen quotes, resolved from the environment. */
 export interface SdkConnection {
@@ -21,22 +17,13 @@ export interface SdkConnection {
   maskedKey: string;
   /** Evaluation endpoint, e.g. `sdk.dariise.dev/prod`. */
   endpoint: string;
-  /** Streaming endpoint the SDK subscribes to. */
   streamEndpoint: string;
 }
 
-/**
- * SDK picker, install steps and connection values.
- *
- * A Client Component because choosing an SDK swaps the snippets and the
- * evaluation scope below in place. The snippets come from `lib/sdk-data.ts`;
- * the connection values are resolved on the server and passed in, because they
- * belong to the environment, not to the SDK.
- */
 export function SdkIntegration({
   connection,
 }: {
-  connection: SdkConnection;
+  readonly connection: SdkConnection;
 }) {
   const [selected, setSelected] = useState<SdkKey>(defaultSdkKey);
   const options = getSdkOptions();

@@ -2,7 +2,6 @@ import { CheckCircle2Icon, GitBranchIcon, LayersIcon } from "lucide-react";
 import { cn } from "cn";
 import type { FlagDetailView } from "@/lib/flag-detail-data";
 
-/** A single node in the dependency graph. */
 function GraphNode({
   flagKey,
   meta,

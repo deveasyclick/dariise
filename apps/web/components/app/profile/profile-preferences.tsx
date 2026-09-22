@@ -2,10 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CheckIcon } from "lucide-react";
-import {
-  SettingsCard,
-  SettingsRowLabel,
-} from "@/components/app/settings-card";
+import { SettingsCard, SettingsRowLabel } from "@/components/app/settings-card";
 import { ThemeChoice } from "@/components/app/theme-choice";
 import { Label } from "@/components/ui/label";
 import {
@@ -24,18 +21,8 @@ import {
 } from "@/lib/profile-data";
 import { updateNotifications, updatePreferences } from "@/lib/profile-stub";
 
-/** How long the acknowledgement stays on screen, in milliseconds. */
 const SAVED_HINT_MS = 2_000;
 
-/**
- * The two "applies immediately" cards.
- *
- * The design shows no Save button on either, so every change goes through the
- * stub as soon as it is made and the card header acknowledges it briefly, the
- * same pattern the Security settings card uses. Nothing is persisted.
- */
-
-/** Renders the transient "Saved just now" hint in a card's header. */
 function useSavedHint() {
   const [saved, setSaved] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -110,9 +97,7 @@ export function ProfilePreferences({
           <Label htmlFor="profile-environment">Default environment</Label>
           <Select
             value={current.defaultEnvironmentKey}
-            onValueChange={(value) =>
-              apply({ defaultEnvironmentKey: value })
-            }
+            onValueChange={(value) => apply({ defaultEnvironmentKey: value })}
             disabled={environments.length === 0}
           >
             <SelectTrigger

@@ -20,7 +20,6 @@ import type { Project } from "@/lib/project-data";
 
 interface SidebarProps {
   user: CurrentUser;
-  /** The project the chrome is scoped to. */
   project: Project;
   /** Every project in the workspace, for the switcher menu. */
   projects: Project[];

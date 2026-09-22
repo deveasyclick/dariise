@@ -1,7 +1,6 @@
 import { SectionCard } from "@/components/app/page-header";
 import type { LatencySummary } from "@/lib/analytics-data";
 
-/** Average evaluation latency with the percentiles the SDK reports. */
 export function SdkLatencyCard({ latency }: { latency: LatencySummary }) {
   const percentiles = [
     { label: "p50", valueMs: latency.p50Ms },

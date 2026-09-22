@@ -12,7 +12,6 @@
 
 import type { SegmentRule } from "@/lib/segment-data";
 
-/** Simulated network latency, in milliseconds. */
 const SIMULATED_LATENCY_MS = 700;
 
 function simulateLatency(signal?: AbortSignal): Promise<void> {
@@ -43,7 +42,6 @@ export interface CreateSegmentInput {
   rules: SegmentRule[];
 }
 
-/** Create a new segment from the create screen. */
 export async function createSegment(
   _input: CreateSegmentInput,
   signal?: AbortSignal,

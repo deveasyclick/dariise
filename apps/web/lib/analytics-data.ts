@@ -55,7 +55,6 @@ export interface AnalyticsStat {
   meta: AnalyticsStatMeta;
 }
 
-/** One environment in a chart's series. */
 export interface EvaluationSeriesEntry {
   envKey: string;
   label: string;
@@ -187,7 +186,6 @@ export function sharePercentages(values: number[]): number[] {
   return rounded;
 }
 
-/** Build the analytics payload. */
 export function getAnalyticsData(): AnalyticsData {
   const last24HourTotal = last24HourRows.reduce(
     (sum, row) => sum + row.value,

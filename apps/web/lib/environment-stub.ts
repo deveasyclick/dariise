@@ -16,7 +16,6 @@ import type {
   InitialFlagStatus,
 } from "@/lib/environment-data";
 
-/** Simulated network latency, in milliseconds. */
 const SIMULATED_LATENCY_MS = 700;
 
 function simulateLatency(signal?: AbortSignal): Promise<void> {
@@ -54,7 +53,6 @@ export interface UpdateEnvironmentSettingsInput {
   settings: EnvironmentSettings;
 }
 
-/** Create a new environment from the create screen. */
 export async function createEnvironment(
   _input: CreateEnvironmentInput,
   signal?: AbortSignal,
@@ -62,7 +60,6 @@ export async function createEnvironment(
   await simulateLatency(signal);
 }
 
-/** Save the toggles on the Settings tab. */
 export async function updateEnvironmentSettings(
   _input: UpdateEnvironmentSettingsInput,
   signal?: AbortSignal,

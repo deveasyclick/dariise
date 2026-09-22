@@ -24,7 +24,6 @@ import {
   type WorkspaceTheme,
 } from "@/lib/settings-data";
 
-/** When this account joined the workspace. */
 const memberSince = "2024-01-15T12:00:00.000Z";
 
 export interface ProfileNotifications {

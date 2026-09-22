@@ -8,7 +8,6 @@ interface AuditTimelineProps {
   onSelect: (id: string) => void;
 }
 
-/** One row: who did what, when, and the value change when there was one. */
 function AuditRow({
   event,
   selected,

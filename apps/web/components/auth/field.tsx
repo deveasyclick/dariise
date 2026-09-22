@@ -137,7 +137,6 @@ interface FieldRowProps {
   className?: string;
 }
 
-/** A checkbox paired with its inline label. */
 export function FieldRow({
   control,
   htmlFor,

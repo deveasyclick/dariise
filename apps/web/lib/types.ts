@@ -73,7 +73,6 @@ export interface TargetingRule {
   description: string | null;
   /** Conditions are combined with AND. */
   conditions: TargetingCondition[];
-  /** Variation served when the rule matches. */
   variation: string;
   /** Segments referenced by key; membership is treated as one more condition. */
   segmentKeys: string[];
@@ -84,7 +83,6 @@ export interface Rollout {
   percentage: number;
   /** Attribute hashed to assign a user to a bucket. Defaults to the user id. */
   bucketBy: string;
-  /** Variation served to users inside the rollout. */
   variation: string;
 }
 

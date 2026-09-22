@@ -184,7 +184,6 @@ export function getWorkspaceUrl(): string {
   return `${workspaceHost}/${workspaceProfile.slug}`;
 }
 
-/** Sign-in, session and access-control settings. */
 export function getSecuritySettings(): SecuritySettings {
   return securitySettings;
 }

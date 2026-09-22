@@ -119,7 +119,6 @@ export function isValidOptionalUrl(value: string): string | null {
   }
 }
 
-/** Turn a human-readable workspace name into a slug candidate. */
 export function toWorkspaceSlug(value: string): string {
   return value
     .toLowerCase()

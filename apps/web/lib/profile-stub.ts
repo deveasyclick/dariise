@@ -13,7 +13,6 @@
 
 import type { ProfileNotifications } from "@/lib/profile-data";
 
-/** Simulated network latency, in milliseconds. */
 const SIMULATED_LATENCY_MS = 700;
 
 function simulateLatency(signal?: AbortSignal): Promise<void> {
@@ -42,7 +41,6 @@ export interface UpdateProfileInput {
   email: string;
 }
 
-/** Save the name and email on the Profile card. */
 export async function updateProfile(
   _input: UpdateProfileInput,
   signal?: AbortSignal,
@@ -81,7 +79,6 @@ export async function updatePreferences(
   await simulateLatency(signal);
 }
 
-/** Apply a Notifications card change. */
 export async function updateNotifications(
   _input: ProfileNotifications,
   signal?: AbortSignal,

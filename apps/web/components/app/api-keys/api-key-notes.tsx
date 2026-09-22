@@ -1,12 +1,5 @@
 import { CircleCheckIcon, TriangleAlertIcon } from "lucide-react";
 
-/**
- * The two note cards beside the create form.
- *
- * Both are static, so they stay Server Components; only the form and the list's
- * table need a client boundary.
- */
-
 const bestPractices = [
   "Store keys in environment variables, never in source control.",
   "Use a separate key per service so you can revoke independently.",
@@ -14,7 +7,6 @@ const bestPractices = [
   "Set an expiration for keys used in short-lived jobs.",
 ] as const;
 
-/** Reminder that the credential is not retrievable after it is issued. */
 export function KeyShownOnceCard() {
   return (
     <section className="bg-info-ink/5 border-info-ink/20 rounded-lg border p-4">
@@ -25,8 +17,8 @@ export function KeyShownOnceCard() {
         <h2 className="text-[13px] font-medium">Your key is shown once</h2>
       </div>
       <p className="text-muted-foreground mt-2 text-[12px] leading-5">
-        Copy it somewhere safe. For security, it cannot be viewed again after you
-        leave this page.
+        Copy it somewhere safe. For security, it cannot be viewed again after
+        you leave this page.
       </p>
     </section>
   );

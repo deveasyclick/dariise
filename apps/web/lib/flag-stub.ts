@@ -12,7 +12,6 @@
 
 import type { FlagType, TargetingRule } from "@/lib/flag-detail-data";
 
-/** Simulated network latency, in milliseconds. */
 const SIMULATED_LATENCY_MS = 700;
 
 function simulateLatency(signal?: AbortSignal): Promise<void> {
@@ -52,7 +51,6 @@ export interface CreateFlagInput {
   tags: string[];
 }
 
-/** Save the Configuration and Targeting tabs for a flag. */
 export async function publishFlagChanges(
   _input: PublishFlagChangesInput,
   signal?: AbortSignal,
@@ -60,7 +58,6 @@ export async function publishFlagChanges(
   await simulateLatency(signal);
 }
 
-/** Create a new flag from the create screen. */
 export async function createFlag(
   _input: CreateFlagInput,
   signal?: AbortSignal,

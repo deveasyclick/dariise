@@ -5,7 +5,6 @@ import {
 } from "@/components/app/settings-card";
 import type { WorkspaceTheme } from "@/lib/settings-data";
 
-/** Appearance — the workspace-wide default look. */
 export function SettingsAppearance({ theme }: { theme: WorkspaceTheme }) {
   return (
     <SettingsCard
