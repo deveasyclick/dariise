@@ -28,6 +28,29 @@ export const workspaceSlugSchema = z
   });
 
 /**
+ * A key for a project-scoped resource: environments, flags, segments and API
+ * keys all use the same shape. Shorter than a workspace slug because keys like
+ * `dev` and `on` are legitimate.
+ */
+export const resourceKeySchema = z
+  .string()
+  .trim()
+  .min(1, "Key is required.")
+  .max(
+    SLUG_MAX_LENGTH,
+    `Key must be at most ${SLUG_MAX_LENGTH} characters.`,
+  )
+  .check((ctx) => {
+    if (!WORKSPACE_SLUG_PATTERN.test(ctx.value)) {
+      ctx.issues.push({
+        code: "custom",
+        input: ctx.value,
+        message: "Use lowercase letters, numbers and single hyphens only.",
+      });
+    }
+  });
+
+/**
  * Turn a human-readable name into a slug candidate.
  *
  * Kept in lockstep with `apps/web/lib/validation.ts#toWorkspaceSlug`, which the

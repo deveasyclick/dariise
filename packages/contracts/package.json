@@ -10,12 +10,21 @@
     ".": "./src/index.ts"
   },
   "imports": {
+    "#api-key": "./src/api-key.ts",
+    "#audit-log": "./src/audit-log.ts",
     "#auth": "./src/auth.ts",
+    "#environment": "./src/environment.ts",
     "#errors": "./src/errors.ts",
+    "#evaluation": "./src/evaluation.ts",
     "#fields": "./src/fields.ts",
+    "#flag": "./src/flag.ts",
     "#forms": "./src/forms.ts",
+    "#me": "./src/me.ts",
     "#oauth": "./src/oauth.ts",
+    "#pagination": "./src/pagination.ts",
     "#project": "./src/project.ts",
+    "#project-member": "./src/project-member.ts",
+    "#segment": "./src/segment.ts",
     "#session": "./src/session.ts",
     "#slug": "./src/slug.ts",
     "#workspace": "./src/workspace.ts"

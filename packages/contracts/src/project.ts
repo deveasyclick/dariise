@@ -31,3 +31,45 @@ export const projectSummarySchema = z.object({
 });
 
 export type ProjectSummary = z.infer<typeof projectSummarySchema>;
+
+/**
+ * The project as the list and detail screens render it. `environmentCount` is
+ * derived server-side so the list costs one request rather than one per row.
+ */
+export const projectSchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  color: z.string().nullable(),
+  ownerTeam: z.string().nullable(),
+  environmentName: z.string(),
+  defaultEnvironmentId: z.string().nullable(),
+  environmentCount: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type Project = z.infer<typeof projectSchema>;
+
+export const updateProjectSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Project name is required.")
+    .max(80, "Project name must be at most 80 characters.")
+    .optional(),
+  description: z.string().trim().max(280).nullable().optional(),
+  color: z.string().trim().min(1).max(40).nullable().optional(),
+  ownerTeam: z.string().trim().min(1).max(80).nullable().optional(),
+  /** The environment key, resolved within the project. */
+  defaultEnvironmentKey: z.string().nullable().optional(),
+});
+
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
+
+export const projectListQuerySchema = z.object({
+  search: z.string().trim().optional(),
+});
+
+export type ProjectListQuery = z.infer<typeof projectListQuerySchema>;
