@@ -51,50 +51,11 @@ export const ConfigSchema = z
     GOOGLE_CLIENT_ID: optionalString,
     GOOGLE_CLIENT_SECRET: optionalString,
 
-    BREVO_API_KEY: optionalString,
-    EMAIL_FROM: optionalString,
+    BREVO_API_KEY: z.string().trim().min(5, {
+      error: "BREVO_API_KEY is required",
+    }),
+    EMAIL_FROM: z.email({ error: "EMAIL_FROM must be an email address" }),
     EMAIL_SENDER_NAME: z.string().trim().min(1).default("Dariise"),
-
-    EMAIL_SANDBOX: z
-      .enum(["true", "false"])
-      .default("false")
-      .transform((value) => value === "true"),
-  })
-  // A mail transport needs both halves. Unlike a half-configured OAuth provider —
-  // which only dims a button — a half-configured transport looks enabled while
-  // every reset silently fails, so it is a startup error instead.
-  .superRefine((value, ctx) => {
-    if (value.BREVO_API_KEY === undefined && value.EMAIL_FROM === undefined) {
-      return;
-    }
-
-    if (value.BREVO_API_KEY === undefined) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["BREVO_API_KEY"],
-        message:
-          "BREVO_API_KEY is required when EMAIL_FROM is set. Set both to enable email, or neither to leave it disabled.",
-      });
-    }
-
-    if (value.EMAIL_FROM === undefined) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["EMAIL_FROM"],
-        message:
-          "EMAIL_FROM is required when BREVO_API_KEY is set. Set both to enable email, or neither to leave it disabled.",
-      });
-      return;
-    }
-
-    if (!z.email().safeParse(value.EMAIL_FROM).success) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["EMAIL_FROM"],
-        message:
-          "EMAIL_FROM must be an email address. Use a sender verified in your Brevo account.",
-      });
-    }
   })
   .transform((value) => ({
     nodeEnv: value.NODE_ENV,
@@ -112,5 +73,4 @@ export const ConfigSchema = z
     brevoApiKey: value.BREVO_API_KEY,
     emailFrom: value.EMAIL_FROM,
     emailSenderName: value.EMAIL_SENDER_NAME,
-    emailSandbox: value.EMAIL_SANDBOX,
   }));

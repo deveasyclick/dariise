@@ -6,7 +6,7 @@
   "description": "Dariise API — Hono on Node.js, Drizzle over PostgreSQL, Better Auth for sessions.",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc --project tsconfig.build.json",
+    "build": "tsc --project tsconfig.build.json && node scripts/copy-email-templates.mjs",
     "start": "node dist/server.js",
     "lint": "biome lint src",
     "format": "biome format --write src",
@@ -27,12 +27,14 @@
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.8",
+    "mjml": "^5.4.1",
     "pg": "^8.23.0",
     "pino": "^10.1.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
+    "@types/mjml": "^5.0.0",
     "@types/node": "^20",
     "@types/pg": "^8.15.6",
     "drizzle-kit": "^0.31.10",

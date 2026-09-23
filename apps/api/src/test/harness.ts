@@ -36,10 +36,7 @@ export interface TestSession {
 
 /** Any Hono app: avoids threading the router's Variables type through tests. */
 export interface TestApp {
-  request(
-    input: string,
-    init?: RequestInit,
-  ): Response | Promise<Response>;
+  request(input: string, init?: RequestInit): Response | Promise<Response>;
 }
 
 export function loadTestEnv(): void {
@@ -49,6 +46,8 @@ export function loadTestEnv(): void {
     "test-secret-that-is-at-least-32-chars-long";
   process.env.BETTER_AUTH_URL ??= "http://localhost:4000";
   process.env.CORS_ORIGINS ??= "http://localhost:3000";
+  process.env.BREVO_API_KEY ??= "xkeysib-test-key";
+  process.env.EMAIL_FROM ??= "no-reply@dariise.test";
 }
 
 function testDatabaseUrl(): string {
@@ -94,7 +93,9 @@ export async function resetTestDatabase(): Promise<void> {
 
   const client = new Client({ connectionString: url });
   await client.connect();
-  await client.query("drop schema if exists public cascade; create schema public;");
+  await client.query(
+    "drop schema if exists public cascade; create schema public;",
+  );
 
   const directory = fileURLToPath(new URL("../../drizzle", import.meta.url));
   const files = (await readdir(directory))
@@ -205,9 +206,7 @@ export async function seedProject(
   const projectId = randomUUID();
   const key = `project-${projectId.slice(0, 8)}`;
 
-  await db
-    .insert(project)
-    .values({ id: projectId, organizationId, key, name });
+  await db.insert(project).values({ id: projectId, organizationId, key, name });
 
   return { projectId, key };
 }

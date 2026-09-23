@@ -1,9 +1,8 @@
-import 'dotenv/config'
+import "dotenv/config";
 
+import type { z } from "zod";
 
-import type { z } from 'zod'
-
-import { ConfigSchema } from './schema.js';
+import { ConfigSchema } from "./schema.js";
 
 export type Config = z.infer<typeof ConfigSchema>;
 
@@ -17,12 +16,9 @@ if (!parsed.success) {
   throw new Error(`Invalid environment configuration:\n${details}`);
 }
 
-
 const env: Config = parsed.data;
 
 const environment = env.nodeEnv;
 const isProduction = environment === "production";
-const emailEnabled =
-  env.brevoApiKey !== undefined && env.emailFrom !== undefined;
 
-export { env, environment, isProduction, emailEnabled }
+export { env, environment, isProduction };

@@ -14,7 +14,7 @@ import {
 } from "../../db/schema/index.js";
 import { env, isProduction } from "../../config/index.js";
 import { enabledProviders } from "../../shared/constants.js";
-import type { EmailService } from "../../shared/email/email.service.js";
+import type { EmailService } from "../email/index.js";
 import { RESET_TOKEN_TTL_SECONDS } from "./auth.types.js";
 
 const socialProviders = {
@@ -36,8 +36,6 @@ const socialProviders = {
     : {}),
 };
 
-// A factory, not a module-level singleton, so the mail transport arrives through
-// the composition root in `app.ts` like every other collaborator.
 export function createAuthConfig(emailService: EmailService) {
   return betterAuth({
     appName: "Dariise",
@@ -66,17 +64,17 @@ export function createAuthConfig(emailService: EmailService) {
       minPasswordLength: 8,
       maxPasswordLength: 128,
       requireEmailVerification: false,
-      // Kept in step with the "expires in 30 minutes" copy the dashboard shows.
       resetPasswordTokenExpiresIn: RESET_TOKEN_TTL_SECONDS,
-      // Better Auth's `url` validates the token, then redirects to the dashboard
-      // with `?token=…`. Rewriting it here would skip that exchange and hand the
-      // reset page a token it cannot use, so it is forwarded untouched.
       sendResetPassword: async ({ user, url }) => {
-        await emailService.sendPasswordReset({
+        await emailService.send({
+          template: "passwordReset",
           to: user.email,
-          name: user.name,
-          url,
-          expiresInMinutes: RESET_TOKEN_TTL_SECONDS / 60,
+          toName: user.name,
+          variables: {
+            name: user.name,
+            url,
+            expiresInMinutes: RESET_TOKEN_TTL_SECONDS / 60,
+          },
         });
       },
     },

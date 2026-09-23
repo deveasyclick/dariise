@@ -5,6 +5,7 @@ import { secureHeaders } from "hono/secure-headers";
 
 import { env } from "./config/index.js";
 import { pool } from "./db/client.js";
+import { BrevoTransport } from "./integrations/brevo/index.js";
 import { createSessionMiddleware } from "./middleware/authorization.js";
 import { ApiKeysController } from "./modules/api-keys/api-keys.controller.js";
 import { ApiKeysRepository } from "./modules/api-keys/api-keys.repository.js";
@@ -25,6 +26,7 @@ import {
   createAuthConfig,
   createAuthRoutes,
 } from "./modules/auth/index.js";
+import { EmailRenderer, EmailService } from "./modules/email/index.js";
 import { EnvironmentsController } from "./modules/environments/environments.controller.js";
 import { EnvironmentsRepository } from "./modules/environments/environments.repository.js";
 import { createEnvironmentsRoutes } from "./modules/environments/environments.routes.js";
@@ -55,18 +57,15 @@ import { WorkspaceController } from "./modules/workspace/workspace.controller.js
 import { WorkspaceRepository } from "./modules/workspace/workspace.repository.js";
 import { createWorkspaceRoutes } from "./modules/workspace/workspace.routes.js";
 import { WorkspaceService } from "./modules/workspace/workspace.service.js";
-import { createConfiguredEmailTransport } from "./shared/email/email.config.js";
-import { EmailService } from "./shared/email/email.service.js";
 import { errorResponse } from "./shared/http/errors.js";
 
-// Mail is optional: with no Brevo credentials the service reports `skipped` and
-// the auth module keeps its development console fallback.
-const emailService = new EmailService(createConfiguredEmailTransport());
+const emailService = new EmailService(
+  new BrevoTransport(),
+  new EmailRenderer(),
+);
 
 console.info(
-  emailService.enabled
-    ? `[email] Brevo transport configured, sending from ${env.emailFrom}`
-    : "[email] no transport configured — reset links are printed to this console",
+  `[email] Brevo transport configured, sending from ${env.emailFrom}`,
 );
 
 const auth = createAuthConfig(emailService);
@@ -103,7 +102,8 @@ const auditLogService = new AuditLogService(
 // Injected so the projects module never reaches into environments itself.
 const projectsService = new ProjectsService(
   projectsRepository,
-  (tx, projectId, name) => environmentsService.createDefault(tx, projectId, name),
+  (tx, projectId, name) =>
+    environmentsService.createDefault(tx, projectId, name),
   projectAccessService,
 );
 const workspaceService = new WorkspaceService(workspaceRepository);
@@ -207,8 +207,7 @@ app.use("*", logger());
 
 app.use("*", (c, next) =>
   cors({
-    origin: (origin) =>
-      env.corsOrigins.includes(origin) ? origin : undefined,
+    origin: (origin) => (env.corsOrigins.includes(origin) ? origin : undefined),
     credentials: true,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],

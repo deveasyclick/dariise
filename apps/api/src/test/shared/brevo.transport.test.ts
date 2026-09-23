@@ -7,6 +7,8 @@ function brevoResponse(): Response {
   });
 }
 
+// `config/index.ts` validates the environment at module load, so these must exist
+// before the transport is imported.
 beforeAll(() => {
   process.env.DATABASE_URL ??=
     "postgresql://postgres:postgres@localhost:5442/dariise_test";
@@ -15,20 +17,18 @@ beforeAll(() => {
   process.env.BREVO_API_KEY = "xkeysib-test-key";
   process.env.EMAIL_FROM = "no-reply@dariise.test";
   process.env.EMAIL_SENDER_NAME = "Dariise";
-  process.env.EMAIL_SANDBOX = "false";
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
   vi.unstubAllGlobals();
-  process.env.EMAIL_SANDBOX = "false";
 });
 
 async function loadTransport() {
-  const { createBrevoTransport } = await import("../../shared/email/email.config.js");
+  const { BrevoTransport } = await import("../../integrations/brevo/index.js");
 
-  return createBrevoTransport();
+  return new BrevoTransport();
 }
 
 const message = {
@@ -41,7 +41,7 @@ const message = {
 
 // Stubs `fetch` rather than Brevo's client, so the SDK's own serialisation runs
 // without a network call or an API key.
-describe("createBrevoTransport", () => {
+describe("BrevoTransport", () => {
   it("posts the message to Brevo's transactional email endpoint", async () => {
     const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
     const fetchStub = vi.fn(async (url: unknown, init?: RequestInit) => {
@@ -101,39 +101,14 @@ describe("createBrevoTransport", () => {
     expect(body.to?.[0]).toEqual({ email: "ada@example.com" });
   });
 
-  it("marks the request for Brevo's sandbox when EMAIL_SANDBOX is set", async () => {
-    const headers: RequestInit["headers"][] = [];
+  it("rejects when Brevo refuses the message", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (_url: unknown, init?: RequestInit) => {
-        headers.push(init?.headers);
-
-        return brevoResponse();
-      }),
-    );
-    process.env.EMAIL_SANDBOX = "true";
-    vi.resetModules();
-
-    const transport = await loadTransport();
-    await transport.send(message);
-
-    expect(new Headers(headers[0]).get("X-Sib-Sandbox")).toBe("true");
-  });
-
-  it("does not mark the request when sandbox mode is off", async () => {
-    const headers: RequestInit["headers"][] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_url: unknown, init?: RequestInit) => {
-        headers.push(init?.headers);
-
-        return brevoResponse();
-      }),
+      vi.fn(async () => new Response(null, { status: 401 })),
     );
 
     const transport = await loadTransport();
-    await transport.send(message);
 
-    expect(new Headers(headers[0]).get("X-Sib-Sandbox")).toBeNull();
+    await expect(transport.send(message)).rejects.toThrow();
   });
 });
