@@ -266,9 +266,11 @@ export async function requestPasswordReset(
   if (errors) throw new AuthError(errors);
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
+  // Resolved against the API's own base URL, so a relative path lands on the API
+  // origin, which serves no reset page. Same trap as `callbackURL` above.
   const { error } = await authClient.requestPasswordReset({
     email,
-    redirectTo: "/reset-password",
+    redirectTo: `${window.location.origin}/reset-password`,
   });
 
   if (error) throw fromAuthError(error);

@@ -22,7 +22,8 @@ export default async function ResetPasswordPage({
   const rawError = params.error;
   const error = Array.isArray(rawError) ? rawError[0] : rawError;
 
-  const expired = error === "invalid_token" || error === "TOKEN_EXPIRED";
+  // A consumed and an expired link are reported the same way, so both land here.
+  const expired = error === "INVALID_TOKEN";
 
   if (!token || expired) {
     return (
