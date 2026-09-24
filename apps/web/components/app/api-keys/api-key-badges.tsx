@@ -1,10 +1,10 @@
 import { KeyRoundIcon } from "lucide-react";
 import { cn } from "cn";
+import type { ApiKeyScope } from "@dariise/contracts";
+import { isWriteScope, scopeLabel } from "@/components/app/api-keys/api-key-scopes";
 import { environmentColorTone } from "@/components/app/environments/environment-colors";
 import { Badge } from "@/components/ui/badge";
-import { isWriteScope, scopeLabel } from "@/lib/api-key-data";
-import type { EnvironmentColor } from "@/lib/environment-data";
-import type { ApiKeyScope } from "@/lib/types";
+import type { EnvironmentColor } from "@/lib/environment-color";
 
 export function KeyGlyph({
   color,

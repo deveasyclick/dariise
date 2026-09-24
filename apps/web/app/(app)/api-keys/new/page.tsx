@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ChevronLeftIcon } from "lucide-react";
 import { CreateApiKeyForm } from "@/components/app/api-keys/create-api-key-form";
-import { getEnvironmentOptions } from "@/lib/environment-data";
+import { getScope } from "@/lib/scope";
 
 export const metadata: Metadata = {
   title: "Create API Key",
@@ -11,7 +12,11 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function CreateApiKeyPage() {
+export default async function CreateApiKeyPage() {
+  const { project, environments } = await getScope();
+
+  if (!project) notFound();
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-4">
@@ -29,7 +34,7 @@ export default function CreateApiKeyPage() {
         </p>
       </div>
 
-      <CreateApiKeyForm environments={getEnvironmentOptions()} />
+      <CreateApiKeyForm projectKey={project.key} environments={environments} />
     </div>
   );
 }

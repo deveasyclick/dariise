@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { PlusIcon } from "lucide-react";
 import { ApiKeyTable } from "@/components/app/api-keys/api-key-table";
+import {
+  toApiKeyView,
+  toEnvironmentOptions,
+} from "@/components/app/api-keys/api-key-view";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
-import { getApiKeys } from "@/lib/api-key-data";
-import { getEnvironmentOptions } from "@/lib/environment-data";
+import { apiKeys } from "@/lib/api";
+import { getScope } from "@/lib/scope";
 
 export const metadata: Metadata = {
   title: "API Keys",
@@ -14,9 +19,17 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function ApiKeysPage() {
-  // One `now` for the whole render keeps server output and hydration in step.
-  const keys = getApiKeys(new Date());
+export default async function ApiKeysPage() {
+  const { project, environments } = await getScope();
+
+  if (!project) notFound();
+
+  const now = new Date();
+  const page = await apiKeys.list(project.key);
+  const environmentOptions = toEnvironmentOptions(environments);
+  const keys = page.data.map((key) =>
+    toApiKeyView(key, environmentOptions, now),
+  );
 
   return (
     <>
@@ -32,7 +45,13 @@ export default function ApiKeysPage() {
         </Button>
       </PageHeader>
 
-      <ApiKeyTable keys={keys} environments={getEnvironmentOptions()} />
+      <ApiKeyTable
+        projectKey={project.key}
+        keys={keys}
+        environments={environmentOptions}
+        now={now.toISOString()}
+        truncated={page.nextCursor !== null}
+      />
     </>
   );
 }

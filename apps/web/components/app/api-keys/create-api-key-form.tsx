@@ -5,9 +5,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { KeyRoundIcon, LoaderCircleIcon } from "lucide-react";
 import {
+  createApiKeySchema,
+  toFieldErrors,
+  type ApiKeyScope,
+  type CreateApiKeyInput,
+  type EnvironmentSummary,
+  type FieldErrors,
+} from "@dariise/contracts";
+import {
   KeyShownOnceCard,
   SecurityBestPracticesCard,
 } from "@/components/app/api-keys/api-key-notes";
+import { useCreatedApiKey } from "@/components/app/api-keys/api-keys-provider";
+import { API_KEY_SCOPE_OPTIONS } from "@/components/app/api-keys/api-key-scopes";
 import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,41 +29,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  apiKeyExpirations,
-  apiKeyScopes,
-  type ApiKeyExpiration,
-} from "@/lib/api-key-data";
-import { createApiKey } from "@/lib/api-key-stub";
-import type { EnvironmentOption } from "@/lib/environment-data";
-import type { ApiKeyScope } from "@/lib/types";
-import { isRequired } from "@/lib/validation";
+import { ApiError, apiKeys } from "@/lib/api";
 
-interface CreateApiKeyErrors {
-  form?: string;
-  name?: string;
-  scopes?: string;
-}
+type CreateApiKeyField = "name" | "environmentKey" | "scopes" | "expiresInDays";
+
+type CreateApiKeyErrors = FieldErrors<CreateApiKeyField>;
+
+type ApiKeyExpiration = "never" | "30d" | "90d" | "1y";
+
+const expirations: Array<{
+  value: ApiKeyExpiration;
+  label: string;
+  days: number | null;
+}> = [
+  { value: "never", label: "Never", days: null },
+  { value: "30d", label: "30 days", days: 30 },
+  { value: "90d", label: "90 days", days: 90 },
+  { value: "1y", label: "1 year", days: 365 },
+];
 
 /** DOM id for a permission row, e.g. `api-key-scope-flags-read`. */
 function scopeFieldId(scope: ApiKeyScope): string {
   return `api-key-scope-${scope.replace(":", "-")}`;
 }
 
-/**
- * Issue an API key.
- *
- * The flow matches the design: the form does not render its own success state.
- * It hands the new credential to the stub — which holds it in memory for this
- * session only — and returns to the list, where the key is shown once. Nothing
- * persists, so a reload cannot reveal it again.
- */
 export function CreateApiKeyForm({
+  projectKey,
   environments,
 }: {
-  environments: EnvironmentOption[];
+  projectKey: string;
+  environments: EnvironmentSummary[];
 }) {
   const router = useRouter();
+  const { setCreated } = useCreatedApiKey();
   const defaultEnvironment =
     environments.find((environment) => environment.isDefault)?.key ??
     environments[0]?.key ??
@@ -84,12 +92,23 @@ export function CreateApiKeyForm({
     clearError("scopes");
   }
 
-  function validate(): CreateApiKeyErrors {
+  function input(): CreateApiKeyInput {
     return {
-      name: isRequired(name, "Key name") ?? undefined,
-      scopes:
-        scopes.length === 0 ? "Select at least one permission." : undefined,
+      name: name.trim(),
+      environmentKey: environmentKey === "" ? null : environmentKey,
+      scopes,
+      expiresInDays:
+        expirations.find((option) => option.value === expiration)?.days ??
+        null,
     };
+  }
+
+  function validate(): CreateApiKeyErrors | null {
+    const result = createApiKeySchema.safeParse(input());
+
+    return result.success
+      ? null
+      : toFieldErrors<CreateApiKeyField>(result.error);
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -97,7 +116,7 @@ export function CreateApiKeyForm({
     if (pending) return;
 
     const nextErrors = validate();
-    if (nextErrors.name || nextErrors.scopes) {
+    if (nextErrors) {
       setErrors(nextErrors);
       return;
     }
@@ -109,15 +128,20 @@ export function CreateApiKeyForm({
     controllerRef.current = controller;
 
     try {
-      await createApiKey(
-        { name: name.trim(), environmentKey, scopes, expiration },
-        controller.signal,
-      );
-      // The credential now lives in the stub's session store; the list shows it.
+      const created = await apiKeys.create(projectKey, input(), {
+        signal: controller.signal,
+      });
+      setCreated(created);
       router.push("/api-keys");
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
-      setErrors({ form: "Something went wrong. Please try again." });
+
+      setErrors({
+        form:
+          error instanceof ApiError
+            ? error.message
+            : "Something went wrong. Please try again.",
+      });
     } finally {
       setPending(false);
     }
@@ -138,7 +162,7 @@ export function CreateApiKeyForm({
                   name="name"
                   placeholder="Production SDK"
                   required
-                  maxLength={60}
+                  maxLength={80}
                   value={name}
                   error={errors.name}
                   onChange={(event) => {
@@ -181,8 +205,11 @@ export function CreateApiKeyForm({
                 <Label asChild>
                   <p id="api-key-permissions-label">Permissions</p>
                 </Label>
-                <ul aria-labelledby="api-key-permissions-label" className="divide-y">
-                  {apiKeyScopes.map((scope) => (
+                <ul
+                  aria-labelledby="api-key-permissions-label"
+                  className="divide-y"
+                >
+                  {API_KEY_SCOPE_OPTIONS.map((scope) => (
                     <li key={scope.value}>
                       <Label
                         htmlFor={scopeFieldId(scope.value)}
@@ -226,7 +253,7 @@ export function CreateApiKeyForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {apiKeyExpirations.map((option) => (
+                    {expirations.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>

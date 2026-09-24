@@ -1,7 +1,8 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import { MoreHorizontalIcon } from "lucide-react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { LoaderCircleIcon, MoreHorizontalIcon } from "lucide-react";
 import { cn } from "cn";
 import { ApiKeyCreatedNotice } from "@/components/app/api-keys/api-key-created-notice";
 import {
@@ -10,7 +11,14 @@ import {
   NewBadge,
   ScopePills,
 } from "@/components/app/api-keys/api-key-badges";
+import { useCreatedApiKey } from "@/components/app/api-keys/api-keys-provider";
+import {
+  toApiKeyView,
+  type ApiKeyView,
+  type EnvironmentOption,
+} from "@/components/app/api-keys/api-key-view";
 import { writeToClipboard } from "@/components/app/copy-button";
+import { FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -27,16 +35,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { toApiKeyView, type ApiKeyView } from "@/lib/api-key-data";
-import { getCreatedApiKey, subscribeToCreatedApiKey } from "@/lib/api-key-stub";
-import type { EnvironmentOption } from "@/lib/environment-data";
+import { ApiError, apiKeys } from "@/lib/api";
 
 const headerClass =
   "text-muted-foreground h-8 px-3 text-[10px] font-medium tracking-[0.1em] uppercase";
 const cellClass = "px-3 py-2.5 text-[12px]";
 
-/** Copy the credential and leave the row as it is. */
-function RowMenu({ apiKey }: { apiKey: ApiKeyView }) {
+function RowMenu({
+  apiKey,
+  pending,
+  onRevoke,
+}: {
+  apiKey: ApiKeyView;
+  pending: boolean;
+  onRevoke: () => void;
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -44,22 +57,33 @@ function RowMenu({ apiKey }: { apiKey: ApiKeyView }) {
           variant="ghost"
           size="icon-sm"
           aria-label={`More actions for ${apiKey.name}`}
+          disabled={pending}
         >
-          <MoreHorizontalIcon aria-hidden="true" />
+          {pending ? (
+            <LoaderCircleIcon className="animate-spin" />
+          ) : (
+            <MoreHorizontalIcon aria-hidden="true" />
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuLabel>{apiKey.name}</DropdownMenuLabel>
         <DropdownMenuItem
           onSelect={() => {
-            void writeToClipboard(apiKey.value);
+            void writeToClipboard(apiKey.prefix);
           }}
         >
-          Copy key
+          Copy prefix
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>Rename key</DropdownMenuItem>
-        <DropdownMenuItem disabled>Rotate key</DropdownMenuItem>
-        <DropdownMenuItem disabled>Revoke key</DropdownMenuItem>
+        <DropdownMenuItem disabled title="Rename — coming soon">
+          Rename key
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled title="Rotate — coming soon">
+          Rotate key
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onSelect={onRevoke}>
+          Revoke key
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -68,31 +92,69 @@ function RowMenu({ apiKey }: { apiKey: ApiKeyView }) {
 /**
  * The API key list.
  *
- * A Client Component for two reasons: each row has an actions menu, and the key
- * issued in this session has to be merged into the list. The second one is what
- * implements the design's "shown once" banner — the session store is read with
- * `useSyncExternalStore`, whose server snapshot is empty, so the banner appears
- * after the client-side return from the create form and disappears on reload.
- * Fixture rows arrive fully resolved, so nothing here formats a date.
+ * A Client Component because each row has an actions menu and revoking is a
+ * mutation. The key issued on the create screen is read from the provider that
+ * wraps both routes, and merged in with its secret still attached.
  */
 export function ApiKeyTable({
+  projectKey,
   keys,
   environments,
+  now,
+  truncated,
 }: {
+  projectKey: string;
   keys: ApiKeyView[];
   environments: EnvironmentOption[];
+  now: string;
+  truncated: boolean;
 }) {
-  const created = useSyncExternalStore(
-    subscribeToCreatedApiKey,
-    getCreatedApiKey,
-    () => null,
-  );
-  const createdRow = created ? toApiKeyView(created, environments) : null;
-  const rows = createdRow ? [createdRow, ...keys] : keys;
+  const router = useRouter();
+  const { created, setCreated } = useCreatedApiKey();
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
+
+  const createdRow = created
+    ? toApiKeyView(created, environments, new Date(now), true)
+    : null;
+  const rows = createdRow
+    ? [createdRow, ...keys.filter((key) => key.id !== createdRow.id)]
+    : keys;
+
+  async function handleRevoke(apiKey: ApiKeyView) {
+    if (pendingId) return;
+
+    setPendingId(apiKey.id);
+    setError(null);
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
+    try {
+      await apiKeys.revoke(projectKey, apiKey.id, {
+        signal: controller.signal,
+      });
+      if (created?.id === apiKey.id) setCreated(null);
+      router.refresh();
+    } catch (cause) {
+      if ((cause as Error)?.name === "AbortError") return;
+
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : "The key could not be revoked. Please try again.",
+      );
+    } finally {
+      setPendingId(null);
+    }
+  }
 
   return (
     <div className="space-y-3">
-      {createdRow ? <ApiKeyCreatedNotice apiKey={createdRow} /> : null}
+      {createdRow && created ? (
+        <ApiKeyCreatedNotice name={created.name} secret={created.secret} />
+      ) : null}
 
       <section className="bg-card rounded-lg border">
         <Table>
@@ -131,7 +193,7 @@ export function ApiKeyTable({
                           {apiKey.isNew ? <NewBadge /> : null}
                         </div>
                         <span className="text-muted-foreground block truncate font-mono text-[11px]">
-                          {apiKey.masked}
+                          {apiKey.prefix}
                         </span>
                       </div>
                     </div>
@@ -164,14 +226,28 @@ export function ApiKeyTable({
                   </TableCell>
 
                   <TableCell className={cn(cellClass, "text-right")}>
-                    <RowMenu apiKey={apiKey} />
+                    <RowMenu
+                      apiKey={apiKey}
+                      pending={pendingId === apiKey.id}
+                      onRevoke={() => {
+                        void handleRevoke(apiKey);
+                      }}
+                    />
                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
+
+        {truncated ? (
+          <p className="text-muted-foreground border-t px-4 py-2.5 text-[11px]">
+            Showing the first {keys.length} keys.
+          </p>
+        ) : null}
       </section>
+
+      {error ? <FieldError>{error}</FieldError> : null}
     </div>
   );
 }
