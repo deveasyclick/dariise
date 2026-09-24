@@ -3,9 +3,25 @@ import { z } from "zod";
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 
+/**
+ * How many digits a confirmation code carries.
+ *
+ * Shared with `auth.config.ts` as the `otpLength` the API generates, so a
+ * change to one cannot silently make the forms reject the codes the API sends.
+ */
+export const VERIFICATION_CODE_LENGTH = 6;
+
 export const emailSchema = z
   .email("Enter a valid email address.")
   .max(254, "Email must be at most 254 characters.");
+
+export const verificationCodeSchema = z
+  .string()
+  .trim()
+  .regex(
+    new RegExp(`^\\d{${VERIFICATION_CODE_LENGTH}}$`),
+    `Enter the ${VERIFICATION_CODE_LENGTH}-digit code.`,
+  );
 
 export const passwordSchema = z
   .string()
