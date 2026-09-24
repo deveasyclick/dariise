@@ -1,14 +1,10 @@
 "use client";
 
+import { useTransition } from "react";
 import Link from "next/link";
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  FoldersIcon,
-  PlusIcon,
-} from "lucide-react";
+import { CheckIcon, ChevronDownIcon, FolderIcon, PlusIcon } from "lucide-react";
 import { cn } from "cn";
-import { projectGlyphs } from "@/components/app/projects/project-glyphs";
+import { environmentColorTone } from "@/components/app/environments/environment-colors";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +13,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Project } from "@/lib/project-data";
+import type { Project } from "@dariise/contracts";
+import { resolveEnvironmentColor } from "@/lib/environment-color";
+import { selectProject } from "@/lib/scope-actions";
 
 interface ProjectSwitcherProps {
   project: Project;
@@ -25,18 +23,26 @@ interface ProjectSwitcherProps {
   projects: Project[];
 }
 
+/**
+ * Project switcher in the sidebar header.
+ *
+ * Selecting a project writes the scope cookie through a Server Action and
+ * re-renders the current screen against it; the project's own colour tints the
+ * icon tile, so the menu stays legible without a per-project glyph.
+ */
 export function ProjectSwitcher({ project, projects }: ProjectSwitcherProps) {
-  const Glyph = projectGlyphs[project.glyph];
+  const [pending, startTransition] = useTransition();
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="bg-nav-chip border-nav-chip-line hover:border-nav-active/60 flex w-full items-center gap-2.5 rounded-lg border p-1.5 text-left transition-colors"
+          disabled={pending}
+          className="bg-nav-chip border-nav-chip-line hover:border-nav-active/60 flex w-full items-center gap-2.5 rounded-lg border p-1.5 text-left transition-colors disabled:opacity-70"
         >
           <span className="bg-nav-active flex size-6 shrink-0 items-center justify-center rounded-md text-white">
-            <Glyph aria-hidden="true" className="size-3.5" />
+            <FolderIcon aria-hidden="true" className="size-3.5" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="text-nav-dim block text-[10px]">Project</span>
@@ -57,33 +63,35 @@ export function ProjectSwitcher({ project, projects }: ProjectSwitcherProps) {
         </DropdownMenuLabel>
 
         {projects.map((item) => {
-          const ItemGlyph = projectGlyphs[item.glyph];
           const current = item.key === project.key;
 
           return (
             <DropdownMenuItem
               key={item.key}
-              disabled
-              title="Switching projects — coming soon"
+              disabled={pending}
+              onSelect={() => {
+                if (current) return;
+                startTransition(() => selectProject(item.key));
+              }}
               className={cn("gap-2.5 px-1.5 py-1.5", current && "bg-primary/5")}
             >
               <span
                 className={cn(
                   "flex size-6 shrink-0 items-center justify-center rounded-md",
                   current
-                    ? "bg-primary/10 text-primary"
+                    ? environmentColorTone[resolveEnvironmentColor(item.color)]
                     : "bg-muted text-muted-foreground",
                 )}
               >
-                <ItemGlyph aria-hidden="true" className="size-3.5" />
+                <FolderIcon aria-hidden="true" className="size-3.5" />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[12px] font-medium">
                   {item.name}
                 </span>
                 <span className="text-muted-foreground block truncate text-[11px]">
-                  {item.isDefault ? "Default · " : ""}
-                  {item.environmentCount} environments
+                  {item.environmentCount}{" "}
+                  {item.environmentCount === 1 ? "environment" : "environments"}
                 </span>
               </span>
               {current ? (
@@ -106,7 +114,7 @@ export function ProjectSwitcher({ project, projects }: ProjectSwitcherProps) {
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href="/projects">
-            <FoldersIcon aria-hidden="true" />
+            <FolderIcon aria-hidden="true" />
             Manage projects
           </Link>
         </DropdownMenuItem>

@@ -2,10 +2,10 @@ import { BellIcon, SearchIcon } from "lucide-react";
 import { AccountMenu } from "@/components/app/account-menu";
 import { MobileNav } from "@/components/app/app-sidebar";
 import { Input } from "@/components/ui/input";
-import type { CurrentUser } from "@/lib/dashboard-data";
+import type { ChromeUser } from "@/lib/scope";
 
 interface TopbarProps {
-  user: CurrentUser;
+  user: ChromeUser;
 }
 
 /**

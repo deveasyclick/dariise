@@ -1,16 +1,15 @@
 /**
  * Auth actions.
  *
- * This module replaces the old `auth-stub.ts`, which simulated a 700 ms
- * round-trip and persisted nothing. It keeps the same shape the four auth forms
- * already call, so the forms needed no restructuring.
+ * The four access forms and the two onboarding steps call these rather than
+ * `authClient` directly, so validation and error shaping happen in one place.
  *
  * Validation runs here, against the shared schemas in `@dariise/contracts`,
  * before any request is made. That is the point of the contracts package: the
  * rule that rejects a password lives in one place, and the same rule is enforced
  * again by the API. The forms' own `lib/validation.ts` checks are kept for
  * inline feedback as the user types — an immediate message is better UX than a
- * deferred one — but they are no longer the only line of defence.
+ * deferred one — but they are not the only line of defence.
  *
  * Errors are surfaced as `AuthError`, which carries a field-keyed map matching
  * what each form renders. A failure that belongs to no single input lands under

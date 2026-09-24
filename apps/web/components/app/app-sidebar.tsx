@@ -14,17 +14,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { CurrentUser } from "@/lib/dashboard-data";
-import type { EnvironmentOption } from "@/lib/environment-data";
-import type { Project } from "@/lib/project-data";
+import type { EnvironmentSummary, Project } from "@dariise/contracts";
+import type { ChromeUser } from "@/lib/scope";
 
 interface SidebarProps {
-  user: CurrentUser;
+  user: ChromeUser;
+  /** The project the dashboard is scoped to. */
   project: Project;
   /** Every project in the workspace, for the switcher menu. */
   projects: Project[];
-  /** Every environment in the project; the default is the current one. */
-  environments: EnvironmentOption[];
+  /** Every environment in the current project. */
+  environments: EnvironmentSummary[];
+  /** The environment the dashboard is scoped to. */
+  environment: EnvironmentSummary | null;
 }
 
 /** The shared nav list. Rendered by both the sidebar and the mobile drawer. */
@@ -86,7 +88,7 @@ function NavList() {
   );
 }
 
-function UserChip({ user }: { user: CurrentUser }) {
+function UserChip({ user }: { user: ChromeUser }) {
   return (
     <div className="border-nav-line flex items-center gap-2.5 border-t pt-3">
       <span className="bg-nav-active flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white">
@@ -117,6 +119,7 @@ export function AppSidebar({
   project,
   projects,
   environments,
+  environment,
 }: SidebarProps) {
   return (
     <aside className="bg-nav-bg hidden w-56 shrink-0 flex-col justify-between p-3 lg:flex">
@@ -141,7 +144,10 @@ export function AppSidebar({
           <ProjectSwitcher project={project} projects={projects} />
 
           <div className="mt-1">
-            <EnvironmentSwitcher environments={environments} />
+            <EnvironmentSwitcher
+              environments={environments}
+              environment={environment}
+            />
           </div>
         </div>
 

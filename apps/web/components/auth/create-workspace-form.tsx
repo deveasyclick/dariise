@@ -8,7 +8,7 @@ import { OnboardingSteps } from "@/components/auth/onboarding-steps";
 import { Field, FieldError, PrefixedField } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import { AuthError, createWorkspace } from "@/lib/auth";
-import { workspaceHost } from "@/lib/settings-data";
+import { workspaceHost } from "@/components/app/settings/settings-options";
 import {
   isRequired,
   isValidOptionalEmailList,

@@ -1,6 +1,7 @@
 import type {
   AddProjectMemberInput,
   ApiKey,
+  ApiKeyListQuery,
   AuditLogEntry,
   AuditLogQuery,
   ChangePasswordInput,
@@ -22,12 +23,14 @@ import type {
   FlagListQuery,
   FlagSummary,
   FlagVersion,
+  PaginationQuery,
   Project,
   ProjectMember,
   ReplaceIndividualTargetsInput,
   ReplaceTargetingRulesInput,
   SegmentDetail,
   SegmentFlag,
+  SegmentListQuery,
   SegmentSummary,
   SessionUser,
   TargetingRule,
@@ -97,8 +100,42 @@ export interface RequestOptions {
 
 export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
+/** True in a Server Component, a Server Action or a route handler. */
+function isServer(): boolean {
+  return typeof window === "undefined";
+}
+
+/**
+ * The origin to reach the API from.
+ *
+ * The browser uses the public URL; the server uses the internal one, which may
+ * be a private address the browser cannot resolve.
+ */
+function apiBaseUrl(): string {
+  return isServer() ? env.apiInternalUrl : env.apiUrl;
+}
+
+/**
+ * The incoming request's cookies, forwarded to the API.
+ *
+ * The API is the only party that can validate the session cookie, and a Server
+ * Component's `fetch` does not carry the browser's headers on its own. Returns
+ * `null` outside a request scope, e.g. while collecting page data at build time.
+ */
+async function forwardedCookies(): Promise<string | null> {
+  if (!isServer()) return null;
+
+  const { cookies } = await import("next/headers");
+
+  try {
+    return (await cookies()).toString() || null;
+  } catch {
+    return null;
+  }
+}
+
 function buildUrl(path: string, query?: QueryParams): string {
-  const url = new URL(`${env.apiUrl}${path}`);
+  const url = new URL(`${apiBaseUrl()}${path}`);
 
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value === undefined || value === null) continue;
@@ -151,6 +188,9 @@ export async function request<T>(
 ): Promise<T> {
   const { query, body, revalidate, signal, headers } = options;
 
+  const server = isServer();
+  const cookieHeader = server ? await forwardedCookies() : null;
+
   let response: Response;
 
   try {
@@ -159,8 +199,12 @@ export async function request<T>(
       headers: {
         Accept: "application/json",
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(cookieHeader === null ? {} : { cookie: cookieHeader }),
         ...headers,
       },
+      // The dashboard and the API are separate origins; a browser request only
+      // carries the session cookie when it opts in.
+      ...(server ? {} : { credentials: "include" as const }),
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
       ...(revalidate === undefined
@@ -168,7 +212,7 @@ export async function request<T>(
         : { next: { revalidate } }),
     });
   } catch (cause) {
-    throw new ApiError(`Could not reach the Dariise API at ${env.apiUrl}.`, 0, cause);
+    throw new ApiError(`Could not reach the Dariise API at ${apiBaseUrl()}.`, 0, cause);
   }
 
   const payload = await parseBody(response);
@@ -209,11 +253,15 @@ export const projects = {
 };
 
 export const environments = {
-  list: (projectKey: string, options?: RequestOptions) =>
+  list: (
+    projectKey: string,
+    query: Partial<PaginationQuery> = {},
+    options?: RequestOptions,
+  ) =>
     request<ApiPage<EnvironmentSummary>>(
       "GET",
       `/v1/projects/${projectKey}/environments`,
-      options,
+      { ...options, query },
     ),
 
   get: (projectKey: string, environmentKey: string, options?: RequestOptions) =>
@@ -246,11 +294,15 @@ export const environments = {
       { ...options, body: input },
     ),
 
-  coverage: (projectKey: string, options?: RequestOptions) =>
+  coverage: (
+    projectKey: string,
+    query: Partial<PaginationQuery> = {},
+    options?: RequestOptions,
+  ) =>
     request<FlagCoveragePage>(
       "GET",
       `/v1/projects/${projectKey}/coverage`,
-      options,
+      { ...options, query },
     ),
 };
 
@@ -399,16 +451,25 @@ export const flags = {
       options,
     ),
 
-  versions: (projectKey: string, flagKey: string, options?: RequestOptions) =>
+  versions: (
+    projectKey: string,
+    flagKey: string,
+    query: Partial<PaginationQuery> = {},
+    options?: RequestOptions,
+  ) =>
     request<ApiPage<FlagVersion>>(
       "GET",
       `/v1/projects/${projectKey}/flags/${flagKey}/versions`,
-      options,
+      { ...options, query },
     ),
 };
 
 export const segments = {
-  list: (projectKey: string, query: { search?: string } = {}, options?: RequestOptions) =>
+  list: (
+    projectKey: string,
+    query: Partial<SegmentListQuery> = {},
+    options?: RequestOptions,
+  ) =>
     request<ApiPage<SegmentSummary>>(
       "GET",
       `/v1/projects/${projectKey}/segments`,
@@ -462,7 +523,7 @@ export const segments = {
 export const apiKeys = {
   list: (
     projectKey: string,
-    query: { includeRevoked?: boolean } = {},
+    query: Partial<ApiKeyListQuery> = {},
     options?: RequestOptions,
   ) =>
     request<ApiPage<ApiKey>>("GET", `/v1/projects/${projectKey}/api-keys`, {

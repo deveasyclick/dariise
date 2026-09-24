@@ -1,5 +1,6 @@
 "use client";
 
+import { useTransition } from "react";
 import Link from "next/link";
 import {
   CheckIcon,
@@ -17,26 +18,29 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { EnvironmentOption } from "@/lib/environment-data";
+import type { EnvironmentSummary } from "@dariise/contracts";
+import { resolveEnvironmentColor } from "@/lib/environment-color";
+import { selectEnvironment } from "@/lib/scope-actions";
 
 interface EnvironmentSwitcherProps {
-  /** Every environment in the project, in the order the menu lists them. */
-  environments: EnvironmentOption[];
+  /** Every environment in the current project. */
+  environments: EnvironmentSummary[];
+  /** The environment the dashboard is scoped to, when one resolved. */
+  environment: EnvironmentSummary | null;
 }
 
 /**
- * Environment switcher below the project switcher in the sidebar.
+ * Environment switcher below the project switcher.
  *
- * A Client Component because Radix needs to own the trigger's ref. The default
- * environment is the one the chrome is in — the same convention the environments
- * fixtures use to preselect a copy source. The rows are selectors: switching is
- * not wired to anything yet, so they are disabled with a title rather than
- * pretending to load another environment's flags. The footer actions do
- * navigate, because the create and manage screens already exist.
+ * Selecting an environment writes the scope cookie through a Server Action, so
+ * every screen that reads flags reads them in the environment the chrome shows.
  */
-export function EnvironmentSwitcher({ environments }: EnvironmentSwitcherProps) {
-  const current =
-    environments.find((item) => item.isDefault) ?? environments[0];
+export function EnvironmentSwitcher({
+  environments,
+  environment,
+}: EnvironmentSwitcherProps) {
+  const [pending, startTransition] = useTransition();
+  const current = environment ?? environments[0] ?? null;
 
   if (!current) return null;
 
@@ -45,13 +49,14 @@ export function EnvironmentSwitcher({ environments }: EnvironmentSwitcherProps) 
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="hover:bg-nav-chip flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors"
+          disabled={pending}
+          className="hover:bg-nav-chip flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors disabled:opacity-70"
         >
           <span
             aria-hidden="true"
             className={cn(
               "size-2 shrink-0 rounded-full",
-              environmentColorSwatch[current.color],
+              environmentColorSwatch[resolveEnvironmentColor(current.color)],
             )}
           />
           <span className="min-w-0 flex-1">
@@ -78,8 +83,11 @@ export function EnvironmentSwitcher({ environments }: EnvironmentSwitcherProps) 
           return (
             <DropdownMenuItem
               key={item.key}
-              disabled
-              title="Switching environments — coming soon"
+              disabled={pending}
+              onSelect={() => {
+                if (selected) return;
+                startTransition(() => selectEnvironment(item.key));
+              }}
               className={cn(
                 "gap-2.5 px-1.5 py-1.5",
                 selected && "bg-primary/5",
@@ -95,7 +103,7 @@ export function EnvironmentSwitcher({ environments }: EnvironmentSwitcherProps) 
                   aria-hidden="true"
                   className={cn(
                     "size-2 rounded-full",
-                    environmentColorSwatch[item.color],
+                    environmentColorSwatch[resolveEnvironmentColor(item.color)],
                   )}
                 />
               </span>
@@ -104,7 +112,6 @@ export function EnvironmentSwitcher({ environments }: EnvironmentSwitcherProps) 
                   {item.name}
                 </span>
                 <span className="text-muted-foreground block truncate font-mono text-[10px]">
-                  {item.isDefault ? "Default · " : ""}
                   {item.key}
                 </span>
               </span>

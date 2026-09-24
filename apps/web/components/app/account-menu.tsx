@@ -19,9 +19,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/auth";
-import type { CurrentUser } from "@/lib/dashboard-data";
+import type { ChromeUser } from "@/lib/scope";
 
-export function AccountMenu({ user }: { user: CurrentUser }) {
+export function AccountMenu({ user }: { user: ChromeUser }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
