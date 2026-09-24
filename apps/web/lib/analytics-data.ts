@@ -1,13 +1,13 @@
 /**
- * TEMPORARY ANALYTICS MOCK DATA — not connected to anything.
+ * Analytics fixtures.
  *
- * `apps/api` does not exist yet, so the Analytics screen reads from the fixtures
- * below, in the same spirit as `dashboard-data.ts` and `environment-data.ts`.
- * Nothing here is fetched or persisted. When the API lands, replace
- * `getAnalyticsData` with calls to `@/lib/api` and delete this module.
+ * The API exposes no metrics endpoint — there is no evaluation-count, latency or
+ * error-rate route — so this screen cannot be served from real responses yet.
+ * The figures are the design's, transcribed rather than invented, and they stay
+ * here until a metrics backend exists. This is the one dashboard screen that is
+ * deliberately still fixture-backed; everything else reads `@/lib/api`.
  *
- * The design's figures are transcribed rather than invented. Two are derived so
- * they cannot drift:
+ * Two figures are derived so they cannot drift:
  *
  *  - every day's total is the sum of its environment values, never stored twice;
  *  - the legend percentages come from `sharePercentages`, so they always add up
@@ -18,7 +18,7 @@
  * the unit is documented here instead of being guessed on screen.
  */
 
-import type { EnvironmentColor } from "@/lib/environment-data";
+import type { EnvironmentColor } from "@/lib/environment-color";
 
 export type AnalyticsStatId =
   | "evaluations"
@@ -150,7 +150,7 @@ const latency: LatencySummary = {
   windowHours: 24,
 };
 
-/** Flags the design ranks; every key exists in the flag fixtures. */
+/** Flags the design ranks, in the order it ranks them. */
 const topFlags: TopFlag[] = [
   { key: "checkout-v2", value: 9_800_000 },
   { key: "new-dashboard", value: 7_100_000 },

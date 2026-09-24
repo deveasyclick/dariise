@@ -1,4 +1,4 @@
-import type { EnvironmentColor } from "@/lib/environment-data";
+import type { EnvironmentColor } from "@/lib/environment-color";
 
 /**
  * Environment colour as a chart fill.

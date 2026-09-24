@@ -29,11 +29,6 @@ export function formatRelativeTime(iso: string, now: Date): string {
   }).format(new Date(iso));
 }
 
-/** Resolve an "hours ago" fixture offset against `now`. */
-export function hoursAgo(hours: number, now: Date): string {
-  return new Date(now.getTime() - hours * HOUR).toISOString();
-}
-
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -102,20 +97,6 @@ const time24Formatter = new Intl.DateTimeFormat("en-US", {
 export function formatDateTime(iso: string): string {
   const date = new Date(iso);
   return `${dateFormatter.format(date)} ${time24Formatter.format(date)}`;
-}
-
-const monthYearFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  year: "numeric",
-});
-
-/**
- * A calendar month, e.g. `Jan 2024`.
- *
- * Used where the day would be noise — a membership date is quoted to the month.
- */
-export function formatMonthYear(iso: string): string {
-  return monthYearFormatter.format(new Date(iso));
 }
 
 const dayKeyFormatter = new Intl.DateTimeFormat("en-CA", { dateStyle: "short" });
