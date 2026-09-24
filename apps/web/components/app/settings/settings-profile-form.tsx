@@ -2,7 +2,18 @@
 
 import { useRef, useState } from "react";
 import { CheckIcon, LoaderCircleIcon } from "lucide-react";
+import {
+  toFieldErrors,
+  updateWorkspaceSchema,
+  type EnvironmentSummary,
+  type UpdateWorkspaceInput,
+  type WorkspaceProfile,
+} from "@dariise/contracts";
 import { SettingsCard } from "@/components/app/settings-card";
+import {
+  timezoneChoices,
+  workspaceUrl,
+} from "@/components/app/settings/settings-options";
 import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,10 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { EnvironmentOption } from "@/lib/environment-data";
-import { timezoneOptions, type WorkspaceProfile } from "@/lib/settings-data";
-import { isRequired } from "@/lib/validation";
-import { updateWorkspaceProfile } from "@/lib/workspace-stub";
+import * as api from "@/lib/api";
 
 interface ProfileErrors {
   form?: string;
@@ -26,36 +34,52 @@ interface ProfileErrors {
 
 interface ProfileDraft {
   name: string;
-  defaultEnvironmentKey: string;
+  defaultEnvironmentKey: string | null;
   timezone: string;
 }
 
-/**
- * Workspace profile.
- *
- * Local state until Save is pressed, matching the environment settings card: the
- * write goes through the stub, so the unsaved and saved states are real even
- * though nothing is persisted. Saving does not rename the sidebar for the
- * session — the chrome reads the fixture, and a reload discards the change.
- */
+function resolveEnvironmentKey(
+  defaultEnvironmentId: string | null,
+  environments: EnvironmentSummary[],
+): string | null {
+  if (!defaultEnvironmentId) return null;
+
+  return (
+    environments.find((environment) => environment.id === defaultEnvironmentId)
+      ?.key ?? null
+  );
+}
+
+function toDraft(
+  profile: WorkspaceProfile,
+  environments: EnvironmentSummary[],
+): ProfileDraft {
+  return {
+    name: profile.name,
+    defaultEnvironmentKey: resolveEnvironmentKey(
+      profile.defaultEnvironmentId,
+      environments,
+    ),
+    timezone: profile.timezone,
+  };
+}
+
 export function SettingsProfileForm({
   profile,
   environments,
-  workspaceUrl,
 }: {
   profile: WorkspaceProfile;
-  environments: EnvironmentOption[];
-  /** Read-only projection of the workspace slug. */
-  workspaceUrl: string;
+  environments: EnvironmentSummary[];
 }) {
-  const initial: ProfileDraft = {
-    name: profile.name,
-    defaultEnvironmentKey: profile.defaultEnvironmentKey,
-    timezone: profile.timezone,
-  };
-
-  const [draft, setDraft] = useState<ProfileDraft>(initial);
-  const [baseline, setBaseline] = useState<ProfileDraft>(initial);
+  const [draft, setDraft] = useState<ProfileDraft>(() =>
+    toDraft(profile, environments),
+  );
+  const [baseline, setBaseline] = useState<ProfileDraft>(() =>
+    toDraft(profile, environments),
+  );
+  const [defaultEnvironmentId, setDefaultEnvironmentId] = useState(
+    profile.defaultEnvironmentId,
+  );
   const [errors, setErrors] = useState<ProfileErrors>({});
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -66,6 +90,9 @@ export function SettingsProfileForm({
     draft.defaultEnvironmentKey !== baseline.defaultEnvironmentKey ||
     draft.timezone !== baseline.timezone;
 
+  const unresolvedDefault =
+    defaultEnvironmentId !== null && draft.defaultEnvironmentKey === null;
+
   function update(patch: Partial<ProfileDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
     setSaved(false);
@@ -75,9 +102,20 @@ export function SettingsProfileForm({
   async function handleSave() {
     if (pending || !dirty) return;
 
-    const nameError = isRequired(draft.name, "Workspace name");
-    if (nameError) {
-      setErrors({ name: nameError });
+    const patch: UpdateWorkspaceInput = {};
+    const name = draft.name.trim();
+
+    if (name !== baseline.name) patch.name = name;
+    if (draft.defaultEnvironmentKey !== baseline.defaultEnvironmentKey) {
+      patch.defaultEnvironmentKey = draft.defaultEnvironmentKey;
+    }
+    if (draft.timezone !== baseline.timezone) patch.timezone = draft.timezone;
+
+    const parsed = updateWorkspaceSchema.safeParse(patch);
+
+    if (!parsed.success) {
+      const fieldErrors = toFieldErrors<"name" | "timezone">(parsed.error);
+      setErrors({ name: fieldErrors.name, form: fieldErrors.form });
       return;
     }
 
@@ -88,18 +126,25 @@ export function SettingsProfileForm({
     const controller = new AbortController();
     controllerRef.current = controller;
 
-    const next: ProfileDraft = { ...draft, name: draft.name.trim() };
-
     try {
-      await updateWorkspaceProfile(next, controller.signal);
-      // A local acknowledgement only — moving the baseline is what lets the
-      // footer say "Saved" instead of "Unsaved".
+      const updated = await api.workspace.update(parsed.data, {
+        signal: controller.signal,
+      });
+      const next = toDraft(updated, environments);
+
       setDraft(next);
       setBaseline(next);
+      setDefaultEnvironmentId(updated.defaultEnvironmentId);
       setSaved(true);
-    } catch (error) {
-      if ((error as Error)?.name === "AbortError") return;
-      setErrors({ form: "Something went wrong. Please try again." });
+    } catch (caught) {
+      if ((caught as Error)?.name === "AbortError") return;
+
+      setErrors({
+        form:
+          caught instanceof api.ApiError
+            ? caught.message
+            : "The workspace could not be saved. Please try again.",
+      });
     } finally {
       setPending(false);
     }
@@ -156,7 +201,7 @@ export function SettingsProfileForm({
           <Label htmlFor="workspace-url">Workspace URL</Label>
           <Input
             id="workspace-url"
-            value={workspaceUrl}
+            value={workspaceUrl(profile.slug)}
             readOnly
             disabled
             title="The workspace URL is fixed once the workspace exists."
@@ -168,7 +213,7 @@ export function SettingsProfileForm({
           <div className="space-y-2">
             <Label htmlFor="workspace-environment">Default environment</Label>
             <Select
-              value={draft.defaultEnvironmentKey}
+              value={draft.defaultEnvironmentKey ?? ""}
               onValueChange={(value) =>
                 update({ defaultEnvironmentKey: value })
               }
@@ -178,11 +223,11 @@ export function SettingsProfileForm({
                 id="workspace-environment"
                 className="h-8 w-full text-[12px]"
               >
-                <SelectValue placeholder="No environment" />
+                <SelectValue placeholder="No default environment" />
               </SelectTrigger>
               <SelectContent>
                 {environments.map((environment) => (
-                  <SelectItem key={environment.key} value={environment.key}>
+                  <SelectItem key={environment.id} value={environment.key}>
                     {environment.name}
                   </SelectItem>
                 ))}
@@ -203,7 +248,7 @@ export function SettingsProfileForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {timezoneOptions.map((timezone) => (
+                {timezoneChoices(draft.timezone).map((timezone) => (
                   <SelectItem key={timezone} value={timezone}>
                     {timezone}
                   </SelectItem>
@@ -212,6 +257,13 @@ export function SettingsProfileForm({
             </Select>
           </div>
         </div>
+
+        {unresolvedDefault ? (
+          <p className="text-muted-foreground text-[11px]">
+            The workspace default environment is not in the project selected in
+            the sidebar.
+          </p>
+        ) : null}
 
         {errors.form ? <FieldError>{errors.form}</FieldError> : null}
       </div>

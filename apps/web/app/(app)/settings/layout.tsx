@@ -1,10 +1,6 @@
 import { SettingsNav } from "@/components/app/settings/settings-nav";
-import { settingsDescription } from "@/lib/settings-data";
+import { settingsDescription } from "@/components/app/settings/settings-options";
 
-/**
- * Shared shell for the Settings screens: one title block and the section nav,
- * with each tab rendered as a real route underneath.
- */
 export default function SettingsLayout({ children }: LayoutProps<"/settings">) {
   return (
     <>

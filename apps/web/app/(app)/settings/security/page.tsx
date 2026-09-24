@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import type { WorkspaceSecuritySettings } from "@dariise/contracts";
 import { SettingsSecurity } from "@/components/app/settings/settings-security";
-import { getSecuritySettings, settingsDescription } from "@/lib/settings-data";
+import { settingsDescription } from "@/components/app/settings/settings-options";
+import * as api from "@/lib/api";
 
 export const metadata: Metadata = {
   title: "Security",
@@ -9,6 +12,15 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsSecurityPage() {
-  return <SettingsSecurity settings={getSecuritySettings()} />;
+async function loadSecurity(): Promise<WorkspaceSecuritySettings> {
+  try {
+    return await api.workspace.getSecurity();
+  } catch (error) {
+    if (error instanceof api.ApiError && error.status === 404) notFound();
+    throw error;
+  }
+}
+
+export default async function SettingsSecurityPage() {
+  return <SettingsSecurity settings={await loadSecurity()} />;
 }

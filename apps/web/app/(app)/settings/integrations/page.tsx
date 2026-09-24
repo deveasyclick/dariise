@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { SettingsIntegrations } from "@/components/app/settings/settings-integrations";
-import { getIntegrations, settingsDescription } from "@/lib/settings-data";
+import {
+  integrations,
+  settingsDescription,
+} from "@/components/app/settings/settings-options";
 
 export const metadata: Metadata = {
   title: "Integrations",
@@ -10,5 +13,5 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default function SettingsIntegrationsPage() {
-  return <SettingsIntegrations apps={getIntegrations()} />;
+  return <SettingsIntegrations apps={integrations} />;
 }

@@ -2,13 +2,17 @@
 
 import { useRef, useState } from "react";
 import { CameraIcon, CheckIcon, LoaderCircleIcon } from "lucide-react";
+import {
+  toFieldErrors,
+  updateProfileSchema,
+  type SessionUser,
+} from "@dariise/contracts";
 import { SettingsCard } from "@/components/app/settings-card";
 import { Field, FieldError } from "@/components/auth/field";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import type { ProfileRecord } from "@/lib/profile-data";
+import * as api from "@/lib/api";
 import { isEmail, isRequired } from "@/lib/validation";
-import { updateProfile } from "@/lib/profile-stub";
 
 interface ProfileErrors {
   form?: string;
@@ -21,16 +25,14 @@ interface ProfileDraft {
   email: string;
 }
 
-/**
- * The personal Profile card.
- *
- * Local state until Save is pressed, matching the workspace profile card in
- * Settings: the write goes through the stub, so the unsaved and saved states are
- * real even though nothing is persisted — and the chrome keeps rendering the
- * fixture identity after a save.
- */
-export function ProfileForm({ profile }: { profile: ProfileRecord }) {
-  const initial: ProfileDraft = { name: profile.name, email: profile.email };
+export function ProfileForm({
+  user,
+  initials,
+}: {
+  user: SessionUser;
+  initials: string;
+}) {
+  const initial: ProfileDraft = { name: user.name, email: user.email };
 
   const [draft, setDraft] = useState<ProfileDraft>(initial);
   const [baseline, setBaseline] = useState<ProfileDraft>(initial);
@@ -65,6 +67,18 @@ export function ProfileForm({ profile }: { profile: ProfileRecord }) {
       return;
     }
 
+    const next: ProfileDraft = {
+      name: draft.name.trim(),
+      email: draft.email.trim(),
+    };
+    const parsed = updateProfileSchema.safeParse(next);
+
+    if (!parsed.success) {
+      const fieldErrors = toFieldErrors<"name" | "email">(parsed.error);
+      setErrors({ name: fieldErrors.name, email: fieldErrors.email });
+      return;
+    }
+
     setErrors({});
     setPending(true);
     setSaved(false);
@@ -72,21 +86,27 @@ export function ProfileForm({ profile }: { profile: ProfileRecord }) {
     const controller = new AbortController();
     controllerRef.current = controller;
 
-    const next: ProfileDraft = {
-      name: draft.name.trim(),
-      email: draft.email.trim(),
-    };
-
     try {
-      await updateProfile(next, controller.signal);
-      // A local acknowledgement only — moving the baseline is what lets the
-      // footer say "Saved" instead of "Unsaved".
-      setDraft(next);
-      setBaseline(next);
+      const updated = await api.me.updateProfile(parsed.data, {
+        signal: controller.signal,
+      });
+      const accepted: ProfileDraft = {
+        name: updated.name,
+        email: updated.email,
+      };
+
+      setDraft(accepted);
+      setBaseline(accepted);
       setSaved(true);
-    } catch (error) {
-      if ((error as Error)?.name === "AbortError") return;
-      setErrors({ form: "Something went wrong. Please try again." });
+    } catch (caught) {
+      if ((caught as Error)?.name === "AbortError") return;
+
+      setErrors({
+        form:
+          caught instanceof api.ApiError
+            ? caught.message
+            : "Your profile could not be saved. Please try again.",
+      });
     } finally {
       setPending(false);
     }
@@ -130,14 +150,14 @@ export function ProfileForm({ profile }: { profile: ProfileRecord }) {
         <div className="flex flex-wrap items-center gap-3">
           <Avatar size="lg">
             <AvatarFallback className="bg-nav-active text-[12px] font-medium text-white">
-              {profile.initials}
+              {initials}
             </AvatarFallback>
           </Avatar>
 
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-medium">{profile.name}</p>
+            <p className="truncate text-[13px] font-medium">{user.name}</p>
             <p className="text-muted-foreground truncate text-[11px]">
-              {profile.email}
+              {user.email}
             </p>
           </div>
 

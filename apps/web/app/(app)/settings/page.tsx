@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import type { WorkspaceProfile } from "@dariise/contracts";
 import { SettingsAppearance } from "@/components/app/settings/settings-appearance";
 import { SettingsDanger } from "@/components/app/settings/settings-danger";
 import { SettingsProfileForm } from "@/components/app/settings/settings-profile-form";
-import { getEnvironmentOptions } from "@/lib/environment-data";
-import {
-  getWorkspaceProfile,
-  getWorkspaceUrl,
-  settingsDescription,
-} from "@/lib/settings-data";
+import { settingsDescription } from "@/components/app/settings/settings-options";
+import * as api from "@/lib/api";
+import { getScope } from "@/lib/scope";
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -16,17 +15,25 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsGeneralPage() {
-  const profile = getWorkspaceProfile();
+async function loadWorkspace(): Promise<WorkspaceProfile> {
+  try {
+    return await api.workspace.get();
+  } catch (error) {
+    if (error instanceof api.ApiError && error.status === 404) notFound();
+    throw error;
+  }
+}
+
+export default async function SettingsGeneralPage() {
+  const [profile, scope] = await Promise.all([loadWorkspace(), getScope()]);
 
   return (
     <div className="space-y-3">
       <SettingsProfileForm
         profile={profile}
-        environments={getEnvironmentOptions()}
-        workspaceUrl={getWorkspaceUrl()}
+        environments={scope.environments}
       />
-      <SettingsAppearance theme={profile.theme} />
+      <SettingsAppearance />
       <SettingsDanger />
     </div>
   );

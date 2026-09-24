@@ -2,10 +2,11 @@
 
 import { useRef, useState } from "react";
 import { CheckIcon, KeyRoundIcon, LoaderCircleIcon } from "lucide-react";
+import { changePasswordSchema, toFieldErrors } from "@dariise/contracts";
 import { SettingsCard } from "@/components/app/settings-card";
 import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
-import { updatePassword } from "@/lib/profile-stub";
+import * as api from "@/lib/api";
 import { isRequired, isStrongPassword } from "@/lib/validation";
 
 interface PasswordErrors {
@@ -14,14 +15,6 @@ interface PasswordErrors {
   next?: string;
 }
 
-/**
- * Change the password.
- *
- * There is no "confirm password" field, matching the design. The current
- * password is required but not verified — the stub has nothing to verify it
- * against — and a successful change clears the form rather than implying a
- * stored credential.
- */
 export function PasswordForm() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -55,6 +48,22 @@ export function PasswordForm() {
       return;
     }
 
+    const parsed = changePasswordSchema.safeParse({
+      currentPassword: current,
+      newPassword: next,
+    });
+
+    if (!parsed.success) {
+      const fieldErrors = toFieldErrors<"currentPassword" | "newPassword">(
+        parsed.error,
+      );
+      setErrors({
+        current: fieldErrors.currentPassword,
+        next: fieldErrors.newPassword,
+      });
+      return;
+    }
+
     setErrors({});
     setPending(true);
     setSaved(false);
@@ -63,13 +72,19 @@ export function PasswordForm() {
     controllerRef.current = controller;
 
     try {
-      await updatePassword({ current, next }, controller.signal);
+      await api.me.changePassword(parsed.data, { signal: controller.signal });
       setCurrent("");
       setNext("");
       setSaved(true);
-    } catch (error) {
-      if ((error as Error)?.name === "AbortError") return;
-      setErrors({ form: "Something went wrong. Please try again." });
+    } catch (caught) {
+      if ((caught as Error)?.name === "AbortError") return;
+
+      setErrors({
+        form:
+          caught instanceof api.ApiError
+            ? caught.message
+            : "Your password could not be changed. Please try again.",
+      });
     } finally {
       setPending(false);
     }
@@ -89,7 +104,7 @@ export function PasswordForm() {
               </span>
             ) : (
               <span className="text-muted-foreground text-[11px]">
-                Nothing is stored yet.
+                Not updated
               </span>
             )}
 

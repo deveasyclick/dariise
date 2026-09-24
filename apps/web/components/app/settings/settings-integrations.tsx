@@ -10,22 +10,12 @@ import {
 import { cn } from "cn";
 import { SettingsCard } from "@/components/app/settings-card";
 import { GitHubIcon } from "@/components/auth/brand-icons";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type {
   IntegrationApp,
   IntegrationGlyph,
   IntegrationTone,
-} from "@/lib/settings-data";
-
-/**
- * The app directory.
- *
- * `lucide-react` ships no third-party logos, so GitHub reuses the inline mark the
- * auth screens already have and the rest are tinted generic glyphs. Connecting an
- * app is not implemented, so the affordance is disabled with a title while a
- * connected app shows its status instead.
- */
+} from "@/components/app/settings/settings-options";
 
 const glyphs: Record<IntegrationGlyph, LucideIcon | typeof GitHubIcon> = {
   slack: MessageSquareIcon,
@@ -77,25 +67,15 @@ export function SettingsIntegrations({ apps }: { apps: IntegrationApp[] }) {
                   </p>
                 </div>
 
-                {app.connected ? (
-                  <Badge variant="ok" className="shrink-0 gap-1.5">
-                    <span
-                      aria-hidden="true"
-                      className="bg-ok-ink size-1.5 rounded-full"
-                    />
-                    Connected
-                  </Badge>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled
-                    title="Connecting an app — coming soon"
-                    className="shrink-0 text-[11px]"
-                  >
-                    Connect
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  title="Connecting an app — coming soon"
+                  className="shrink-0 text-[11px]"
+                >
+                  Connect
+                </Button>
               </li>
             );
           })}

@@ -1,5 +1,8 @@
 import { cn } from "cn";
-import { themeOptions, type WorkspaceTheme } from "@/lib/settings-data";
+import {
+  themeOptions,
+  type WorkspaceTheme,
+} from "@/components/app/settings/settings-options";
 
 /**
  * The Light / Dark / System control.

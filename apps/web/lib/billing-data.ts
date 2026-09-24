@@ -1,23 +1,21 @@
 /**
- * TEMPORARY BILLING MOCK DATA — not connected to anything.
+ * Billing fixtures.
  *
- * `apps/api` does not exist yet, so the Billing tab reads from the fixture
- * below, in the same spirit as the other `-data` modules. Nothing here is
- * fetched, charged or persisted. When the API lands, replace `getBillingSummary`
- * with a call to `@/lib/api` and delete this module.
+ * The API exposes no billing endpoint — no plan, usage, payment-method or
+ * invoice route — so this screen cannot be served from real responses yet. The
+ * figures are the design's and stay here until a billing backend exists.
  *
  * Dates are derived from a caller-supplied `now` rather than frozen: the renewal
  * date is the first of next month and the invoices are the first of this month
  * and the two before it, so the screen stays plausible whenever it is opened
  * instead of drifting stale.
  *
- * The environment count is read from `environment-data.ts` so the allowance
- * cannot disagree with the Environments screen. The evaluation and user figures
- * are design fixtures; the user figure is the same one the Analytics screen
- * reports.
+ * The environment count is passed in by the caller, which reads it from the
+ * API, so the allowance cannot disagree with the Environments screen. The
+ * evaluation and user figures are design fixtures; the user figure is the same
+ * one the Analytics screen reports.
  */
 
-import { getEnvironmentOptions } from "@/lib/environment-data";
 import {
   formatCompactNumber,
   formatDate,
@@ -88,11 +86,16 @@ function dollars(amount: number): string {
  *
  * @param now - The moment the billing period is measured from. The page passes
  * a single value for the whole render so server and client agree.
+ * @param environmentCount - The workspace's real environment count, read from
+ * the API by the caller.
  */
-export function getBillingSummary(now: Date): BillingSummary {
+export function getBillingSummary(
+  now: Date,
+  environmentCount: number,
+): BillingSummary {
   const evaluations = 48_200_000;
   const activeUsers = 128_940;
-  const environments = getEnvironmentOptions().length;
+  const environments = environmentCount;
 
   return {
     plan: {

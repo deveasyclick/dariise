@@ -1,11 +1,9 @@
-import { ThemeChoice } from "@/components/app/theme-choice";
 import {
   SettingsCard,
   SettingsRowLabel,
 } from "@/components/app/settings-card";
-import type { WorkspaceTheme } from "@/lib/settings-data";
 
-export function SettingsAppearance({ theme }: { theme: WorkspaceTheme }) {
+export function SettingsAppearance() {
   return (
     <SettingsCard
       title="Appearance"
@@ -16,7 +14,12 @@ export function SettingsAppearance({ theme }: { theme: WorkspaceTheme }) {
           label="Theme"
           description="Applies to all members by default."
         />
-        <ThemeChoice theme={theme} />
+        <span
+          className="text-muted-foreground shrink-0 text-[11px]"
+          title="The API does not expose a workspace-level theme."
+        >
+          Not available — the API does not expose a workspace theme.
+        </span>
       </div>
     </SettingsCard>
   );

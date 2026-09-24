@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/app/page-header";
 import { PasswordForm } from "@/components/app/profile/password-form";
 import { ProfileAccountCard } from "@/components/app/profile/profile-account-card";
@@ -7,8 +8,8 @@ import {
   ProfileNotifications,
   ProfilePreferences,
 } from "@/components/app/profile/profile-preferences";
-import { getEnvironmentOptions } from "@/lib/environment-data";
-import { getProfile } from "@/lib/profile-data";
+import { getScope, initialsOf } from "@/lib/scope";
+import { getSession } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Profile",
@@ -17,8 +18,12 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function ProfilePage() {
-  const profile = getProfile();
+export default async function ProfilePage() {
+  const session = await getSession();
+
+  if (!session) redirect("/");
+
+  const { environments, environment } = await getScope();
 
   return (
     <>
@@ -29,17 +34,23 @@ export default function ProfilePage() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.62fr)]">
         <div className="space-y-4">
-          <ProfileForm profile={profile} />
+          <ProfileForm
+            user={session.user}
+            initials={initialsOf(session.user.name)}
+          />
           <PasswordForm />
         </div>
 
         <div className="space-y-4">
-          <ProfileAccountCard profile={profile} />
-          <ProfilePreferences
-            preferences={profile.preferences}
-            environments={getEnvironmentOptions()}
+          <ProfileAccountCard
+            role={session.workspace?.role ?? null}
+            workspaceName={session.workspace?.name ?? null}
           />
-          <ProfileNotifications notifications={profile.notifications} />
+          <ProfilePreferences
+            environments={environments}
+            defaultEnvironmentKey={environment?.key ?? null}
+          />
+          <ProfileNotifications />
         </div>
       </div>
     </>

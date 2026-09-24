@@ -2,7 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CheckIcon, PlusIcon } from "lucide-react";
+import {
+  toFieldErrors,
+  updateWorkspaceSecuritySchema,
+  type WorkspaceSecuritySettings,
+} from "@dariise/contracts";
 import { SettingsCard, SettingsRowLabel } from "@/components/app/settings-card";
+import {
+  auditRetentionOptions,
+  sessionTimeoutOptions,
+} from "@/components/app/settings/settings-options";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,19 +22,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import {
-  auditRetentionOptions,
-  sessionTimeoutOptions,
-  type SecuritySettings,
-  type SessionTimeout,
-} from "@/lib/settings-data";
-import { updateWorkspaceSecurity } from "@/lib/workspace-stub";
+import * as api from "@/lib/api";
 
 const SAVED_HINT_MS = 2_000;
 
-export function SettingsSecurity({ settings }: { settings: SecuritySettings }) {
-  const [current, setCurrent] = useState<SecuritySettings>(settings);
+function retentionChoices(current: number): Array<{ value: number; label: string }> {
+  return auditRetentionOptions.some((option) => option.value === current)
+    ? auditRetentionOptions
+    : [{ value: current, label: `${current} days` }, ...auditRetentionOptions];
+}
+
+export function SettingsSecurity({
+  settings,
+}: {
+  settings: WorkspaceSecuritySettings;
+}) {
+  const [current, setCurrent] = useState<WorkspaceSecuritySettings>(settings);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const timerRef = useRef<number | null>(null);
 
@@ -36,28 +50,58 @@ export function SettingsSecurity({ settings }: { settings: SecuritySettings }) {
     [],
   );
 
-  async function apply(patch: Partial<SecuritySettings>) {
+  async function apply(patch: Partial<WorkspaceSecuritySettings>) {
+    const previous = current;
     const next = { ...current, ...patch };
+
     setCurrent(next);
     setSaved(false);
+    setError(null);
+
+    const parsed = updateWorkspaceSecuritySchema.safeParse(next);
+
+    if (!parsed.success) {
+      setCurrent(previous);
+      const fieldErrors = toFieldErrors(parsed.error);
+      setError(
+        fieldErrors.form ??
+          Object.values(fieldErrors)[0] ??
+          "Those security settings are not valid.",
+      );
+      return;
+    }
+
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
 
     try {
-      await updateWorkspaceSecurity(next, controller.signal);
+      const updated = await api.workspace.updateSecurity(parsed.data, {
+        signal: controller.signal,
+      });
+
+      setCurrent(updated);
       setSaved(true);
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
       timerRef.current = window.setTimeout(
         () => setSaved(false),
         SAVED_HINT_MS,
       );
-    } catch (error) {
-      if ((error as Error)?.name !== "AbortError") setSaved(false);
+    } catch (caught) {
+      if ((caught as Error)?.name === "AbortError") return;
+
+      setCurrent(previous);
+      setError(
+        caught instanceof api.ApiError
+          ? caught.message
+          : "The security settings could not be saved. Please try again.",
+      );
     }
   }
 
-  const savedHint = saved ? (
+  const status = error ? (
+    <span className="text-danger-ink text-[11px]">{error}</span>
+  ) : saved ? (
     <span className="text-ok-ink inline-flex items-center gap-1.5 text-[11px]">
       <CheckIcon aria-hidden="true" className="size-3.5" />
       Saved just now
@@ -69,7 +113,7 @@ export function SettingsSecurity({ settings }: { settings: SecuritySettings }) {
       <SettingsCard
         title="Authentication"
         description="Control how members sign in and stay authenticated."
-        action={savedHint}
+        action={status}
       >
         <ul className="divide-y">
           <li className="flex flex-wrap items-center justify-between gap-3 pb-3">
@@ -85,7 +129,9 @@ export function SettingsSecurity({ settings }: { settings: SecuritySettings }) {
                     aria-hidden="true"
                     className="bg-ok-ink size-1.5 rounded-full"
                   />
-                  {current.ssoProvider} · Connected
+                  {current.ssoProvider
+                    ? `${current.ssoProvider} · Connected`
+                    : "Connected"}
                 </Badge>
               ) : null}
               <Button
@@ -121,7 +167,10 @@ export function SettingsSecurity({ settings }: { settings: SecuritySettings }) {
             <Select
               value={current.sessionTimeout}
               onValueChange={(value) =>
-                apply({ sessionTimeout: value as SessionTimeout })
+                apply({
+                  sessionTimeout:
+                    value as WorkspaceSecuritySettings["sessionTimeout"],
+                })
               }
             >
               <SelectTrigger
@@ -145,7 +194,7 @@ export function SettingsSecurity({ settings }: { settings: SecuritySettings }) {
       <SettingsCard
         title="Access control"
         description="Restrict who can reach the workspace and how long activity is retained."
-        action={savedHint}
+        action={status}
       >
         <ul className="divide-y">
           <li className="flex flex-wrap items-center justify-between gap-3 pb-3">
@@ -155,14 +204,20 @@ export function SettingsSecurity({ settings }: { settings: SecuritySettings }) {
             />
 
             <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {current.allowedEmailDomains.map((domain) => (
-                <span
-                  key={domain}
-                  className="bg-muted text-muted-foreground rounded-md px-2.5 py-1.5 font-mono text-[11px]"
-                >
-                  {domain}
+              {current.allowedEmailDomains.length === 0 ? (
+                <span className="text-muted-foreground font-mono text-[11px]">
+                  None
                 </span>
-              ))}
+              ) : (
+                current.allowedEmailDomains.map((domain) => (
+                  <span
+                    key={domain}
+                    className="bg-muted text-muted-foreground rounded-md px-2.5 py-1.5 font-mono text-[11px]"
+                  >
+                    {domain}
+                  </span>
+                ))
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -210,7 +265,7 @@ export function SettingsSecurity({ settings }: { settings: SecuritySettings }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {auditRetentionOptions.map((option) => (
+                {retentionChoices(current.auditRetentionDays).map((option) => (
                   <SelectItem key={option.value} value={String(option.value)}>
                     {option.label}
                   </SelectItem>

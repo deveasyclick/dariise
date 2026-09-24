@@ -1,28 +1,48 @@
+import type { ReactNode } from "react";
 import { SettingsCard } from "@/components/app/settings-card";
 import { Badge } from "@/components/ui/badge";
-import type { ProfileRecord } from "@/lib/profile-data";
 
-/**
- * Read-only facts about the account.
- *
- * The Role badge is the one thing here that is not editable from this screen:
- * roles are a workspace concern, and `Owner` is the fixture's own value.
- */
-export function ProfileAccountCard({ profile }: { profile: ProfileRecord }) {
-  const rows = [
+function Unavailable({ reason }: { reason: string }) {
+  return (
+    <span className="text-muted-foreground" title={reason}>
+      Not available
+    </span>
+  );
+}
+
+export function ProfileAccountCard({
+  role,
+  workspaceName,
+}: {
+  role: string | null;
+  workspaceName: string | null;
+}) {
+  const rows: Array<{ label: string; value: ReactNode }> = [
     {
       label: "Role",
-      value: (
+      value: role ? (
         <Badge
           variant="secondary"
           className="bg-primary/10 text-primary text-[10px]"
         >
-          {profile.role}
+          {role}
         </Badge>
+      ) : (
+        <Unavailable reason="The API did not report a workspace role." />
       ),
     },
-    { label: "Workspace", value: profile.workspaceName },
-    { label: "Member since", value: profile.memberSinceLabel },
+    {
+      label: "Workspace",
+      value: workspaceName ?? (
+        <Unavailable reason="The API did not report a workspace." />
+      ),
+    },
+    {
+      label: "Member since",
+      value: (
+        <Unavailable reason="The API does not expose an account creation date." />
+      ),
+    },
   ];
 
   return (

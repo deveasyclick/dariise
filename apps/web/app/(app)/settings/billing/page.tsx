@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { SettingsBilling } from "@/components/app/settings/settings-billing";
+import { settingsDescription } from "@/components/app/settings/settings-options";
 import { getBillingSummary } from "@/lib/billing-data";
-import { settingsDescription } from "@/lib/settings-data";
+import { getScope } from "@/lib/scope";
 
 export const metadata: Metadata = {
   title: "Billing",
@@ -10,9 +11,10 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsBillingPage() {
+export default async function SettingsBillingPage() {
   // One `now` for the whole render, so the derived billing dates agree.
-  const summary = getBillingSummary(new Date());
+  const { environments } = await getScope();
+  const summary = getBillingSummary(new Date(), environments.length);
 
   return <SettingsBilling summary={summary} />;
 }
