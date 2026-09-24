@@ -1,15 +1,14 @@
 /**
- * TEMPORARY SDK MOCK DATA — not connected to anything.
+ * SDK install and usage snippets.
  *
- * `apps/api` does not exist yet, and neither do the SDKs, so the SDKs &
- * Integration screen reads the install and usage snippets below in the same
- * spirit as the other `lib/*-data.ts` modules. Nothing here is fetched: the
- * snippets are the shape each SDK is meant to ship with. When the SDK packages
- * land, replace `getSdk` with a call to `@/lib/api` (or import the real
- * snippets from the packages) and delete this module.
+ * These are documentation, not API data: the SDK packages do not exist yet, so
+ * the snippets are the shape each SDK is meant to ship with and are maintained
+ * here until the packages publish their own. The connection values the screen
+ * pairs them with — key, endpoints — come from the API, via
+ * `environments.get(...).connection`.
  *
- * Every snippet evaluates `checkout-v2`, a flag that exists in
- * `dashboard-data.ts`, so the example and the rest of the product agree.
+ * Every snippet evaluates `checkout-v2`, the flag used throughout the docs, so
+ * the example and the rest of the product agree.
  */
 
 export type SdkKey =

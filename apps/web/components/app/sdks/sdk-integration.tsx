@@ -14,10 +14,12 @@ import { defaultSdkKey, getSdkOptions, type SdkKey } from "@/lib/sdk-data";
 export interface SdkConnection {
   /** Environment the values belong to, e.g. `Production`. */
   environmentName: string;
-  maskedKey: string;
+  /** The API returns `null` until an SDK key has been issued. */
+  maskedKey: string | null;
   /** Evaluation endpoint, e.g. `sdk.dariise.dev/prod`. */
   endpoint: string;
-  streamEndpoint: string;
+  /** `null` until flag streaming exists; the row says so rather than lying. */
+  streamEndpoint: string | null;
 }
 
 export function SdkIntegration({
@@ -37,7 +39,7 @@ export function SdkIntegration({
 
   const connectionRows: Array<{
     label: string;
-    value: string;
+    value: string | null;
     mono: boolean;
   }> = [
     { label: "SDK key", value: connection.maskedKey, mono: true },
@@ -135,15 +137,18 @@ export function SdkIntegration({
                     className={cn(
                       "truncate text-[12px]",
                       row.mono && "font-mono",
+                      row.value === null && "text-muted-foreground italic",
                     )}
                   >
-                    {row.value}
+                    {row.value ?? "Not available yet"}
                   </span>
-                  <CopyButton
-                    value={row.value}
-                    label={`${connection.environmentName} ${row.label.toLowerCase()}`}
-                    className="shrink-0"
-                  />
+                  {row.value === null ? null : (
+                    <CopyButton
+                      value={row.value}
+                      label={`${connection.environmentName} ${row.label.toLowerCase()}`}
+                      className="shrink-0"
+                    />
+                  )}
                 </dd>
               </div>
             ))}
