@@ -1,6 +1,6 @@
 "use client";
 
-import { organizationClient } from "better-auth/client/plugins";
+import { emailOTPClient, organizationClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
 import env from "shared/env";
@@ -15,8 +15,12 @@ export const authClient = createAuthClient({
    * The workspace **is** the Better Auth organization (ADR-0003), so the client
    * needs the matching plugin to reach `organization.create`. Without it the
    * method does not exist and TypeScript says so, which is how this was caught.
+   *
+   * `emailOTPClient` is the other half of the confirmation flow: it adds
+   * `emailOtp.sendVerificationOtp` and `emailOtp.verifyEmail`, which replace the
+   * emailed link with a code the user types on this site.
    */
-  plugins: [organizationClient()],
+  plugins: [organizationClient(), emailOTPClient()],
 });
 
 export const { signIn, signUp, signOut, useSession } = authClient;
@@ -47,7 +51,13 @@ export function authErrorMessage(error: {
     case "INVALID_EMAIL":
       return "Enter a valid email address.";
     case "EMAIL_NOT_VERIFIED":
-      return "Verify your email address before signing in.";
+      return "Confirm your email address before signing in — we'll send you a code.";
+    case "INVALID_OTP":
+      return "That code is not right. Check the email and try again.";
+    case "OTP_EXPIRED":
+      return "That code has expired. Ask for a new one.";
+    case "TOO_MANY_ATTEMPTS":
+      return "Too many attempts with that code. Ask for a new one.";
     case "MISSING_OR_NULL_ORIGIN":
     case "INVALID_ORIGIN":
       return "This request came from an origin the API does not trust.";

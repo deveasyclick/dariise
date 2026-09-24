@@ -20,11 +20,13 @@ import {
   createProjectSchema,
   createWorkspaceSchema,
   projectSummarySchema,
+  requestEmailVerificationSchema,
   requestPasswordResetSchema,
   resetPasswordSchema,
   signInSchema,
   signUpSchema,
   toFieldErrors,
+  verifyEmailCodeSchema,
   type CreateWorkspaceInput,
   type FieldErrors,
   type OAuthProvider,
@@ -43,14 +45,24 @@ export type { OAuthProvider };
 
 /**
  * A validation or API failure, carrying the message to show against each field.
+ *
+ * `code` is kept as well as the wording: a caller that wants to offer a next
+ * step — resending a confirmation link, say — has to branch on something that
+ * does not change when the copy does.
  */
 export class AuthError<Field extends string = string> extends Error {
   readonly fieldErrors: FieldErrors<Field>;
+  readonly code: string | undefined;
 
-  constructor(fieldErrors: FieldErrors<Field>, message?: string) {
+  constructor(
+    fieldErrors: FieldErrors<Field>,
+    message?: string,
+    code?: string,
+  ) {
     super(message ?? Object.values(fieldErrors)[0] ?? "Something went wrong.");
     this.name = "AuthError";
     this.fieldErrors = fieldErrors;
+    this.code = code;
   }
 }
 
@@ -77,10 +89,9 @@ function fromAuthError(error: {
   code?: string | undefined;
   message?: string | undefined;
 } | null): AuthError<FieldKey> {
-  return new AuthError<FieldKey>(
-    { form: authErrorMessage(error ?? {}) },
-    authErrorMessage(error ?? {}),
-  );
+  const message = authErrorMessage(error ?? {});
+
+  return new AuthError<FieldKey>({ form: message }, message, error?.code);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -180,6 +191,57 @@ export async function signUp(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Email confirmation                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Send a confirmation code.
+ *
+ * The code is typed in here rather than followed as a link, so the user never
+ * leaves the dashboard to finish signing up.
+ *
+ * Answered identically for an address that is unknown, already confirmed or
+ * genuinely waiting, so this cannot be used to discover which accounts exist.
+ */
+export async function sendEmailVerificationCode(
+  email: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const errors = validate(requestEmailVerificationSchema, { email });
+  if (errors) throw new AuthError(errors);
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+
+  const { error } = await authClient.emailOtp.sendVerificationOtp({
+    email,
+    type: "email-verification",
+  });
+
+  if (error) throw fromAuthError(error);
+}
+
+/**
+ * Confirm an address with the code from the email.
+ *
+ * A success issues the session on the same request, so the caller only has to
+ * refresh the router afterwards.
+ */
+export async function verifyEmailCode(
+  input: { email: string; code: string },
+  signal?: AbortSignal,
+): Promise<void> {
+  const errors = validate(verifyEmailCodeSchema, input);
+  if (errors) throw new AuthError(errors);
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+
+  const { error } = await authClient.emailOtp.verifyEmail({
+    email: input.email,
+    otp: input.code,
+  });
+
+  if (error) throw fromAuthError(error);
+}
+
+/* -------------------------------------------------------------------------- */
 /* Social sign-in                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -226,7 +288,9 @@ export function oauthErrorMessage(
     case "state_mismatch":
       return "The sign-in attempt could not be verified. Please try again.";
     case "account_not_linked":
-      return "That email is already registered with a different sign-in method.";
+      // Only reachable after the provider confirmed the address, so naming the
+      // existing account tells the caller nothing they could not already prove.
+      return "That email already has a password account. Sign in with your password and confirm the address from the link we sent — Google will then attach to the same account.";
     default:
       return `Sign-in failed (${code}). Please try again.`;
   }
@@ -249,11 +313,10 @@ export async function signOut(signal?: AbortSignal): Promise<void> {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Request a reset link.
+ * Ask for a password reset code.
  *
- * The API mails the link through Brevo when it is configured, and otherwise
- * prints it to its own console — the request is made either way, so this is not
- * a place to branch on whether mail is set up. Better Auth answers identically
+ * The code is typed in here rather than followed as a link, so the user never
+ * leaves the dashboard to set a new password. Better Auth answers identically
  * for a known and an unknown address, which is what keeps the form from leaking
  * which emails have accounts.
  */
@@ -265,34 +328,30 @@ export async function requestPasswordReset(
   if (errors) throw new AuthError(errors);
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-  // Resolved against the API's own base URL, so a relative path lands on the API
-  // origin, which serves no reset page. Same trap as `callbackURL` above.
-  const { error } = await authClient.requestPasswordReset({
-    email,
-    redirectTo: `${window.location.origin}/reset-password`,
-  });
+  const { error } = await authClient.emailOtp.requestPasswordReset({ email });
 
   if (error) throw fromAuthError(error);
 }
 
 /**
- * Complete a password reset.
+ * Complete a password reset with the code from the email.
  *
- * The token is the one the email's link resolves to; with no mail transport
- * configured it is the URL the API logged to its console instead. It is
- * single-use and expires after 30 minutes.
+ * The address travels with the code because the code is looked up against the
+ * account it was issued for, and because confirming the mailbox this way is
+ * also what marks an unconfirmed address verified.
  */
 export async function resetPassword(
-  input: { token: string; newPassword: string },
+  input: { email: string; code: string; newPassword: string },
   signal?: AbortSignal,
 ): Promise<void> {
   const errors = validate(resetPasswordSchema, input);
   if (errors) throw new AuthError(errors);
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-  const { error } = await authClient.resetPassword({
-    newPassword: input.newPassword,
-    token: input.token,
+  const { error } = await authClient.emailOtp.resetPassword({
+    email: input.email,
+    otp: input.code,
+    password: input.newPassword,
   });
 
   if (error) throw fromAuthError(error);

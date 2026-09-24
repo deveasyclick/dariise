@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LoaderCircleIcon } from "lucide-react";
+import { VERIFICATION_CODE_LENGTH } from "@dariise/contracts";
 import { AuthCard } from "@/components/auth/auth-card";
 import { GitHubIcon, GoogleIcon } from "@/components/auth/brand-icons";
 import {
@@ -17,13 +18,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import {
   AuthError,
+  sendEmailVerificationCode,
   signInWithProvider,
   signUp,
+  verifyEmailCode,
   type OAuthProvider,
 } from "@/lib/auth";
 import { isEmail, isRequired } from "@/lib/validation";
 
-type Action = OAuthProvider | "credentials";
+type Action = OAuthProvider | "credentials" | "code" | "resend";
 
 interface SignUpErrors {
   form?: string;
@@ -31,6 +34,7 @@ interface SignUpErrors {
   email?: string;
   password?: string;
   terms?: string;
+  code?: string;
 }
 
 interface SignUpFormProps {
@@ -51,6 +55,17 @@ export function SignUpForm({
     initialError ? { form: initialError } : {},
   );
   const [pending, setPending] = useState<Action | null>(null);
+  /**
+   * The address a confirmation code went to, once one has.
+   *
+   * Sign-up deliberately issues no session while `requireEmailVerification` is
+   * on, so there is nowhere to push the user: the account exists, but the
+   * password will not work until the code is entered. This is that wait, and it
+   * happens here rather than behind a link so the user never leaves the site.
+   */
+  const [awaiting, setAwaiting] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [resent, setResent] = useState(false);
   const router = useRouter();
   const controllerRef = useRef<AbortController | null>(null);
 
@@ -99,6 +114,25 @@ export function SignUpForm({
     return run(provider, (signal) => signInWithProvider(provider, signal));
   }
 
+  function handleResend(address: string) {
+    setResent(false);
+    return run("resend", async (signal) => {
+      await sendEmailVerificationCode(address, signal);
+      setResent(true);
+    });
+  }
+
+  function handleConfirm(address: string) {
+    return run("code", async (signal) => {
+      await verifyEmailCode({ email: address, code }, signal);
+
+      // Confirming issues the session, so the shell has to be re-read from the
+      // server before navigating into it.
+      router.refresh();
+      router.push("/create-workspace");
+    });
+  }
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -132,15 +166,99 @@ export function SignUpForm({
         signal,
       );
 
-      router.refresh();
-      router.push("/create-workspace");
+      setAwaiting(email.trim());
     });
+  }
+
+  if (awaiting) {
+    const address = awaiting;
+
+    return (
+      <AuthCard
+        title="Confirm your email"
+        description={
+          <>
+            We emailed a {VERIFICATION_CODE_LENGTH}-digit code to{" "}
+            <strong>{address}</strong>. Enter it below to finish setting up your
+            account — until then, the password you chose will not sign you in.
+          </>
+        }
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleConfirm(address);
+          }}
+          noValidate
+          className="space-y-4"
+        >
+          <Field
+            id="sign-up-code"
+            label="Confirmation code"
+            name="code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder={"0".repeat(VERIFICATION_CODE_LENGTH)}
+            maxLength={VERIFICATION_CODE_LENGTH}
+            required
+            value={code}
+            error={errors.code}
+            onChange={(event) => {
+              setCode(event.target.value);
+              clearError("code");
+            }}
+          />
+
+          {errors.form ? <FieldError>{errors.form}</FieldError> : null}
+
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={pending !== null}
+          >
+            {pending === "code" ? (
+              <LoaderCircleIcon className="animate-spin" />
+            ) : null}
+            {pending === "code" ? "Confirming…" : "Confirm and continue"}
+          </Button>
+        </form>
+
+        <Button
+          type="button"
+          variant="ghost"
+          className="mt-3 w-full"
+          disabled={pending !== null}
+          onClick={() => void handleResend(address)}
+        >
+          {pending === "resend" ? (
+            <LoaderCircleIcon className="animate-spin" />
+          ) : null}
+          {resent ? "A new code is on its way" : "Send a new code"}
+        </Button>
+
+        <p className="text-muted-foreground mt-6 text-center text-sm">
+          Wrong address?{" "}
+          <button
+            type="button"
+            className="text-primary font-medium hover:underline"
+            onClick={() => {
+              setAwaiting(null);
+              setCode("");
+              setResent(false);
+              setErrors({});
+            }}
+          >
+            Start over
+          </button>
+        </p>
+      </AuthCard>
+    );
   }
 
   return (
     <AuthCard
       title="Create your account"
-      description="Set up your Dariise account. Next you'll create a workspace and your first project."
+      description="Set up your Dariise account. We'll email you a code to confirm your address, then you'll create a workspace and your first project."
     >
       <div className="space-y-3">
         <Button

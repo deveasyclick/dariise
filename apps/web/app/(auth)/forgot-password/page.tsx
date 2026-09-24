@@ -3,7 +3,7 @@ import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 
 export const metadata: Metadata = {
   title: "Reset password",
-  description: "Request a password reset link for your Dariise account.",
+  description: "Request a password reset code for your Dariise account.",
 };
 
 export default function ForgotPasswordPage() {
