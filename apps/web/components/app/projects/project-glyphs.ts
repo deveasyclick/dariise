@@ -5,18 +5,21 @@ import {
   WrenchIcon,
   type LucideIcon,
 } from "lucide-react";
-import type { ProjectGlyph } from "@/lib/project-data";
+import type { EnvironmentColor } from "@/lib/environment-color";
 
 /**
- * Icon each project glyph is drawn with.
+ * Icon a project is drawn with, keyed by the colour the API stores.
  *
- * The tile's tint comes from the project's own colour — see
- * `environmentColorTone` — so the glyph and the colour chosen on the create
- * screen stay independent.
+ * The API carries no glyph, so the project's colour picks one; the tile's tint
+ * comes from the same colour, which keeps the glyph and the colour chosen on the
+ * create screen consistent. Index it with a resolved colour — see
+ * `resolveEnvironmentColor`.
  */
-export const projectGlyphs: Record<ProjectGlyph, LucideIcon> = {
-  folder: FolderIcon,
-  flask: FlaskConicalIcon,
-  phone: SmartphoneIcon,
-  wrench: WrenchIcon,
+export const projectGlyphs: Record<EnvironmentColor, LucideIcon> = {
+  primary: FolderIcon,
+  cyan: FlaskConicalIcon,
+  purple: SmartphoneIcon,
+  green: WrenchIcon,
+  indigo: SmartphoneIcon,
+  slate: WrenchIcon,
 };

@@ -1,14 +1,15 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CheckIcon, LoaderCircleIcon, PlusIcon } from "lucide-react";
+import { LoaderCircleIcon, PlusIcon } from "lucide-react";
 import { cn } from "cn";
 import {
   environmentColors,
   environmentColorSwatch,
 } from "@/components/app/environments/environment-colors";
-import { ProjectWhatYouGetCard } from "@/components/app/projects/project-cards";
+import { ProjectWhatYouGetCard } from "@/components/app/projects/project-what-you-get";
 import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -21,10 +22,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type { EnvironmentColor } from "@/lib/environment-data";
-import { environmentPresets, getProjectKeys } from "@/lib/project-data";
-import { AuthError, createProject, type InitialFlagState } from "@/lib/auth";
-import { isRequired, isValidSlug, toWorkspaceSlug } from "@/lib/validation";
+import type { EnvironmentColor } from "@/lib/environment-color";
+import * as api from "@/lib/api";
+import { selectProject } from "@/lib/scope-actions";
+import { isRequired } from "@/lib/validation";
+
+type InitialFlagState = "all-off" | "copy-source" | "all-on";
+
+/**
+ * Environments a new project is offered with.
+ *
+ * Presentation only: `POST /v1/projects` takes a single environment name, so
+ * only the preset's first environment is created — see the note on the submit
+ * button.
+ */
+interface EnvironmentPreset {
+  value: string;
+  label: string;
+  environments: string[];
+}
+
+const environmentPresets: EnvironmentPreset[] = [
+  {
+    value: "standard",
+    label: "Standard",
+    environments: ["Development", "Staging", "Production"],
+  },
+];
 
 const initialFlagStateOptions: Array<{
   value: InitialFlagState;
@@ -47,26 +71,23 @@ const initialFlagStateOptions: Array<{
 interface CreateProjectErrors {
   form?: string;
   name?: string;
-  key?: string;
 }
 
 export function CreateProjectForm() {
   const defaultPreset = environmentPresets[0];
   const [name, setName] = useState("");
-  const [key, setKey] = useState("");
   const [color, setColor] = useState<EnvironmentColor>("primary");
-  const [preset, setPreset] = useState(defaultPreset.value);
+  const [preset, setPreset] = useState<string>(defaultPreset.value);
   const [initialFlagState, setInitialFlagState] =
     useState<InitialFlagState>("copy-source");
   const [defaultEnvironment, setDefaultEnvironment] = useState(
     defaultPreset.environments[defaultPreset.environments.length - 1],
   );
   const [setAsDefault, setSetAsDefault] = useState(false);
-  const [editedKey, setEditedKey] = useState(false);
   const [errors, setErrors] = useState<CreateProjectErrors>({});
   const [pending, setPending] = useState(false);
-  const [created, setCreated] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
+  const router = useRouter();
 
   const environments =
     environmentPresets.find((item) => item.value === preset)?.environments ??
@@ -78,13 +99,6 @@ export function CreateProjectForm() {
       form: undefined,
       [field]: undefined,
     }));
-  }
-
-  function handleNameChange(value: string) {
-    setName(value);
-    // Keep the key in step with the name until the user takes it over.
-    if (!editedKey) setKey(toWorkspaceSlug(value));
-    clearError("name");
   }
 
   function handlePresetChange(value: string) {
@@ -99,26 +113,13 @@ export function CreateProjectForm() {
     }
   }
 
-  function validate(): CreateProjectErrors {
-    const next: CreateProjectErrors = {
-      name: isRequired(name, "Project name") ?? undefined,
-      key: isValidSlug(key, "Project key", 2) ?? undefined,
-    };
-
-    if (!next.key && getProjectKeys().includes(key.trim())) {
-      next.key = "A project with this key already exists.";
-    }
-
-    return next;
-  }
-
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
 
-    const nextErrors = validate();
-    if (nextErrors.name || nextErrors.key) {
-      setErrors(nextErrors);
+    const nameError = isRequired(name, "Project name");
+    if (nameError) {
+      setErrors({ name: nameError });
       return;
     }
 
@@ -129,73 +130,30 @@ export function CreateProjectForm() {
     controllerRef.current = controller;
 
     try {
-      await createProject(
+      const project = await api.projects.create(
         {
           name: name.trim(),
           environmentName: environments[0] ?? "Development",
         },
-        controller.signal,
+        { signal: controller.signal },
       );
-      setCreated(true);
+
+      await selectProject(project.key);
+
+      router.refresh();
+      router.push(`/projects/${project.key}`);
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
 
-      if (error instanceof AuthError) {
-        setErrors((previous) => ({
-          ...previous,
-          ...(error.fieldErrors as CreateProjectErrors),
-        }));
-        return;
-      }
-
-      setErrors({ form: "Something went wrong. Please try again." });
+      setErrors({
+        form:
+          error instanceof api.ApiError
+            ? error.message
+            : "Something went wrong. Please try again.",
+      });
     } finally {
       setPending(false);
     }
-  }
-
-  if (created) {
-    return (
-      <div className="bg-card rounded-lg border p-6">
-        <span className="bg-ok-ink/10 text-ok-ink flex size-9 items-center justify-center rounded-lg">
-          <CheckIcon aria-hidden="true" className="size-4.5" />
-        </span>
-        <h2 className="mt-3 text-base font-semibold tracking-tight">
-          {name.trim() || key.trim()} created
-        </h2>
-        <p className="text-muted-foreground mt-1 max-w-md text-[13px]">
-          Your project and its first environment are saved. Environments, SDK
-          keys and colour are not configurable yet, so those choices were not
-          applied.
-        </p>
-        <div className="mt-5 flex items-center gap-2">
-          <Button asChild size="sm">
-            <Link href="/projects">Back to projects</Link>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setCreated(false);
-              setName("");
-              setKey("");
-              setColor("primary");
-              setPreset(defaultPreset.value);
-              setInitialFlagState("copy-source");
-              setDefaultEnvironment(
-                defaultPreset.environments[
-                  defaultPreset.environments.length - 1
-                ],
-              );
-              setSetAsDefault(false);
-              setEditedKey(false);
-            }}
-          >
-            Create another
-          </Button>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -204,7 +162,7 @@ export function CreateProjectForm() {
         <section className="bg-card rounded-lg border p-4">
           <h2 className="text-[13px] font-medium">Project details</h2>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto]">
             <Field
               id="create-project-name"
               label="Name"
@@ -214,23 +172,9 @@ export function CreateProjectForm() {
               required
               value={name}
               error={errors.name}
-              onChange={(event) => handleNameChange(event.target.value)}
-            />
-
-            <Field
-              id="create-project-key"
-              label="Key"
-              name="key"
-              autoComplete="off"
-              placeholder="checkout-platform"
-              required
-              value={key}
-              error={errors.key}
-              className="font-mono"
               onChange={(event) => {
-                setEditedKey(true);
-                setKey(event.target.value);
-                clearError("key");
+                setName(event.target.value);
+                clearError("name");
               }}
             />
 
@@ -261,8 +205,8 @@ export function CreateProjectForm() {
           </div>
 
           <p className="text-muted-foreground mt-2 text-[11px] leading-5">
-            Shown in the project switcher, dashboards, and audit log. Keys are
-            API paths. Immutable after creation.
+            The project key is derived from the name. The colour is not stored by
+            the create call yet.
           </p>
 
           <h3 className="mt-6 text-[13px] font-medium">Environments</h3>
@@ -285,11 +229,16 @@ export function CreateProjectForm() {
               </SelectContent>
             </Select>
             <p className="text-muted-foreground text-[11px]">
-              Creates the default environments in this project.
+              Only the preset&apos;s first environment is created today.
             </p>
           </div>
 
-          <h3 className="mt-6 text-[13px] font-medium">Initial flag states</h3>
+          <h3 className="mt-6 text-[13px] font-medium">
+            Initial flag states{" "}
+            <span className="text-muted-foreground font-normal">
+              (not applied yet)
+            </span>
+          </h3>
 
           <RadioGroup
             value={initialFlagState}
@@ -331,7 +280,12 @@ export function CreateProjectForm() {
             })}
           </RadioGroup>
 
-          <h3 className="mt-6 text-[13px] font-medium">Default environment</h3>
+          <h3 className="mt-6 text-[13px] font-medium">
+            Default environment{" "}
+            <span className="text-muted-foreground font-normal">
+              (not applied yet)
+            </span>
+          </h3>
 
           <div className="mt-3 space-y-2">
             <Select
@@ -353,10 +307,13 @@ export function CreateProjectForm() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-muted-foreground text-[11px]">
-              Flags resolve here unless an environment override is set.
-            </p>
           </div>
+
+          <p className="text-muted-foreground mt-6 text-[11px] leading-5">
+            Only the project name and its first environment are saved today.
+            Presets, colour, initial flag states and the default environment are
+            sent to the API once those choices are modelled.
+          </p>
 
           {errors.form ? <FieldError>{errors.form}</FieldError> : null}
 
@@ -385,8 +342,8 @@ export function CreateProjectForm() {
                   Set as default project
                 </h2>
                 <p className="text-muted-foreground mt-1 text-[11px] leading-5">
-                  New members land in this project. New API keys default to its{" "}
-                  {defaultEnvironment} environment.
+                  New members land in this project. Not applied yet — the API
+                  does not model a workspace default project.
                 </p>
               </div>
               <Switch

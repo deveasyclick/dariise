@@ -5,9 +5,11 @@ import { PageHeader } from "@/components/app/page-header";
 import {
   ProjectGrid,
   ProjectsOverviewCard,
+  type ProjectCardData,
 } from "@/components/app/projects/project-cards";
+import { cappedCount } from "@/components/app/environments/capped-count";
 import { Button } from "@/components/ui/button";
-import { getProjectRecords } from "@/lib/project-data";
+import * as api from "@/lib/api";
 
 export const metadata: Metadata = {
   title: "Projects",
@@ -15,13 +17,30 @@ export const metadata: Metadata = {
     "Every project owns its own environments, feature flags, SDK keys, and audit trail.",
 };
 
-// "Last changed" is relative, so the screen is rendered per request and the
-// whole page shares one `now`.
 export const dynamic = "force-dynamic";
 
-export default function ProjectsPage() {
-  const projects = getProjectRecords();
+export default async function ProjectsPage() {
+  const projects = await api.projects.list();
+
+  // "Last changed" is relative, so the whole page shares one `now`.
   const now = new Date();
+
+  const rows: ProjectCardData[] = await Promise.all(
+    projects.map(async (project) => {
+      const [environments, flags, apiKeys] = await Promise.all([
+        api.environments.list(project.key),
+        api.flags.list(project.key, { limit: 100 }),
+        api.apiKeys.list(project.key),
+      ]);
+
+      return {
+        project,
+        environments: environments.data,
+        flagCount: cappedCount(flags),
+        apiKeyCount: cappedCount(apiKeys),
+      };
+    }),
+  );
 
   return (
     <>
@@ -37,10 +56,10 @@ export default function ProjectsPage() {
         </Button>
       </PageHeader>
 
-      <ProjectGrid projects={projects} />
+      <ProjectGrid projects={rows} />
 
       <div className="mt-3">
-        <ProjectsOverviewCard projects={projects} now={now} />
+        <ProjectsOverviewCard projects={rows} now={now} />
       </div>
     </>
   );

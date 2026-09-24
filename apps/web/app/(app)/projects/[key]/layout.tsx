@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { ProjectHeader } from "@/components/app/projects/project-headers";
 import { ProjectTabs } from "@/components/app/projects/project-tabs";
-import { getProject } from "@/lib/project-data";
+import { loadProject } from "./load-project";
+
+export const dynamic = "force-dynamic";
 
 /**
  * Shared shell for the project screens: one identity strip and the tab bar,
@@ -13,7 +15,7 @@ export default async function ProjectLayout({
   params,
 }: LayoutProps<"/projects/[key]">) {
   const { key } = await params;
-  const project = getProject(key);
+  const project = await loadProject(key);
 
   if (!project) notFound();
 

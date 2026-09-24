@@ -1,20 +1,25 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
-import {
-  ArchiveIcon,
-  ArrowRightIcon,
-  ChartColumnIcon,
-  FlagIcon,
-  GlobeIcon,
-  KeyRoundIcon,
-  ServerIcon,
-  type LucideIcon,
-} from "lucide-react";
+import { ArchiveIcon, ArrowRightIcon, FlagIcon, GlobeIcon } from "lucide-react";
 import { cn } from "cn";
+import type {
+  EnvironmentSummary,
+  FlagCoverageState,
+  FlagEnvironmentSummary,
+  FlagSummary,
+  Project,
+  ProjectMember,
+} from "@dariise/contracts";
 import {
   environmentColorSwatch,
   environmentColorTone,
 } from "@/components/app/environments/environment-colors";
 import { CoverageStatePill } from "@/components/app/environments/coverage-pill";
+import {
+  countLabel,
+  environmentFlagCounts,
+  type CappedCount,
+} from "@/components/app/environments/capped-count";
 import { sectionActionClass, SectionCard } from "@/components/app/page-header";
 import { projectGlyphs } from "@/components/app/projects/project-glyphs";
 import { Badge } from "@/components/ui/badge";
@@ -27,34 +32,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { CurrentUser } from "@/lib/dashboard-data";
-import type {
-  ProjectEnvironment,
-  ProjectFlag,
-  ProjectMember,
-  ProjectRecord,
-} from "@/lib/project-data";
-import {
-  getProjectFlagCount,
-  getProjectUpdatedLabel,
-} from "@/lib/project-data";
+import { resolveEnvironmentColor } from "@/lib/environment-color";
+import { formatRelativeTime } from "@/lib/format";
+import { initialsOf } from "@/lib/scope";
 
-function flagState(flag: ProjectFlag): {
-  kind: "on" | "off" | "percentage";
-  percentage?: number;
-} {
-  if (flag.rollout >= 100) return { kind: "on" };
-  if (flag.rollout <= 0) return { kind: "off" };
-
-  return { kind: "percentage", percentage: flag.rollout };
-}
-
-/** Tile tint for a flag row, following the state it renders. */
-function flagTone(flag: ProjectFlag): string {
-  if (flag.rollout >= 100) return "bg-ok-ink/10 text-ok-ink";
-  if (flag.rollout <= 0) return "bg-muted text-muted-foreground";
-
-  return "bg-primary-ink/10 text-primary-ink";
+/**
+ * One project as the list screens render it.
+ *
+ * The API returns the project and its environments separately, and carries no
+ * flag or key totals, so the page fetches one capped page of each and passes the
+ * derived counts down here.
+ */
+export interface ProjectCardData {
+  project: Project;
+  environments: EnvironmentSummary[];
+  flagCount: CappedCount;
+  apiKeyCount: CappedCount;
 }
 
 /** Environment pills, tinted with each environment's own colour. */
@@ -62,7 +55,7 @@ function EnvironmentPills({
   environments,
   limit,
 }: {
-  readonly environments: ProjectEnvironment[];
+  readonly environments: EnvironmentSummary[];
   /** Show this many, then a `+N` chip. Omit to show them all. */
   readonly limit?: number;
 }) {
@@ -71,24 +64,28 @@ function EnvironmentPills({
 
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      {shown.map((environment) => (
-        <span
-          key={environment.key}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
-            environmentColorTone[environment.color],
-          )}
-        >
+      {shown.map((environment) => {
+        const color = resolveEnvironmentColor(environment.color);
+
+        return (
           <span
-            aria-hidden="true"
+            key={environment.key}
             className={cn(
-              "size-1.5 rounded-full",
-              environmentColorSwatch[environment.color],
+              "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
+              environmentColorTone[color],
             )}
-          />
-          {environment.name}
-        </span>
-      ))}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "size-1.5 rounded-full",
+                environmentColorSwatch[color],
+              )}
+            />
+            {environment.name}
+          </span>
+        );
+      })}
       {hidden > 0 ? (
         <span className="bg-muted text-muted-foreground rounded-md px-1.5 py-0.5 text-[10px] font-medium">
           +{hidden}
@@ -104,7 +101,7 @@ function ProjectStatTile({
   label,
   tone,
 }: {
-  value: number;
+  value: ReactNode;
   label: string;
   tone: string;
 }) {
@@ -117,22 +114,17 @@ function ProjectStatTile({
 }
 
 /** One project as summarised on the Projects list. */
-export function ProjectCard({ project }: { project: ProjectRecord }) {
-  const Glyph = projectGlyphs[project.glyph];
-  const tone = environmentColorTone[project.color];
+export function ProjectCard({ data }: { data: ProjectCardData }) {
+  const { project, environments, flagCount, apiKeyCount } = data;
+  const Glyph = projectGlyphs[resolveEnvironmentColor(project.color)];
 
   return (
-    <article
-      className={cn(
-        "bg-card flex flex-col rounded-lg border p-4",
-        project.isDefault && "border-primary",
-      )}
-    >
+    <article className="bg-card flex flex-col rounded-lg border p-4">
       <div className="flex items-center gap-2">
         <span
           className={cn(
             "flex size-7 shrink-0 items-center justify-center rounded-md",
-            tone,
+            environmentColorTone[resolveEnvironmentColor(project.color)],
           )}
         >
           <Glyph aria-hidden="true" className="size-4" />
@@ -140,42 +132,29 @@ export function ProjectCard({ project }: { project: ProjectRecord }) {
         <h2 className="min-w-0 flex-1 truncate text-[13px] font-medium">
           {project.name}
         </h2>
-        <Badge
-          variant={project.isDefault ? "outline" : "ok"}
-          className="gap-1.5 text-[10px]"
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "size-1.5 rounded-full",
-              project.isDefault ? "bg-primary" : "bg-ok-ink",
-            )}
-          />
-          {project.isDefault ? "Default" : "Active"}
-        </Badge>
       </div>
 
       <p className="text-muted-foreground mt-2 line-clamp-2 text-[11px] leading-5">
-        {project.description}
+        {project.description ?? "No description yet."}
       </p>
 
       <div className="mt-3">
-        <EnvironmentPills environments={project.environments} />
+        <EnvironmentPills environments={environments} />
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2">
         <ProjectStatTile
-          value={project.environments.length}
+          value={project.environmentCount}
           label="envs"
           tone="bg-primary/10 text-primary"
         />
         <ProjectStatTile
-          value={getProjectFlagCount(project)}
+          value={countLabel(flagCount)}
           label="flags"
           tone="bg-primary-ink/10 text-primary-ink"
         />
         <ProjectStatTile
-          value={project.sdkKeys}
+          value={countLabel(apiKeyCount)}
           label="keys"
           tone="bg-purple-ink/10 text-purple-ink"
         />
@@ -193,7 +172,7 @@ export function ProjectCard({ project }: { project: ProjectRecord }) {
 }
 
 /** The project cards, with the empty state the design does not cover. */
-export function ProjectGrid({ projects }: { projects: ProjectRecord[] }) {
+export function ProjectGrid({ projects }: { projects: ProjectCardData[] }) {
   if (projects.length === 0) {
     return (
       <section className="bg-card text-muted-foreground rounded-lg border border-dashed p-6 text-[13px]">
@@ -205,7 +184,7 @@ export function ProjectGrid({ projects }: { projects: ProjectRecord[] }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {projects.map((project) => (
-        <ProjectCard key={project.key} project={project} />
+        <ProjectCard key={project.project.key} data={project} />
       ))}
     </div>
   );
@@ -220,7 +199,7 @@ export function ProjectsOverviewCard({
   projects,
   now,
 }: {
-  projects: ProjectRecord[];
+  projects: ProjectCardData[];
   /** The moment "last changed" is measured against; one per render. */
   now: Date;
 }) {
@@ -247,64 +226,86 @@ export function ProjectsOverviewCard({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {projects.map((project) => {
-            const Glyph = projectGlyphs[project.glyph];
+          {projects.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell
+                colSpan={5}
+                className="text-muted-foreground py-10 text-center text-[12px]"
+              >
+                No projects yet.
+              </TableCell>
+            </TableRow>
+          ) : (
+            projects.map(
+              ({ project, environments, flagCount, apiKeyCount }) => {
+                const Glyph =
+                  projectGlyphs[resolveEnvironmentColor(project.color)];
 
-            return (
-              <TableRow key={project.key}>
-                <TableCell className="pl-4">
-                  <span className="flex items-center gap-2.5">
-                    <span
-                      className={cn(
-                        "flex size-6 shrink-0 items-center justify-center rounded-md",
-                        environmentColorTone[project.color],
-                      )}
-                    >
-                      <Glyph aria-hidden="true" className="size-3.5" />
-                    </span>
-                    <span className="min-w-0">
-                      <Link
-                        href={`/projects/${project.key}`}
-                        className="block truncate text-[12px] font-medium hover:underline"
-                      >
-                        {project.name}
-                      </Link>
-                      <span className="text-muted-foreground block truncate text-[11px]">
-                        {project.key} ·{" "}
-                        {project.isDefault
-                          ? "Default project"
-                          : `Owned by ${project.ownerTeam}`}
+                return (
+                  <TableRow key={project.key}>
+                    <TableCell className="pl-4">
+                      <span className="flex items-center gap-2.5">
+                        <span
+                          className={cn(
+                            "flex size-6 shrink-0 items-center justify-center rounded-md",
+                            environmentColorTone[
+                              resolveEnvironmentColor(project.color)
+                            ],
+                          )}
+                        >
+                          <Glyph aria-hidden="true" className="size-3.5" />
+                        </span>
+                        <span className="min-w-0">
+                          <Link
+                            href={`/projects/${project.key}`}
+                            className="block truncate text-[12px] font-medium hover:underline"
+                          >
+                            {project.name}
+                          </Link>
+                          <span className="text-muted-foreground block truncate text-[11px]">
+                            {project.key} ·{" "}
+                            {project.ownerTeam
+                              ? `Owned by ${project.ownerTeam}`
+                              : `${project.environmentCount} environments`}
+                          </span>
+                        </span>
                       </span>
-                    </span>
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <EnvironmentPills
-                    environments={project.environments}
-                    limit={2}
-                  />
-                </TableCell>
-                <TableCell className="text-[12px]">
-                  {getProjectFlagCount(project)}
-                </TableCell>
-                <TableCell className="text-[12px]">{project.sdkKeys}</TableCell>
-                <TableCell className="text-muted-foreground text-[11px]">
-                  {getProjectUpdatedLabel(project, now)}
-                </TableCell>
-              </TableRow>
-            );
-          })}
+                    </TableCell>
+                    <TableCell>
+                      <EnvironmentPills
+                        environments={environments}
+                        limit={2}
+                      />
+                    </TableCell>
+                    <TableCell className="text-[12px]">
+                      {countLabel(flagCount)}
+                    </TableCell>
+                    <TableCell className="text-[12px]">
+                      {countLabel(apiKeyCount)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-[11px]">
+                      {formatRelativeTime(project.updatedAt, now)}
+                    </TableCell>
+                  </TableRow>
+                );
+              },
+            )
+          )}
         </TableBody>
       </Table>
     </SectionCard>
   );
 }
 
-/** Environments of one project, with their flag totals. */
+/** Environments of one project, with how many flags each enables. */
 export function ProjectEnvironmentsCard({
-  project,
+  environments,
+  flags,
+  flagsTruncated,
 }: {
-  project: ProjectRecord;
+  environments: EnvironmentSummary[];
+  flags: FlagSummary[];
+  flagsTruncated: boolean;
 }) {
   return (
     <SectionCard
@@ -327,39 +328,89 @@ export function ProjectEnvironmentsCard({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {project.environments.map((environment) => (
-            <TableRow key={environment.key}>
-              <TableCell className="pl-4 text-[12px] font-medium">
-                <Link
-                  href={`/environments/${environment.key}`}
-                  className="hover:underline"
-                >
-                  {environment.name}
-                </Link>
-              </TableCell>
-              <TableCell className="text-muted-foreground font-mono text-[11px]">
-                {environment.key}
-              </TableCell>
-              <TableCell className="text-[12px]">
-                {environment.flagsOn}
+          {environments.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell
+                colSpan={3}
+                className="text-muted-foreground py-10 text-center text-[12px]"
+              >
+                No environments yet.
               </TableCell>
             </TableRow>
-          ))}
+          ) : (
+            environments.map((environment) => (
+              <TableRow key={environment.key}>
+                <TableCell className="pl-4 text-[12px] font-medium">
+                  <Link
+                    href={`/environments/${environment.key}`}
+                    className="hover:underline"
+                  >
+                    {environment.name}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-muted-foreground font-mono text-[11px]">
+                  {environment.key}
+                </TableCell>
+                <TableCell className="text-[12px]">
+                  {countLabel(
+                    environmentFlagCounts(
+                      flags,
+                      environment.key,
+                      flagsTruncated,
+                    ).enabled,
+                  )}
+                </TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
     </SectionCard>
   );
 }
 
+function flagState(
+  summary: FlagEnvironmentSummary | undefined,
+): FlagCoverageState {
+  if (!summary?.enabled || summary.rolloutPercentage <= 0) {
+    return { kind: "off" };
+  }
+
+  if (summary.rolloutPercentage >= 100) return { kind: "on" };
+
+  return { kind: "percentage", percentage: summary.rolloutPercentage };
+}
+
+/** Tile tint for a flag row, following the state it renders. */
+function flagTone(state: FlagCoverageState): string {
+  if (state.kind === "on") return "bg-ok-ink/10 text-ok-ink";
+  if (state.kind === "percentage") return "bg-primary-ink/10 text-primary-ink";
+
+  return "bg-muted text-muted-foreground";
+}
+
 interface ProjectFlagsCardProps {
-  project: ProjectRecord;
+  projectKey: string;
+  flags: FlagSummary[];
+  environments: EnvironmentSummary[];
+  /** Environment whose state each row quotes; the project's default. */
+  defaultEnvironmentKey: string | null;
   /** Cap the list and add a "View all" link, as the design does on Overview. */
   limit?: number;
+  /** True when the flag list is one page of a longer collection. */
+  truncated?: boolean;
 }
 
 /** Flags this project owns, each with the environment and state it serves. */
-export function ProjectFlagsCard({ project, limit }: ProjectFlagsCardProps) {
-  const flags = limit ? project.flags.slice(0, limit) : project.flags;
+export function ProjectFlagsCard({
+  projectKey,
+  flags,
+  environments,
+  defaultEnvironmentKey,
+  limit,
+  truncated = false,
+}: ProjectFlagsCardProps) {
+  const visible = limit ? flags.slice(0, limit) : flags;
 
   return (
     <SectionCard
@@ -367,7 +418,7 @@ export function ProjectFlagsCard({ project, limit }: ProjectFlagsCardProps) {
       action={
         limit ? (
           <Link
-            href={`/projects/${project.key}/flags`}
+            href={`/projects/${projectKey}/flags`}
             className={sectionActionClass}
           >
             View all
@@ -375,26 +426,32 @@ export function ProjectFlagsCard({ project, limit }: ProjectFlagsCardProps) {
         ) : undefined
       }
     >
-      {flags.length === 0 ? (
+      {visible.length === 0 ? (
         <p className="text-muted-foreground text-[13px]">
           No flags in this project yet.
         </p>
       ) : (
         <ul className="divide-y">
-          {flags.map((flag) => {
-            const environment = project.environments.find(
-              (item) => item.key === flag.environmentKey,
+          {visible.map((flag) => {
+            const summary =
+              flag.environments.find(
+                (environment) =>
+                  environment.environmentKey === defaultEnvironmentKey,
+              ) ?? flag.environments[0];
+            const environment = environments.find(
+              (item) => item.key === summary?.environmentKey,
             );
+            const state = flagState(summary);
 
             return (
               <li
-                key={`${flag.key}-${flag.environmentKey}`}
+                key={flag.key}
                 className="flex items-center gap-2.5 py-2.5 first:pt-0 last:pb-0"
               >
                 <span
                   className={cn(
                     "flex size-6 shrink-0 items-center justify-center rounded-md",
-                    flagTone(flag),
+                    flagTone(state),
                   )}
                 >
                   <FlagIcon aria-hidden="true" className="size-3.5" />
@@ -406,14 +463,20 @@ export function ProjectFlagsCard({ project, limit }: ProjectFlagsCardProps) {
                   {flag.key}
                 </Link>
                 <span className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-[10px]">
-                  {environment?.name ?? flag.environmentKey}
+                  {environment?.name ?? summary?.environmentName ?? "No environment"}
                 </span>
-                <CoverageStatePill state={flagState(flag)} label="long" />
+                <CoverageStatePill state={state} label="long" />
               </li>
             );
           })}
         </ul>
       )}
+
+      {truncated ? (
+        <p className="text-muted-foreground mt-3 text-[11px]">
+          Showing the first {flags.length} flags.
+        </p>
+      ) : null}
     </SectionCard>
   );
 }
@@ -421,16 +484,20 @@ export function ProjectFlagsCard({ project, limit }: ProjectFlagsCardProps) {
 /** Counts and owner of one project. */
 export function ProjectSummaryCard({
   project,
-  owner,
+  flagCount,
+  segmentCount,
+  apiKeyCount,
 }: {
-  project: ProjectRecord;
-  owner: CurrentUser;
+  project: Project;
+  flagCount: CappedCount;
+  segmentCount: CappedCount;
+  apiKeyCount: CappedCount;
 }) {
   const tiles = [
-    { label: "Environments", value: project.environments.length },
-    { label: "Flags", value: getProjectFlagCount(project) },
-    { label: "Segments", value: project.segments },
-    { label: "SDK keys", value: project.sdkKeys },
+    { label: "Environments", value: String(project.environmentCount) },
+    { label: "Flags", value: countLabel(flagCount) },
+    { label: "Segments", value: countLabel(segmentCount) },
+    { label: "SDK keys", value: countLabel(apiKeyCount) },
   ];
 
   return (
@@ -444,26 +511,31 @@ export function ProjectSummaryCard({
         ))}
       </dl>
 
-      <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3">
-        <span className="text-muted-foreground text-[11px]">Owner</span>
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="bg-primary/10 text-primary flex size-5 shrink-0 items-center justify-center rounded-full text-[9px] font-medium">
-            {owner.initials}
+      {project.ownerTeam ? (
+        <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3">
+          <span className="text-muted-foreground text-[11px]">Owner team</span>
+          <span className="truncate text-[12px] font-medium">
+            {project.ownerTeam}
           </span>
-          <span className="truncate text-[12px] font-medium">{owner.name}</span>
-        </span>
-      </div>
+        </div>
+      ) : null}
     </SectionCard>
   );
 }
 
 /** The environment flags resolve in, and the rest of the project's set. */
 export function DefaultEnvironmentCard({
-  project,
+  environments,
+  flags,
+  flagsTruncated,
+  defaultEnvironmentKey,
 }: {
-  project: ProjectRecord;
+  environments: EnvironmentSummary[];
+  flags: FlagSummary[];
+  flagsTruncated: boolean;
+  defaultEnvironmentKey: string | null;
 }) {
-  const environments = [...project.environments].sort(
+  const ordered = [...environments].sort(
     (a, b) => Number(b.isDefault) - Number(a.isDefault),
   );
 
@@ -473,36 +545,48 @@ export function DefaultEnvironmentCard({
         Flags resolve here unless an environment override is set.
       </p>
 
-      <ul className="mt-3 space-y-3">
-        {environments.map((environment: ProjectEnvironment) => (
-          <li key={environment.key} className="flex items-center gap-2.5">
-            <span
-              className={cn(
-                "flex size-6 shrink-0 items-center justify-center rounded-full",
-                environmentColorTone[environment.color],
-              )}
-            >
-              <GlobeIcon aria-hidden="true" className="size-3.5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[12px] font-medium">
-                {environment.name}
+      {ordered.length === 0 ? (
+        <p className="text-muted-foreground mt-3 text-[12px]">
+          No environments yet.
+        </p>
+      ) : (
+        <ul className="mt-3 space-y-3">
+          {ordered.map((environment) => (
+            <li key={environment.key} className="flex items-center gap-2.5">
+              <span
+                className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-full",
+                  environmentColorTone[
+                    resolveEnvironmentColor(environment.color)
+                  ],
+                )}
+              >
+                <GlobeIcon aria-hidden="true" className="size-3.5" />
               </span>
-              <span className="text-muted-foreground block text-[11px]">
-                {environment.flagsOn} flags on
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-medium">
+                  {environment.name}
+                </span>
+                <span className="text-muted-foreground block text-[11px]">
+                  {countLabel(
+                    environmentFlagCounts(
+                      flags,
+                      environment.key,
+                      flagsTruncated,
+                    ).enabled,
+                  )}{" "}
+                  flags on
+                </span>
               </span>
-            </span>
-            <span
-              className={cn(
-                "shrink-0 text-[11px] font-medium",
-                environment.isDefault ? "text-primary" : "text-ok-ink",
-              )}
-            >
-              {environment.isDefault ? "Default" : "Healthy"}
-            </span>
-          </li>
-        ))}
-      </ul>
+              {environment.key === defaultEnvironmentKey ? (
+                <span className="text-primary shrink-0 text-[11px] font-medium">
+                  Default
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </SectionCard>
   );
 }
@@ -535,7 +619,14 @@ export function ArchiveProjectCard() {
   );
 }
 
-/** The project's team, owner first. */
+const roleLabels: Record<ProjectMember["role"], string> = {
+  owner: "Owner",
+  admin: "Admin",
+  engineer: "Engineer",
+  viewer: "Viewer",
+};
+
+/** The project's team, as the members endpoint returns it. */
 export function ProjectMembersCard({ members }: { members: ProjectMember[] }) {
   return (
     <SectionCard
@@ -546,95 +637,33 @@ export function ProjectMembersCard({ members }: { members: ProjectMember[] }) {
         </span>
       }
     >
-      <ul className="divide-y">
-        {members.map((member) => (
-          <li
-            key={member.email}
-            className="flex items-center gap-2.5 py-2.5 first:pt-0 last:pb-0"
-          >
-            <span className="bg-primary/10 text-primary flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-medium">
-              {member.initials}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[12px] font-medium">
-                {member.name}
+      {members.length === 0 ? (
+        <p className="text-muted-foreground text-[13px]">No members yet.</p>
+      ) : (
+        <ul className="divide-y">
+          {members.map((member) => (
+            <li
+              key={member.id}
+              className="flex items-center gap-2.5 py-2.5 first:pt-0 last:pb-0"
+            >
+              <span className="bg-primary/10 text-primary flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-medium">
+                {initialsOf(member.name)}
               </span>
-              <span className="text-muted-foreground block truncate text-[11px]">
-                {member.email}
-              </span>
-            </span>
-            <Badge variant="secondary" className="text-[10px]">
-              {member.role}
-            </Badge>
-          </li>
-        ))}
-      </ul>
-    </SectionCard>
-  );
-}
-
-const projectBenefits: Array<{
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  tone: string;
-}> = [
-  {
-    title: "Environments",
-    description: "Development, Staging and Production created for you.",
-    icon: ServerIcon,
-    tone: "bg-primary/10 text-primary",
-  },
-  {
-    title: "Feature flags",
-    description: "Flag definitions and targeting shared across environments.",
-    icon: FlagIcon,
-    tone: "bg-purple-ink/10 text-purple-ink",
-  },
-  {
-    title: "SDK keys",
-    description: "Scoped keys per environment with instant rotation.",
-    icon: KeyRoundIcon,
-    tone: "bg-info-ink/10 text-info-ink",
-  },
-  {
-    title: "Insights",
-    description: "Evaluation volume, latency and error analytics.",
-    icon: ChartColumnIcon,
-    tone: "bg-primary-ink/10 text-primary-ink",
-  },
-];
-
-/** Right rail of the create screen: what a new project comes with. */
-export function ProjectWhatYouGetCard() {
-  return (
-    <SectionCard title="What you get">
-      <ul className="space-y-3">
-        {projectBenefits.map((benefit) => {
-          const Icon = benefit.icon;
-
-          return (
-            <li key={benefit.title} className="flex items-start gap-2.5">
-              <span
-                className={cn(
-                  "flex size-6 shrink-0 items-center justify-center rounded-md",
-                  benefit.tone,
-                )}
-              >
-                <Icon aria-hidden="true" className="size-3.5" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[12px] font-medium">
-                  {benefit.title}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-medium">
+                  {member.name}
                 </span>
-                <span className="text-muted-foreground block text-[11px] leading-5">
-                  {benefit.description}
+                <span className="text-muted-foreground block truncate text-[11px]">
+                  {member.email}
                 </span>
               </span>
+              <Badge variant="secondary" className="text-[10px]">
+                {roleLabels[member.role]}
+              </Badge>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      )}
     </SectionCard>
   );
 }

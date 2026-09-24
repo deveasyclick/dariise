@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { ChevronLeftIcon, PencilIcon } from "lucide-react";
 import { cn } from "cn";
-import { HealthBadge } from "@/components/app/health-badge";
+import type { Project } from "@dariise/contracts";
 import { environmentColorTone } from "@/components/app/environments/environment-colors";
 import { projectGlyphs } from "@/components/app/projects/project-glyphs";
 import { ProjectMenu } from "@/components/app/projects/project-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { ProjectRecord } from "@/lib/project-data";
+import { resolveEnvironmentColor } from "@/lib/environment-color";
 
 /**
  * Identity strip shown above the tabs on every project screen.
@@ -15,9 +15,8 @@ import type { ProjectRecord } from "@/lib/project-data";
  * A Server Component: the only interactive piece is the actions menu, which is
  * imported as a Client Component.
  */
-export function ProjectHeader({ project }: { project: ProjectRecord }) {
-  const Glyph = projectGlyphs[project.glyph];
-  const tone = environmentColorTone[project.color];
+export function ProjectHeader({ project }: { project: Project }) {
+  const Glyph = projectGlyphs[resolveEnvironmentColor(project.color)];
 
   return (
     <div className="bg-card mb-4 rounded-lg border p-4">
@@ -33,7 +32,7 @@ export function ProjectHeader({ project }: { project: ProjectRecord }) {
         <span
           className={cn(
             "flex size-9 shrink-0 items-center justify-center rounded-lg",
-            tone,
+            environmentColorTone[resolveEnvironmentColor(project.color)],
           )}
         >
           <Glyph aria-hidden="true" className="size-4.5" />
@@ -44,23 +43,19 @@ export function ProjectHeader({ project }: { project: ProjectRecord }) {
             <h1 className="text-xl font-semibold tracking-tight">
               {project.name}
             </h1>
-            {project.isDefault ? (
-              <Badge
-                variant="outline"
-                className="text-[10px] tracking-wide uppercase"
-              >
-                Default
+            {project.ownerTeam ? (
+              <Badge variant="secondary" className="text-[10px]">
+                {project.ownerTeam}
               </Badge>
             ) : null}
           </div>
           <p className="text-muted-foreground mt-0.5 text-[12px]">
-            {project.description}
+            {project.description ??
+              `${project.environmentCount} environments · ${project.key}`}
           </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <HealthBadge status={project.status} />
-
           <Button
             variant="outline"
             size="sm"
