@@ -1,12 +1,21 @@
 import {
+  ArchiveIcon,
   CalendarClockIcon,
   CircleCheckIcon,
   FlagIcon,
-  TriangleAlertIcon,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "cn";
-import type { HeroStat, HeroStatId } from "@/lib/dashboard-data";
+
+export type HeroStatId = "total" | "enabled" | "rollout" | "archived";
+
+export interface HeroStat {
+  id: HeroStatId;
+  label: string;
+  /** Pre-formatted, so the card never derives or invents a figure. */
+  value: string;
+  note: string;
+}
 
 /** Icon and tint per stat, matching the stat's meaning rather than its order. */
 const statPresentation: Record<
@@ -15,11 +24,11 @@ const statPresentation: Record<
 > = {
   total: { icon: FlagIcon, tone: "bg-info-ink/10 text-info-ink" },
   enabled: { icon: CircleCheckIcon, tone: "bg-ok-ink/10 text-ok-ink" },
-  scheduled: {
+  rollout: {
     icon: CalendarClockIcon,
     tone: "bg-primary-ink/10 text-primary-ink",
   },
-  stale: { icon: TriangleAlertIcon, tone: "bg-muted text-muted-foreground" },
+  archived: { icon: ArchiveIcon, tone: "bg-muted text-muted-foreground" },
 };
 
 export function StatCard({ stat }: { stat: HeroStat }) {

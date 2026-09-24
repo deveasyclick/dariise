@@ -4,13 +4,12 @@ import { CalendarIcon, PlusIcon } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import {
   ActiveRolloutsCard,
-  EvaluateSummaryCard,
   FlagHealthCard,
   RecentActivityCard,
 } from "@/components/app/overview-cards";
 import { StatCard } from "@/components/app/stat-card";
 import { Button } from "@/components/ui/button";
-import { getDashboardData } from "@/lib/dashboard-data";
+import { loadOverview } from "./load-overview";
 
 export const metadata: Metadata = {
   title: "Overview",
@@ -20,9 +19,11 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function OverviewPage() {
+export default async function OverviewPage() {
   // One `now` for the whole render keeps server output and hydration in step.
-  const data = getDashboardData(new Date());
+  const data = await loadOverview(new Date());
+
+  if (!data) return null;
 
   return (
     <>
@@ -53,9 +54,8 @@ export default function OverviewPage() {
         <FlagHealthCard health={data.flagHealth} />
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="mt-3">
         <RecentActivityCard activity={data.recentActivity} />
-        <EvaluateSummaryCard summary={data.evaluateSummary} />
       </div>
     </>
   );
