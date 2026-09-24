@@ -1,7 +1,8 @@
-import { AlertTriangleIcon, UserIcon } from "lucide-react";
+import { AlertTriangleIcon } from "lucide-react";
+import type { FlagDetail, FlagVariation } from "@dariise/contracts";
 import { SdkPreview, sdkSnippet } from "@/components/app/flags/sdk-preview";
 import { Button } from "@/components/ui/button";
-import type { FlagDetailView } from "@/lib/flag-detail-data";
+import { formatRelativeTime } from "@/lib/format";
 
 /**
  * Read-only panels for the Configuration tab.
@@ -11,13 +12,13 @@ import type { FlagDetailView } from "@/lib/flag-detail-data";
  * children.
  */
 
-export function FlagMetadata({ flag }: { flag: FlagDetailView }) {
+export function FlagMetadata({ flag, now }: { flag: FlagDetail; now: Date }) {
   const rows: Array<[string, React.ReactNode]> = [
     ["Key", <span key="key" className="font-mono">{flag.key}</span>],
     ["Type", flag.type.charAt(0).toUpperCase() + flag.type.slice(1)],
-    ["Created", flag.createdLabel],
-    ["Last modified", flag.updatedLabel],
-    ["Owner", flag.owner],
+    ["Created", formatRelativeTime(flag.createdAt, now)],
+    ["Last modified", formatRelativeTime(flag.updatedAt, now)],
+    ["Owner", flag.owner ?? "—"],
   ];
 
   return (
@@ -34,16 +35,15 @@ export function FlagMetadata({ flag }: { flag: FlagDetailView }) {
           </div>
         ))}
       </dl>
-
-      <div className="text-muted-foreground mt-3 flex items-center gap-1.5 border-t pt-3 text-[11px]">
-        <UserIcon aria-hidden="true" className="size-3" />
-        Last changed by {flag.owner}
-      </div>
     </section>
   );
 }
 
-export function FlagVariations({ flag }: { flag: FlagDetailView }) {
+export function FlagVariations({
+  variations,
+}: {
+  variations: FlagVariation[];
+}) {
   return (
     <section className="bg-card rounded-lg border p-4">
       <h2 className="text-[13px] font-medium">Variations</h2>
@@ -52,20 +52,22 @@ export function FlagVariations({ flag }: { flag: FlagDetailView }) {
       </p>
 
       <ul className="mt-3 divide-y">
-        {flag.variations.map((variation) => (
+        {variations.map((variation) => (
           <li
-            key={variation.name}
+            key={variation.key}
             className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"
           >
             <div className="min-w-0">
               <p className="text-[12px] font-medium">{variation.name}</p>
               <p className="text-muted-foreground font-mono text-[11px]">
-                {variation.value}
+                {String(variation.value)}
               </p>
             </div>
-            <p className="text-muted-foreground max-w-[18rem] text-right text-[11px]">
-              {variation.description}
-            </p>
+            {variation.description ? (
+              <p className="text-muted-foreground max-w-[18rem] text-right text-[11px]">
+                {variation.description}
+              </p>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -73,7 +75,13 @@ export function FlagVariations({ flag }: { flag: FlagDetailView }) {
   );
 }
 
-export function FlagFallback({ flag }: { flag: FlagDetailView }) {
+export function FlagFallback({
+  flagKey,
+  fallback,
+}: {
+  flagKey: string;
+  fallback: string;
+}) {
   return (
     <section className="bg-card rounded-lg border p-4">
       <h2 className="text-[13px] font-medium">Evaluation Fallback</h2>
@@ -84,10 +92,7 @@ export function FlagFallback({ flag }: { flag: FlagDetailView }) {
         <SdkPreview
           title="Fallback"
           language=""
-          lines={sdkSnippet({
-            flagKey: flag.key,
-            fallback: flag.fallbackVariant.toLowerCase(),
-          })}
+          lines={sdkSnippet({ flagKey, fallback })}
         />
       </div>
     </section>

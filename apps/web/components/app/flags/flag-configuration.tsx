@@ -7,6 +7,8 @@ import {
   LoaderCircleIcon,
   SaveIcon,
 } from "lucide-react";
+import type { FlagEnvironmentConfig } from "@dariise/contracts";
+import { FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -17,8 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type { FlagDetailView } from "@/lib/flag-detail-data";
-import { publishFlagChanges } from "@/lib/flag-stub";
+import { ApiError, flags as flagsApi } from "@/lib/api";
 
 /**
  * Configuration tab.
@@ -28,51 +29,69 @@ import { publishFlagChanges } from "@/lib/flag-stub";
  * stay Server Components.
  */
 export function FlagConfiguration({
-  flag,
+  projectKey,
+  flagKey,
+  config,
+  updatedLabel,
   metadata,
   variations,
   dangerZone,
 }: {
-  flag: FlagDetailView;
+  projectKey: string;
+  flagKey: string;
+  config: FlagEnvironmentConfig;
+  updatedLabel: string;
   metadata: React.ReactNode;
   variations: React.ReactNode;
   dangerZone: React.ReactNode;
 }) {
-  const [enabled, setEnabled] = useState(flag.enabled);
-  const [serving, setServing] = useState(
-    flag.enabled ? flag.defaultVariation : flag.offVariation,
-  );
-  const [percentage, setPercentage] = useState(flag.rolloutPercentage);
+  const [enabled, setEnabled] = useState(config.enabled);
+  const [serving, setServing] = useState(config.defaultVariation);
+  const [percentage, setPercentage] = useState(config.rolloutPercentage);
   const [pending, setPending] = useState(false);
   const [published, setPublished] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
-  const environmentLabel =
-    flag.environment.charAt(0).toUpperCase() + flag.environment.slice(1);
+  const environmentLabel = config.environmentName;
 
   async function handlePublish() {
     if (pending) return;
     setPending(true);
     setPublished(null);
+    setError(null);
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
 
     try {
-      await publishFlagChanges(
+      const updated = await flagsApi.updateEnvironmentConfig(
+        projectKey,
+        flagKey,
+        config.environmentKey,
         {
-          key: flag.key,
           enabled,
+          offVariation: config.offVariation,
           defaultVariation: serving,
           rolloutPercentage: percentage,
-          rules: flag.rules,
+          bucketBy: config.bucketBy,
+          variations: config.variations,
         },
-        controller.signal,
+        { signal: controller.signal },
       );
-      // A local acknowledgement only — nothing is persisted.
+
+      setEnabled(updated.enabled);
+      setServing(updated.defaultVariation);
+      setPercentage(updated.rolloutPercentage);
       setPublished("just now");
-    } catch (error) {
-      if ((error as Error)?.name !== "AbortError") setPublished(null);
+    } catch (publishError) {
+      if ((publishError as Error)?.name === "AbortError") return;
+
+      setError(
+        publishError instanceof ApiError
+          ? publishError.message
+          : "Something went wrong. Please try again.",
+      );
     } finally {
       setPending(false);
     }
@@ -94,7 +113,7 @@ export function FlagConfiguration({
             <Switch
               checked={enabled}
               onCheckedChange={setEnabled}
-              aria-label={`Serve ${flag.key} in ${environmentLabel}`}
+              aria-label={`Serve ${flagKey} in ${environmentLabel}`}
             />
           </div>
 
@@ -108,8 +127,8 @@ export function FlagConfiguration({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {flag.variations.map((variation) => (
-                  <SelectItem key={variation.name} value={variation.name}>
+                {config.variations.map((variation) => (
+                  <SelectItem key={variation.key} value={variation.key}>
                     {variation.name}
                   </SelectItem>
                 ))}
@@ -134,7 +153,7 @@ export function FlagConfiguration({
               max={100}
               step={1}
               value={percentage}
-              aria-label={`${flag.key} rollout percentage`}
+              aria-label={`${flagKey} rollout percentage`}
               onChange={(event) => setPercentage(Number(event.target.value))}
               className="accent-primary bg-muted h-1.5 w-full cursor-pointer rounded-full"
             />
@@ -160,9 +179,11 @@ export function FlagConfiguration({
                   ? "Off — nobody receives this variation"
                   : "Deterministic bucketing keeps each user's result stable"}
               </span>
-              <span className="font-mono">bucket-by: {flag.bucketBy}</span>
+              <span className="font-mono">bucket-by: {config.bucketBy}</span>
             </div>
           </div>
+
+          {error ? <FieldError>{error}</FieldError> : null}
 
           <div className="mt-4 flex items-center justify-between gap-3">
             {published ? (
@@ -173,7 +194,7 @@ export function FlagConfiguration({
             ) : (
               <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px]">
                 <HistoryIcon aria-hidden="true" className="size-3.5" />
-                Last published {flag.updatedLabel}
+                Last published {updatedLabel}
               </span>
             )}
 

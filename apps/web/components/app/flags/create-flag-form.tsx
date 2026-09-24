@@ -9,6 +9,13 @@ import {
   TagIcon,
   XIcon,
 } from "lucide-react";
+import {
+  createFlagSchema,
+  toFieldErrors,
+  type CreateFlagInput,
+  type FieldErrors,
+  type FlagType,
+} from "@dariise/contracts";
 import { cn } from "cn";
 import { CreateFlagHeader } from "@/components/app/flags/flag-headers";
 import { SdkPreview, sdkSnippet } from "@/components/app/flags/sdk-preview";
@@ -18,9 +25,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import type { FlagType } from "@/lib/flag-detail-data";
-import { createFlag as createFlagRequest } from "@/lib/flag-stub";
-import { isRequired, isValidWorkspaceSlug, toWorkspaceSlug } from "@/lib/validation";
+import { ApiError, flags as flagsApi } from "@/lib/api";
+import { toWorkspaceSlug } from "@/lib/validation";
 
 const steps = ["Details", "Targeting", "Review"] as const;
 
@@ -44,13 +50,11 @@ const bestPractices = [
 
 const suggestedTags = ["checkout", "frontend", "payments", "internal"];
 
-interface CreateFlagErrors {
-  form?: string;
-  name?: string;
-  key?: string;
-}
+type CreateFlagField = "key" | "name" | "description" | "type" | "tags";
 
-export function CreateFlagForm({ existingKeys }: { existingKeys: string[] }) {
+type CreateFlagErrors = FieldErrors<CreateFlagField>;
+
+export function CreateFlagForm({ projectKey }: { projectKey: string }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
@@ -61,7 +65,7 @@ export function CreateFlagForm({ existingKeys }: { existingKeys: string[] }) {
   const [editedKey, setEditedKey] = useState(false);
   const [errors, setErrors] = useState<CreateFlagErrors>({});
   const [pending, setPending] = useState(false);
-  const [created, setCreated] = useState(false);
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
   function clearError(field: keyof CreateFlagErrors) {
@@ -82,25 +86,28 @@ export function CreateFlagForm({ existingKeys }: { existingKeys: string[] }) {
     setTagDraft("");
   }
 
-  function validate(): CreateFlagErrors {
-    const next: CreateFlagErrors = {
-      name: isRequired(name, "Flag name") ?? undefined,
-      key: isValidWorkspaceSlug(key) ?? undefined,
+  function input(): CreateFlagInput {
+    return {
+      key: key.trim(),
+      name: name.trim(),
+      description: description.trim() || null,
+      type,
+      tags,
     };
+  }
 
-    if (!next.key && existingKeys.includes(key.trim())) {
-      next.key = "A flag with this key already exists.";
-    }
+  function validate(): CreateFlagErrors | null {
+    const result = createFlagSchema.safeParse(input());
 
-    return next;
+    return result.success ? null : toFieldErrors<CreateFlagField>(result.error);
   }
 
   function goToStep(next: number) {
     const nextErrors = validate();
-    setErrors(nextErrors);
+    setErrors(nextErrors ?? {});
 
     // Only the first step gates progress; Review is the confirmation.
-    if (next > 0 && (nextErrors.name || nextErrors.key)) return;
+    if (next > 0 && (nextErrors?.name || nextErrors?.key)) return;
     setStep(next);
   }
 
@@ -109,7 +116,7 @@ export function CreateFlagForm({ existingKeys }: { existingKeys: string[] }) {
     if (pending) return;
 
     const nextErrors = validate();
-    if (nextErrors.name || nextErrors.key) {
+    if (nextErrors) {
       setErrors(nextErrors);
       setStep(0);
       return;
@@ -122,26 +129,42 @@ export function CreateFlagForm({ existingKeys }: { existingKeys: string[] }) {
     controllerRef.current = controller;
 
     try {
-      await createFlagRequest(
-        {
-          name: name.trim(),
-          key: key.trim(),
-          description: description.trim(),
-          type,
-          tags,
-        },
-        controller.signal,
-      );
-      setCreated(true);
+      const created = await flagsApi.create(projectKey, input(), {
+        signal: controller.signal,
+      });
+      setCreatedKey(created.key);
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
+
+      if (error instanceof ApiError) {
+        if (error.status === 409) {
+          setErrors({ key: error.message });
+          setStep(0);
+          return;
+        }
+
+        setErrors({ form: error.message });
+        return;
+      }
+
       setErrors({ form: "Something went wrong. Please try again." });
     } finally {
       setPending(false);
     }
   }
 
-  if (created) {
+  function reset() {
+    setCreatedKey(null);
+    setStep(0);
+    setName("");
+    setKey("");
+    setDescription("");
+    setTags([]);
+    setType("boolean");
+    setEditedKey(false);
+  }
+
+  if (createdKey) {
     return (
       <>
         <CreateFlagHeader steps={[...steps]} currentStep={2} />
@@ -150,31 +173,21 @@ export function CreateFlagForm({ existingKeys }: { existingKeys: string[] }) {
             <CheckIcon aria-hidden="true" className="size-4.5" />
           </span>
           <h2 className="mt-3 text-base font-semibold tracking-tight">
-            {name || key} created
+            {createdKey} created
           </h2>
           <p className="text-muted-foreground mt-1 max-w-md text-[13px]">
-            The flag exists in this preview only — the API is not wired up yet,
-            so nothing was saved and no SDK can see it.
+            The flag was created switched off in every environment. Configure
+            targeting per environment, then turn it on when you are ready.
           </p>
           <div className="mt-5 flex items-center gap-2">
             <Button asChild size="sm">
-              <Link href="/flags">Back to flags</Link>
+              <Link href={`/flags/${createdKey}`}>Open flag</Link>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setCreated(false);
-                setStep(0);
-                setName("");
-                setKey("");
-                setDescription("");
-                setTags([]);
-                setType("boolean");
-                setEditedKey(false);
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={reset}>
               Create another
+            </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/flags">Back to flags</Link>
             </Button>
           </div>
         </div>
@@ -235,10 +248,17 @@ export function CreateFlagForm({ existingKeys }: { existingKeys: string[] }) {
                       id="flag-description"
                       name="description"
                       rows={3}
+                      maxLength={280}
                       placeholder="What this flag controls and when it can be removed."
                       value={description}
-                      onChange={(event) => setDescription(event.target.value)}
+                      onChange={(event) => {
+                        setDescription(event.target.value);
+                        clearError("description");
+                      }}
                     />
+                    {errors.description ? (
+                      <FieldError>{errors.description}</FieldError>
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -338,6 +358,8 @@ export function CreateFlagForm({ existingKeys }: { existingKeys: string[] }) {
                       </button>
                     ))}
                 </div>
+
+                {errors.tags ? <FieldError>{errors.tags}</FieldError> : null}
               </section>
             </>
           ) : null}
@@ -392,18 +414,7 @@ export function CreateFlagForm({ existingKeys }: { existingKeys: string[] }) {
                 </p>
                 <SdkPreview
                   title="Config to be created"
-                  lines={JSON.stringify(
-                    {
-                      key: key.trim() || "flag-key",
-                      name: name.trim(),
-                      type,
-                      enabled: false,
-                      defaultVariation: "false",
-                      tags,
-                    },
-                    null,
-                    2,
-                  ).split("\n")}
+                  lines={JSON.stringify(input(), null, 2).split("\n")}
                 />
               </div>
             </section>

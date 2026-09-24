@@ -1,6 +1,6 @@
 import { CheckCircle2Icon, GitBranchIcon, LayersIcon } from "lucide-react";
+import type { FlagDependencyGraph } from "@dariise/contracts";
 import { cn } from "cn";
-import type { FlagDetailView } from "@/lib/flag-detail-data";
 
 function GraphNode({
   flagKey,
@@ -68,12 +68,18 @@ const legend = [
  * and border rules rather than a graph library: the diagram is a static
  * three-tier tree, and a dependency would not be justified.
  */
-export function FlagDependencies({ flag }: { flag: FlagDetailView }) {
-  const { dependencies } = flag;
-  const environmentLabel =
-    flag.environment.charAt(0).toUpperCase() + flag.environment.slice(1);
-  const hasAny =
-    dependencies.upstream.length > 0 || dependencies.downstream.length > 0;
+export function FlagDependencies({
+  graph,
+  flagKey,
+  environmentName,
+  enabled,
+}: {
+  graph: FlagDependencyGraph;
+  flagKey: string;
+  environmentName: string;
+  enabled: boolean;
+}) {
+  const hasAny = graph.upstream.length > 0 || graph.downstream.length > 0;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)]">
@@ -83,7 +89,7 @@ export function FlagDependencies({ flag }: { flag: FlagDetailView }) {
             <div>
               <h2 className="text-[13px] font-medium">Dependency Graph</h2>
               <p className="text-muted-foreground mt-1 text-[11px]">
-                {flag.key} · {environmentLabel}
+                {flagKey} · {environmentName}
               </p>
             </div>
 
@@ -110,17 +116,15 @@ export function FlagDependencies({ flag }: { flag: FlagDetailView }) {
 
           {hasAny ? (
             <div className="mt-5">
-              {dependencies.upstream.length > 0 ? (
+              {graph.upstream.length > 0 ? (
                 <>
-                  <GraphLabel>
-                    requires {dependencies.upstream.length}
-                  </GraphLabel>
+                  <GraphLabel>requires {graph.upstream.length}</GraphLabel>
                   <ul className="mt-3 flex flex-wrap justify-center gap-3">
-                    {dependencies.upstream.map((dependency) => (
-                      <li key={dependency.key}>
+                    {graph.upstream.map((dependency) => (
+                      <li key={dependency}>
                         <GraphNode
-                          flagKey={dependency.key}
-                          meta={dependency.requires}
+                          flagKey={dependency}
+                          meta="Upstream dependency"
                           tone="upstream"
                         />
                       </li>
@@ -134,27 +138,27 @@ export function FlagDependencies({ flag }: { flag: FlagDetailView }) {
 
               <div className="flex justify-center">
                 <GraphNode
-                  flagKey={flag.key}
-                  meta={`This flag · ${environmentLabel}`}
+                  flagKey={flagKey}
+                  meta={`This flag · ${environmentName}`}
                   tone="self"
-                  chip={flag.enabled ? "Enabled" : "Disabled"}
+                  chip={enabled ? "Enabled" : "Disabled"}
                 />
               </div>
 
-              {dependencies.downstream.length > 0 ? (
+              {graph.downstream.length > 0 ? (
                 <>
                   <div className="mt-1">
                     <Connector />
                   </div>
                   <GraphLabel>
-                    required by {dependencies.downstream.length}
+                    required by {graph.downstream.length}
                   </GraphLabel>
                   <ul className="mt-3 flex flex-wrap justify-center gap-3">
-                    {dependencies.downstream.map((dependency) => (
-                      <li key={dependency.key}>
+                    {graph.downstream.map((dependency) => (
+                      <li key={dependency}>
                         <GraphNode
-                          flagKey={dependency.key}
-                          meta={dependency.requires}
+                          flagKey={dependency}
+                          meta="Downstream dependency"
                           tone="downstream"
                         />
                       </li>
@@ -178,9 +182,9 @@ export function FlagDependencies({ flag }: { flag: FlagDetailView }) {
 
           {hasAny ? (
             <ul className="mt-3 divide-y">
-              {dependencies.upstream.map((dependency) => (
+              {graph.upstream.map((dependency) => (
                 <li
-                  key={dependency.key}
+                  key={dependency}
                   className="flex items-start gap-3 py-3 first:pt-0"
                 >
                   <CheckCircle2Icon
@@ -188,21 +192,20 @@ export function FlagDependencies({ flag }: { flag: FlagDetailView }) {
                     className="text-ok-ink mt-0.5 size-3.5 shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="font-mono text-[12px]">{dependency.key}</p>
+                    <p className="font-mono text-[12px]">{dependency}</p>
                     <p className="text-muted-foreground mt-0.5 text-[11px]">
-                      Must be {dependency.requires.toLowerCase()} before{" "}
-                      {flag.key} evaluates. Referenced in {dependency.referencedIn}.
+                      Evaluated before {flagKey}.
                     </p>
                   </div>
                   <span className="bg-ok-ink/10 text-ok-ink shrink-0 rounded-md px-2 py-0.5 text-[10px]">
-                    satisfied
+                    upstream
                   </span>
                 </li>
               ))}
 
-              {dependencies.downstream.map((dependency) => (
+              {graph.downstream.map((dependency) => (
                 <li
-                  key={dependency.key}
+                  key={dependency}
                   className="flex items-start gap-3 py-3 last:pb-0"
                 >
                   <GitBranchIcon
@@ -210,14 +213,13 @@ export function FlagDependencies({ flag }: { flag: FlagDetailView }) {
                     className="text-warn-ink mt-0.5 size-3.5 shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="font-mono text-[12px]">{dependency.key}</p>
+                    <p className="font-mono text-[12px]">{dependency}</p>
                     <p className="text-muted-foreground mt-0.5 text-[11px]">
-                      Disabling {flag.key} cascades to this flag. Referenced in{" "}
-                      {dependency.referencedIn}.
+                      Evaluated after {flagKey}.
                     </p>
                   </div>
                   <span className="bg-warn-ink/10 text-warn-ink shrink-0 rounded-md px-2 py-0.5 text-[10px]">
-                    cascades
+                    downstream
                   </span>
                 </li>
               ))}
@@ -235,10 +237,10 @@ export function FlagDependencies({ flag }: { flag: FlagDetailView }) {
           <h2 className="text-[13px] font-medium">Dependency Summary</h2>
           <dl className="mt-3 grid grid-cols-2 gap-3">
             {[
-              ["Upstream", dependencies.summary.upstream],
-              ["Downstream", dependencies.summary.downstream],
-              ["Circular", dependencies.summary.circular],
-              ["Max depth", dependencies.summary.maxDepth],
+              ["Upstream", graph.summary.upstream],
+              ["Downstream", graph.summary.downstream],
+              ["Circular", graph.summary.circular ? "Yes" : "No"],
+              ["Max depth", graph.summary.maxDepth],
             ].map(([label, value]) => (
               <div key={label} className="bg-muted/50 rounded-lg border p-3">
                 <dt className="text-muted-foreground text-[11px]">{label}</dt>
@@ -249,14 +251,14 @@ export function FlagDependencies({ flag }: { flag: FlagDetailView }) {
             ))}
           </dl>
 
-          {dependencies.summary.circular === 0 ? (
+          {graph.summary.circular ? (
+            <p className="text-danger-ink mt-3 text-[11px]">
+              Circular dependencies detected.
+            </p>
+          ) : (
             <p className="text-ok-ink mt-3 inline-flex items-center gap-1.5 text-[11px]">
               <CheckCircle2Icon aria-hidden="true" className="size-3.5" />
               No circular dependencies
-            </p>
-          ) : (
-            <p className="text-danger-ink mt-3 text-[11px]">
-              {dependencies.summary.circular} circular dependencies detected.
             </p>
           )}
         </section>
@@ -264,44 +266,50 @@ export function FlagDependencies({ flag }: { flag: FlagDetailView }) {
         <section className="bg-card rounded-lg border p-4">
           <h2 className="text-[13px] font-medium">Evaluation Order</h2>
           <p className="text-muted-foreground mt-1 text-[11px]">
-            Flags are resolved top to bottom before {flag.key} is evaluated.
+            Flags are resolved top to bottom before {flagKey} is evaluated.
           </p>
 
-          <ol className="mt-3 divide-y">
-            {dependencies.evaluationOrder.map((entry, index) => (
-              <li
-                key={entry.key}
-                className="flex items-center gap-3 py-2 first:pt-0 last:pb-0"
-              >
-                <span className="text-muted-foreground w-4 text-right text-[11px]">
-                  {index + 1}
-                </span>
-                <span
-                  className={cn(
-                    "flex-1 font-mono text-[12px]",
-                    entry.isSelf && "font-medium",
-                  )}
+          {graph.evaluationOrder.length === 0 ? (
+            <p className="text-muted-foreground mt-3 rounded-lg border border-dashed p-4 text-[12px]">
+              No evaluation order recorded.
+            </p>
+          ) : (
+            <ol className="mt-3 divide-y">
+              {graph.evaluationOrder.map((entry, index) => (
+                <li
+                  key={entry.key}
+                  className="flex items-center gap-3 py-2 first:pt-0 last:pb-0"
                 >
-                  {entry.key}
-                </span>
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1.5 text-[10px]",
-                    entry.isSelf ? "text-primary" : "text-ok-ink",
-                  )}
-                >
+                  <span className="text-muted-foreground w-4 text-right text-[11px]">
+                    {index + 1}
+                  </span>
                   <span
-                    aria-hidden="true"
                     className={cn(
-                      "size-1.5 rounded-full",
-                      entry.isSelf ? "bg-primary" : "bg-ok-ink",
+                      "flex-1 font-mono text-[12px]",
+                      entry.isSelf && "font-medium",
                     )}
-                  />
-                  {entry.status}
-                </span>
-              </li>
-            ))}
-          </ol>
+                  >
+                    {entry.key}
+                  </span>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 text-[10px] capitalize",
+                      entry.isSelf ? "text-primary" : "text-ok-ink",
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        entry.isSelf ? "bg-primary" : "bg-ok-ink",
+                      )}
+                    />
+                    {entry.isSelf ? "This flag" : entry.status}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
         </section>
       </div>
     </div>

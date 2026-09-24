@@ -10,6 +10,15 @@ import {
   SparklesIcon,
   XIcon,
 } from "lucide-react";
+import type {
+  FlagEnvironmentConfig,
+  FlagIndividualTarget,
+  TargetingCondition,
+  TargetingOperator,
+  TargetingRule,
+  TargetingRuleInput,
+} from "@dariise/contracts";
+import { FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,38 +28,62 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type {
-  FlagDetailView,
-  TargetingCondition,
-  TargetingOperator,
-  TargetingRule,
-} from "@/lib/flag-detail-data";
-import { publishFlagChanges } from "@/lib/flag-stub";
+import { ApiError, flags as flagsApi } from "@/lib/api";
 
-const operators: TargetingOperator[] = [
-  "is one of",
-  "is not one of",
-  "equals",
-  "contains",
-  "matches",
-];
+const operatorLabels: Record<TargetingOperator, string> = {
+  equals: "equals",
+  not_equals: "is not",
+  contains: "contains",
+  not_contains: "does not contain",
+  in: "is one of",
+  not_in: "is not one of",
+  greater_than: "greater than",
+  greater_than_or_equal: "greater than or equal",
+  less_than: "less than",
+  less_than_or_equal: "less than or equal",
+  matches_regex: "matches regex",
+};
+
+const operators = Object.keys(operatorLabels) as TargetingOperator[];
+
+let generatedId = 0;
+
+function nextId(prefix: string): string {
+  generatedId += 1;
+  return `${prefix}-${generatedId}`;
+}
 
 /**
  * Targeting tab.
  *
- * Rule edits are local to this screen: the API is not wired up, so publishing
- * acknowledges locally and nothing survives a reload.
+ * Rule and individual-target edits are published through the API: rules with
+ * `replaceRules`, targets with `replaceTargets`, and the default variation with
+ * the environment config.
  */
-export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
-  const [rules, setRules] = useState<TargetingRule[]>(flag.rules);
-  const [targets, setTargets] = useState(flag.individualTargets);
-  const [serveDefault, setServeDefault] = useState(flag.defaultVariation);
+export function FlagTargeting({
+  projectKey,
+  flagKey,
+  config,
+  rules: initialRules,
+  targets: initialTargets,
+  updatedLabel,
+}: {
+  projectKey: string;
+  flagKey: string;
+  config: FlagEnvironmentConfig;
+  rules: TargetingRule[];
+  targets: FlagIndividualTarget[];
+  updatedLabel: string;
+}) {
+  const [rules, setRules] = useState(initialRules);
+  const [targets, setTargets] = useState(initialTargets);
+  const [serveDefault, setServeDefault] = useState(config.defaultVariation);
   const [pending, setPending] = useState(false);
   const [published, setPublished] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
-  const environmentLabel =
-    flag.environment.charAt(0).toUpperCase() + flag.environment.slice(1);
+  const environmentLabel = config.environmentName;
 
   function updateCondition(
     ruleId: string,
@@ -80,21 +113,23 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
   }
 
   function addRule() {
-    const stamp = rules.length + 1;
     setRules((previous) => [
       ...previous,
       {
-        id: `rule-${stamp}`,
-        name: `Rule ${stamp}`,
+        id: nextId("rule"),
+        description: null,
         conditions: [
           {
-            id: `cond-${stamp}`,
+            id: nextId("cond"),
             attribute: "user.id",
-            operator: "is one of",
+            attributeType: "string",
+            operator: "in",
             values: [],
           },
         ],
-        serve: flag.defaultVariation,
+        variation: config.defaultVariation,
+        segmentKeys: [],
+        rollout: null,
       },
     ]);
   }
@@ -103,24 +138,68 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
     if (pending) return;
     setPending(true);
     setPublished(false);
+    setError(null);
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
 
+    const ruleInputs: TargetingRuleInput[] = rules.map((rule) => ({
+      description: rule.description,
+      conditions: rule.conditions.map((condition) => ({
+        attribute: condition.attribute,
+        attributeType: condition.attributeType,
+        operator: condition.operator,
+        values: condition.values,
+      })),
+      variation: rule.variation,
+      segmentKeys: rule.segmentKeys,
+      rollout: rule.rollout,
+    }));
+
     try {
-      await publishFlagChanges(
-        {
-          key: flag.key,
-          enabled: flag.enabled,
-          defaultVariation: serveDefault,
-          rolloutPercentage: flag.rolloutPercentage,
-          rules,
-        },
-        controller.signal,
-      );
+      await Promise.all([
+        flagsApi.replaceRules(
+          projectKey,
+          flagKey,
+          config.environmentKey,
+          { rules: ruleInputs },
+          { signal: controller.signal },
+        ),
+        flagsApi.replaceTargets(
+          projectKey,
+          flagKey,
+          config.environmentKey,
+          { targets },
+          { signal: controller.signal },
+        ),
+        ...(serveDefault !== config.defaultVariation
+          ? [
+              flagsApi.updateEnvironmentConfig(
+                projectKey,
+                flagKey,
+                config.environmentKey,
+                {
+                  enabled: config.enabled,
+                  offVariation: config.offVariation,
+                  defaultVariation: serveDefault,
+                  rolloutPercentage: config.rolloutPercentage,
+                  bucketBy: config.bucketBy,
+                  variations: config.variations,
+                },
+                { signal: controller.signal },
+              ),
+            ]
+          : []),
+      ]);
       setPublished(true);
-    } catch (error) {
-      if ((error as Error)?.name !== "AbortError") setPublished(false);
+    } catch (publishError) {
+      if ((publishError as Error)?.name === "AbortError") return;
+
+      setError(
+        publishError instanceof ApiError
+          ? publishError.message
+          : "Something went wrong. Please try again.",
+      );
     } finally {
       setPending(false);
     }
@@ -155,42 +234,42 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
             </p>
           ) : (
             <ul className="mt-4 space-y-3">
-              {rules.map((rule) => (
+              {rules.map((rule, index) => (
                 <li key={rule.id} className="bg-muted/30 rounded-lg border p-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-[11px] font-medium">
-                      {rule.name}
+                      {rule.description ?? `Rule ${index + 1}`}
                       <span className="text-muted-foreground ml-1.5 font-normal">
                         ALL conditions
                       </span>
                     </p>
                     <div className="flex items-center gap-2">
-                      {rule.rollout !== undefined ? (
+                      {rule.rollout ? (
                         <span className="bg-primary/10 text-primary rounded-md px-1.5 py-0.5 text-[10px]">
-                          {rule.rollout}% rollout
+                          {rule.rollout.percentage}% rollout
                         </span>
                       ) : null}
                       <span className="text-muted-foreground text-[10px]">
                         serve
                       </span>
                       <Select
-                        value={rule.serve}
+                        value={rule.variation}
                         onValueChange={(value) =>
-                          updateRule(rule.id, { serve: value })
+                          updateRule(rule.id, { variation: value })
                         }
                       >
                         <SelectTrigger
                           size="sm"
-                          aria-label={`Variation served by ${rule.name}`}
+                          aria-label={`Variation served by rule ${index + 1}`}
                           className="text-[11px]"
                         >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {flag.variations.map((variation) => (
+                          {config.variations.map((variation) => (
                             <SelectItem
-                              key={variation.name}
-                              value={variation.name}
+                              key={variation.key}
+                              value={variation.key}
                             >
                               {variation.name}
                             </SelectItem>
@@ -201,13 +280,13 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
                   </div>
 
                   <ul className="mt-2.5 space-y-2">
-                    {rule.conditions.map((condition, index) => (
+                    {rule.conditions.map((condition, conditionIndex) => (
                       <li
                         key={condition.id}
                         className="flex flex-wrap items-center gap-2"
                       >
                         <span className="text-muted-foreground w-7 text-[10px] uppercase">
-                          {index === 0 ? "if" : "and"}
+                          {conditionIndex === 0 ? "if" : "and"}
                         </span>
                         <span className="bg-card rounded-md border px-2 py-1 font-mono text-[11px]">
                           {condition.attribute}
@@ -230,7 +309,7 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
                           <SelectContent>
                             {operators.map((operator) => (
                               <SelectItem key={operator} value={operator}>
-                                {operator}
+                                {operatorLabels[operator]}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -300,12 +379,12 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
                   <span className="font-mono text-[11px]">{target.userId}</span>
                   <div className="flex items-center gap-2">
                     <Select
-                      value={target.serve}
+                      value={target.variationKey}
                       onValueChange={(value) =>
                         setTargets((previous) =>
                           previous.map((item) =>
                             item.userId === target.userId
-                              ? { ...item, serve: value }
+                              ? { ...item, variationKey: value }
                               : item,
                           ),
                         )
@@ -319,11 +398,8 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {flag.variations.map((variation) => (
-                          <SelectItem
-                            key={variation.name}
-                            value={variation.name}
-                          >
+                        {config.variations.map((variation) => (
+                          <SelectItem key={variation.key} value={variation.key}>
                             {variation.name}
                           </SelectItem>
                         ))}
@@ -378,8 +454,8 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {flag.variations.map((variation) => (
-                  <SelectItem key={variation.name} value={variation.name}>
+                {config.variations.map((variation) => (
+                  <SelectItem key={variation.key} value={variation.key}>
                     {variation.name}
                   </SelectItem>
                 ))}
@@ -389,8 +465,14 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
 
           <p className="text-muted-foreground mt-3 rounded-md border px-3 py-2 text-[11px]">
             Serving{" "}
-            <span className="text-foreground font-mono">{serveDefault}</span> to
-            everyone in {environmentLabel} who matches no rule above.
+            <span className="text-foreground font-mono">
+              {
+                config.variations.find(
+                  (variation) => variation.key === serveDefault,
+                )?.name ?? serveDefault
+              }
+            </span>{" "}
+            to everyone in {environmentLabel} who matches no rule above.
           </p>
         </section>
 
@@ -398,7 +480,7 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
           <h2 className="text-[13px] font-medium">Publish changes</h2>
           <div className="text-muted-foreground mt-2 flex items-center gap-1.5 text-[11px]">
             <InfoIcon aria-hidden="true" className="size-3.5" />
-            Last published {flag.updatedLabel}
+            Last published {updatedLabel}
           </div>
 
           <Button
@@ -415,10 +497,16 @@ export function FlagTargeting({ flag }: { flag: FlagDetailView }) {
             {pending ? "Publishing…" : "Save & Publish"}
           </Button>
 
+          {error ? (
+            <div className="mt-2">
+              <FieldError>{error}</FieldError>
+            </div>
+          ) : null}
+
           {published ? (
             <p className="text-ok-ink mt-2 inline-flex items-center gap-1.5 text-[11px]">
               <CheckCircle2Icon aria-hidden="true" className="size-3.5" />
-              Published just now — nothing is persisted
+              Published just now
             </p>
           ) : null}
 

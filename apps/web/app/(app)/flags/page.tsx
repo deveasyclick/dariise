@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PlusIcon, UploadIcon } from "lucide-react";
 import { FlagsTable } from "@/components/app/flags-table";
+import { listWorkspaceFlags } from "@/components/app/flags/flag-queries";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
-import { getDashboardData } from "@/lib/dashboard-data";
+import { getScope } from "@/lib/scope";
 
 export const metadata: Metadata = {
   title: "Feature Flags",
@@ -13,9 +14,12 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function FeatureFlagsPage() {
+export default async function FeatureFlagsPage() {
   const now = new Date();
-  const data = getDashboardData(now);
+  const [{ project, environment }, flags] = await Promise.all([
+    getScope(),
+    listWorkspaceFlags(),
+  ]);
 
   return (
     <>
@@ -42,8 +46,10 @@ export default function FeatureFlagsPage() {
       </PageHeader>
 
       <FlagsTable
-        flags={data.flags}
-        environmentLabel={data.environmentLabel}
+        flags={flags}
+        projectKey={project?.key ?? null}
+        environmentKey={environment?.key ?? null}
+        environmentName={environment?.name ?? null}
         now={now.toISOString()}
       />
     </>
