@@ -1,4 +1,4 @@
-import type { EnvironmentColor } from "@/lib/environment-data";
+import type { EnvironmentColor } from "@/lib/environment-color";
 
 /**
  * Colour presentation for environments.
@@ -8,6 +8,8 @@ import type { EnvironmentColor } from "@/lib/environment-data";
  * rather than an interpolated class name. Every value is a design token, so
  * light and dark stay in step.
  */
+
+export type { EnvironmentColor };
 
 /** Options offered by the create screen's swatch picker, in design order. */
 export const environmentColors: Array<{

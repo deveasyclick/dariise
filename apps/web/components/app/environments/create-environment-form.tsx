@@ -2,17 +2,22 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import {
-  CheckIcon,
-  LoaderCircleIcon,
-  RocketIcon,
-} from "lucide-react";
+import { CheckIcon, LoaderCircleIcon, RocketIcon } from "lucide-react";
 import { cn } from "cn";
+import type {
+  EnvironmentSummary,
+  FlagCoverageRow,
+  FlagCoverageState,
+  InitialFlagState,
+} from "@dariise/contracts";
 import {
   ProtectedEnvironmentsNote,
   WhatYouGetCard,
 } from "@/components/app/environments/environment-cards";
-import { environmentColorSwatch, environmentColors } from "@/components/app/environments/environment-colors";
+import {
+  environmentColorSwatch,
+  environmentColors,
+} from "@/components/app/environments/environment-colors";
 import { CreateEnvironmentHeader } from "@/components/app/environments/environment-headers";
 import { CoverageStatePill } from "@/components/app/environments/coverage-pill";
 import { Field, FieldError } from "@/components/auth/field";
@@ -26,20 +31,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type {
-  CoverageFlag,
-  EnvironmentColor,
-  EnvironmentOption,
-  FlagCoverageState,
-  InitialFlagStatus,
-} from "@/lib/environment-data";
-import { createEnvironment } from "@/lib/environment-stub";
+import type { EnvironmentColor } from "@/lib/environment-color";
+import * as api from "@/lib/api";
 import { isRequired, isValidSlug, toWorkspaceSlug } from "@/lib/validation";
 
 const steps = ["Details", "Flags", "Review"] as const;
 
 const initialStatusOptions: Array<{
-  value: InitialFlagStatus;
+  value: InitialFlagState;
   label: string;
   hint: string;
 }> = [
@@ -59,11 +58,13 @@ interface CreateEnvironmentErrors {
 }
 
 export function CreateEnvironmentForm({
+  projectKey,
   environments,
   coverageFlags,
 }: {
-  environments: EnvironmentOption[];
-  coverageFlags: CoverageFlag[];
+  projectKey: string;
+  environments: EnvironmentSummary[];
+  coverageFlags: FlagCoverageRow[];
 }) {
   const defaultSource =
     environments.find((environment) => environment.isDefault)?.key ??
@@ -76,7 +77,7 @@ export function CreateEnvironmentForm({
   const [color, setColor] = useState<EnvironmentColor>("primary");
   const [copyFrom, setCopyFrom] = useState(defaultSource);
   const [initialStatus, setInitialStatus] =
-    useState<InitialFlagStatus>("copy-source");
+    useState<InitialFlagState>("copy-source");
   const [editedKey, setEditedKey] = useState(false);
   const [errors, setErrors] = useState<CreateEnvironmentErrors>({});
   const [pending, setPending] = useState(false);
@@ -141,20 +142,27 @@ export function CreateEnvironmentForm({
     controllerRef.current = controller;
 
     try {
-      await createEnvironment(
+      await api.environments.create(
+        projectKey,
         {
           name: name.trim(),
           key: key.trim(),
           color,
-          copyFrom,
+          copyFrom: copyFrom || undefined,
           initialFlagStatus: initialStatus,
         },
-        controller.signal,
+        { signal: controller.signal },
       );
       setCreated(true);
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
-      setErrors({ form: "Something went wrong. Please try again." });
+
+      setErrors({
+        form:
+          error instanceof api.ApiError
+            ? error.message
+            : "Something went wrong. Please try again.",
+      });
     } finally {
       setPending(false);
     }
@@ -173,8 +181,9 @@ export function CreateEnvironmentForm({
             {name.trim() || key.trim()} created
           </h2>
           <p className="text-muted-foreground mt-1 max-w-md text-[13px]">
-            The environment exists in this preview only — the API is not wired
-            up yet, so nothing was saved and no SDK key was issued.
+            The environment and its flag configuration are saved. Issue an SDK
+            key for it from the SDK keys tab when you are ready to connect a
+            client.
           </p>
           <div className="mt-5 flex items-center gap-2">
             <Button asChild size="sm">
@@ -202,7 +211,7 @@ export function CreateEnvironmentForm({
     );
   }
 
-  function previewState(flag: CoverageFlag): FlagCoverageState {
+  function previewState(flag: FlagCoverageRow): FlagCoverageState {
     if (initialStatus === "all-on") return { kind: "on" };
     if (initialStatus === "all-off") return { kind: "off" };
 
@@ -328,7 +337,7 @@ export function CreateEnvironmentForm({
                 <RadioGroup
                   value={initialStatus}
                   onValueChange={(value) =>
-                    setInitialStatus(value as InitialFlagStatus)
+                    setInitialStatus(value as InitialFlagState)
                   }
                   aria-labelledby="environment-initial-status-label"
                   className="grid gap-2 sm:grid-cols-3"
@@ -399,10 +408,17 @@ export function CreateEnvironmentForm({
                 ))}
               </ul>
 
-              <p className="text-muted-foreground mt-4 text-[11px]">
-                The preview lists the flags worth comparing across environments.
-                Every other flag is created switched off.
-              </p>
+              {coverageFlags.length === 0 ? (
+                <p className="text-muted-foreground mt-4 text-[11px]">
+                  This project has no flags yet, so there is nothing to
+                  configure.
+                </p>
+              ) : (
+                <p className="text-muted-foreground mt-4 text-[11px]">
+                  The preview shows each flag&apos;s starting state in this
+                  environment.
+                </p>
+              )}
             </section>
           ) : null}
 
@@ -439,19 +455,18 @@ export function CreateEnvironmentForm({
 
               <div className="mt-4">
                 <p className="text-muted-foreground mb-2 text-[11px]">
-                  The environment will be created with three SDK keys and its own
-                  evaluation endpoints.
+                  The environment is created with its own flag configuration.
+                  SDK keys are issued separately.
                 </p>
                 <pre className="bg-muted overflow-x-auto rounded-lg border p-3 text-[11px] leading-5">
                   <code className="font-mono">
                     {JSON.stringify(
                       {
-                        key: key.trim() || "environment-key",
                         name: name.trim(),
+                        key: key.trim() || "environment-key",
                         color,
-                        copySettingsFrom: copyFrom || null,
+                        copyFrom: copyFrom || null,
                         initialFlagStatus: initialStatus,
-                        isProtected: false,
                       },
                       null,
                       2,

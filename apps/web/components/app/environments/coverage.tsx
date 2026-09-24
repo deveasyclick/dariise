@@ -1,5 +1,9 @@
 import { FlagIcon } from "lucide-react";
-import { cn } from "cn";
+import type {
+  EnvironmentSummary,
+  FlagCoverageRow,
+  FlagCoverageState,
+} from "@dariise/contracts";
 import { CoverageStatePill } from "@/components/app/environments/coverage-pill";
 import {
   Table,
@@ -9,11 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type {
-  EnvironmentView,
-  FlagCoverageState,
-  ResolvedCoverageRow,
-} from "@/lib/environment-data";
 
 /**
  * Flag coverage tables.
@@ -32,7 +31,7 @@ export { CoverageStatePill };
 
 /** A missing entry reads as off — a flag that is not listed is not enabled. */
 function stateFor(
-  row: ResolvedCoverageRow,
+  row: FlagCoverageRow,
   environmentKey: string,
 ): FlagCoverageState {
   return row.states[environmentKey] ?? { kind: "off" };
@@ -47,13 +46,24 @@ function FlagCell({ flagKey }: { flagKey: string }) {
   );
 }
 
+/** A footer note for a coverage table the API only returned one page of. */
+function TruncatedNote({ shown }: { shown: number }) {
+  return (
+    <p className="text-muted-foreground border-t px-4 py-2.5 text-[11px]">
+      Showing the first {shown} flags; this project has more.
+    </p>
+  );
+}
+
 /** The cross-environment matrix on the Environments screen. */
 export function FlagCoverageCard({
   environments,
   rows,
+  truncated,
 }: {
-  environments: Array<Pick<EnvironmentView, "key" | "name">>;
-  rows: ResolvedCoverageRow[];
+  environments: Array<Pick<EnvironmentSummary, "key" | "name">>;
+  rows: FlagCoverageRow[];
+  truncated: boolean;
 }) {
   return (
     <section className="bg-card mt-3 rounded-lg border">
@@ -73,16 +83,13 @@ export function FlagCoverageCard({
                 {environment.name}
               </TableHead>
             ))}
-            <TableHead className={cn(headerClass, "text-right")}>
-              Last changed
-            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
             <TableRow className="hover:bg-transparent">
               <TableCell
-                colSpan={environments.length + 2}
+                colSpan={environments.length + 1}
                 className="text-muted-foreground py-10 text-center text-[12px]"
               >
                 No flags yet.
@@ -100,17 +107,13 @@ export function FlagCoverageCard({
                     <CoverageStatePill state={stateFor(row, environment.key)} />
                   </TableCell>
                 ))}
-
-                <TableCell
-                  className={cn(cellClass, "text-muted-foreground text-right")}
-                >
-                  {row.changedLabel}
-                </TableCell>
               </TableRow>
             ))
           )}
         </TableBody>
       </Table>
+
+      {truncated ? <TruncatedNote shown={rows.length} /> : null}
     </section>
   );
 }
@@ -119,23 +122,19 @@ export function FlagCoverageCard({
 export function EnvironmentCoverageCard({
   environment,
   rows,
+  truncated,
 }: {
-  environment: EnvironmentView;
-  rows: ResolvedCoverageRow[];
+  environment: Pick<EnvironmentSummary, "key" | "name">;
+  rows: FlagCoverageRow[];
+  truncated: boolean;
 }) {
   return (
     <section className="bg-card rounded-lg border">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-        <div>
-          <h2 className="text-[13px] font-medium">Flag coverage</h2>
-          <p className="text-muted-foreground mt-0.5 text-[11px]">
-            The flags whose state is worth comparing in {environment.name}.
-          </p>
-        </div>
-        <span className="text-muted-foreground text-[11px]">
-          {environment.counts.on} on · {environment.counts.off} off ·{" "}
-          {environment.counts.scheduled} scheduled
-        </span>
+      <header className="border-b px-4 py-3">
+        <h2 className="text-[13px] font-medium">Flag coverage</h2>
+        <p className="text-muted-foreground mt-0.5 text-[11px]">
+          The flags whose state is worth comparing in {environment.name}.
+        </p>
       </header>
 
       <Table>
@@ -143,16 +142,13 @@ export function EnvironmentCoverageCard({
           <TableRow className="hover:bg-transparent">
             <TableHead className={headerClass}>Flag</TableHead>
             <TableHead className={headerClass}>Effective state</TableHead>
-            <TableHead className={cn(headerClass, "text-right")}>
-              Last changed
-            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
             <TableRow className="hover:bg-transparent">
               <TableCell
-                colSpan={3}
+                colSpan={2}
                 className="text-muted-foreground py-10 text-center text-[12px]"
               >
                 No flags yet.
@@ -167,16 +163,13 @@ export function EnvironmentCoverageCard({
                 <TableCell className={cellClass}>
                   <CoverageStatePill state={stateFor(row, environment.key)} />
                 </TableCell>
-                <TableCell
-                  className={cn(cellClass, "text-muted-foreground text-right")}
-                >
-                  {row.changedLabel}
-                </TableCell>
               </TableRow>
             ))
           )}
         </TableBody>
       </Table>
+
+      {truncated ? <TruncatedNote shown={rows.length} /> : null}
     </section>
   );
 }

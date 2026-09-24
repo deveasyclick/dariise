@@ -1,42 +1,42 @@
 "use client";
 
-import { useState } from "react";
-import { EyeIcon, EyeOffIcon } from "lucide-react";
+import Link from "next/link";
 import { cn } from "cn";
+import type { ApiKey, EnvironmentConnection } from "@dariise/contracts";
 import { CopyButton } from "@/components/app/copy-button";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type {
-  EnvironmentEndpoint,
-  ResolvedSdkKey,
-} from "@/lib/environment-data";
+import { formatDate } from "@/lib/format";
 
 /**
- * SDK keys and endpoints.
+ * SDK keys and endpoints for one environment.
  *
- * A Client Component because revealing and copying a credential need state and
- * clipboard access. Every value it renders comes from the fixtures in
- * `environment-data.ts` — nothing here is a real credential.
+ * A Client Component because copying a value needs clipboard access. The API
+ * only ever returns a key's non-secret prefix outside the create response, so
+ * every value rendered here is an identifier, not a credential.
  */
 
+const kindLabels: Record<ApiKey["kind"], string> = {
+  management: "Management",
+  server: "Server",
+  client: "Client",
+};
+
 /**
- * A masked credential with reveal and copy.
+ * A non-secret key identifier with copy-to-clipboard.
  *
- * The mask is passed in rather than derived here so the list card can show the
- * environment-level mask while the key rows show the fuller one.
+ * The value is passed in rather than derived here: the environment card shows
+ * `connection.maskedKey`, while a key row shows that key's own prefix.
  */
-export function SdkKeyChip({
+export function MaskedKeyChip({
   value,
-  masked,
   label,
   className,
 }: {
-  value: string;
-  masked: string;
+  value: string | null;
   label: string;
   className?: string;
 }) {
-  const [revealed, setRevealed] = useState(false);
-
   return (
     <div
       className={cn(
@@ -45,81 +45,121 @@ export function SdkKeyChip({
       )}
     >
       <span className="truncate font-mono text-[11px]">
-        {revealed ? value : masked}
+        {value ?? "No usable key"}
       </span>
 
-      <span className="ml-auto flex shrink-0 items-center">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-pressed={revealed}
-          aria-label={revealed ? `Hide ${label}` : `Show ${label}`}
-          title={revealed ? "Hide key" : "Show key"}
-          onClick={() => setRevealed((current) => !current)}
-        >
-          {revealed ? (
-            <EyeOffIcon aria-hidden="true" />
-          ) : (
-            <EyeIcon aria-hidden="true" />
-          )}
-        </Button>
-        <CopyButton value={value} label={label} />
-      </span>
+      {value ? (
+        <span className="ml-auto shrink-0">
+          <CopyButton value={value} label={label} />
+        </span>
+      ) : null}
     </div>
   );
 }
 
-/** The keys an SDK uses to authenticate against this environment. */
-export function SdkKeysCard({ keys }: { keys: ResolvedSdkKey[] }) {
+/** The keys that target this environment. */
+export function SdkKeysCard({
+  keys,
+  maskedKey,
+  truncated,
+}: {
+  keys: ApiKey[];
+  /** `connection.maskedKey` — shown when no key row targets this environment. */
+  maskedKey: string | null;
+  truncated: boolean;
+}) {
   return (
     <section className="bg-card rounded-lg border">
       <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
         <h2 className="text-[13px] font-medium">SDK keys</h2>
-        <Button
-          variant="link"
-          size="sm"
-          disabled
-          title="Create key — coming soon"
-          className="text-[11px]"
-        >
-          Create key
+        <Button variant="link" size="sm" asChild className="text-[11px]">
+          <Link href="/api-keys/new">Create key</Link>
         </Button>
       </header>
 
-      <ul className="divide-y px-4">
-        {keys.map((key) => (
-          <li
-            key={key.kind}
-            className="flex flex-wrap items-center justify-between gap-3 py-3"
-          >
-            <div className="min-w-0">
-              <p className="text-[12px] font-medium">{key.label}</p>
-              <p className="text-muted-foreground mt-0.5 text-[11px]">
-                Created {key.createdLabel}
-              </p>
-            </div>
+      {keys.length === 0 ? (
+        <div className="space-y-2 p-4">
+          <MaskedKeyChip value={maskedKey} label="environment key" />
+          <p className="text-muted-foreground text-[11px]">
+            No SDK key targets this environment yet. A key issued for the whole
+            project still works here.
+          </p>
+        </div>
+      ) : (
+        <ul className="divide-y px-4">
+          {keys.map((key) => (
+            <li
+              key={key.id}
+              className="flex flex-wrap items-center justify-between gap-3 py-3"
+            >
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-[12px] font-medium">
+                  {key.name}
+                  <Badge variant="secondary" className="text-[10px]">
+                    {kindLabels[key.kind]}
+                  </Badge>
+                </p>
+                <p className="text-muted-foreground mt-0.5 text-[11px]">
+                  Created {formatDate(key.createdAt)} ·{" "}
+                  {key.lastUsedAt
+                    ? `Last used ${formatDate(key.lastUsedAt)}`
+                    : "Never used"}
+                </p>
+              </div>
 
-            <div className="w-full min-w-0 sm:w-auto sm:min-w-[15rem]">
-              <SdkKeyChip
-                value={key.value}
-                masked={key.masked}
-                label={key.label.toLowerCase()}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
+              <div className="w-full min-w-0 sm:w-auto sm:min-w-[13rem]">
+                <MaskedKeyChip
+                  value={key.prefix}
+                  label={`${key.name} prefix`}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {truncated ? (
+        <p className="text-muted-foreground border-t px-4 py-2.5 text-[11px]">
+          Showing the first {keys.length} keys.
+        </p>
+      ) : null}
     </section>
   );
 }
 
+interface EndpointRow {
+  label: string;
+  description: string;
+  url: string;
+}
+
 /** Per-environment URLs an SDK points at. */
 export function EndpointsCard({
-  endpoints,
+  connection,
 }: {
-  endpoints: EnvironmentEndpoint[];
+  connection: EnvironmentConnection;
 }) {
+  const endpoints: EndpointRow[] = [
+    {
+      label: "Base URL",
+      description: "Origin the SDK calls",
+      url: connection.baseUrl,
+    },
+    {
+      label: "Evaluation",
+      description: "Resolve flags at runtime",
+      url: connection.evalUrl,
+    },
+  ];
+
+  if (connection.streamUrl) {
+    endpoints.push({
+      label: "Streaming",
+      description: "Live updates over SSE",
+      url: connection.streamUrl,
+    });
+  }
+
   return (
     <section className="bg-card rounded-lg border">
       <header className="border-b px-4 py-3">

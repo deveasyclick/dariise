@@ -1,16 +1,12 @@
 import Link from "next/link";
-import {
-  ChevronLeftIcon,
-  PencilIcon,
-  ServerIcon,
-} from "lucide-react";
+import { ChevronLeftIcon, PencilIcon, ServerIcon } from "lucide-react";
 import { cn } from "cn";
-import { EnvironmentStatusBadge } from "@/components/app/environments/environment-cards";
+import type { EnvironmentDetail } from "@dariise/contracts";
+import { EnvironmentBadges } from "@/components/app/environments/environment-cards";
 import { environmentColorTone } from "@/components/app/environments/environment-colors";
 import { EnvironmentMenu } from "@/components/app/environments/environment-menu";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { EnvironmentView } from "@/lib/environment-data";
+import { resolveEnvironmentColor } from "@/lib/environment-color";
 
 /**
  * Headers for the environment screens.
@@ -90,7 +86,7 @@ export function CreateEnvironmentHeader({
 export function EnvironmentDetailHeader({
   environment,
 }: {
-  environment: EnvironmentView;
+  environment: EnvironmentDetail;
 }) {
   return (
     <div className="bg-card mb-4 rounded-lg border p-4">
@@ -106,7 +102,7 @@ export function EnvironmentDetailHeader({
         <span
           className={cn(
             "flex size-9 shrink-0 items-center justify-center rounded-lg",
-            environmentColorTone[environment.color],
+            environmentColorTone[resolveEnvironmentColor(environment.color)],
           )}
         >
           <ServerIcon aria-hidden="true" className="size-4.5" />
@@ -117,23 +113,17 @@ export function EnvironmentDetailHeader({
             <h1 className="text-xl font-semibold tracking-tight">
               {environment.name}
             </h1>
-            {environment.isDefault ? (
-              <Badge
-                variant="outline"
-                className="text-[10px] tracking-wide uppercase"
-              >
-                Default
-              </Badge>
-            ) : null}
+            <EnvironmentBadges
+              isDefault={environment.isDefault}
+              isProtected={environment.isProtected}
+            />
           </div>
           <p className="text-muted-foreground mt-0.5 font-mono text-[12px]">
-            {environment.baseUrl}
+            {environment.key}
           </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <EnvironmentStatusBadge status={environment.status} />
-
           <Button
             variant="outline"
             size="sm"

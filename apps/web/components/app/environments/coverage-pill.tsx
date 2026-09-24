@@ -1,5 +1,5 @@
+import type { FlagCoverageState } from "@dariise/contracts";
 import { Badge } from "@/components/ui/badge";
-import type { FlagCoverageState } from "@/lib/environment-data";
 
 interface CoverageStatePillProps {
   state: FlagCoverageState;

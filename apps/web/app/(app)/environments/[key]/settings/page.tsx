@@ -8,7 +8,8 @@ import {
 import { EnvironmentDetailHeader } from "@/components/app/environments/environment-headers";
 import { EnvironmentSettingsCard } from "@/components/app/environments/environment-settings";
 import { EnvironmentTabs } from "@/components/app/environments/environment-tabs";
-import { getEnvironment } from "@/lib/environment-data";
+import { getScope } from "@/lib/scope";
+import { findEnvironment } from "../load-environment";
 
 export const dynamic = "force-dynamic";
 
@@ -16,23 +17,29 @@ export async function generateMetadata(
   props: PageProps<"/environments/[key]/settings">,
 ): Promise<Metadata> {
   const { key } = await props.params;
-  const environment = getEnvironment(key, new Date());
+  const { project } = await getScope();
 
-  return {
-    title: environment ? `${environment.name} · Settings` : "Not found",
-    description: environment
-      ? `Settings for ${environment.name}.`
-      : undefined,
-  };
+  if (!project) return { title: "Environment" };
+
+  const environment = await findEnvironment(project.key, key);
+
+  return environment
+    ? {
+        title: `${environment.name} · Settings`,
+        description: `Settings for ${environment.name}.`,
+      }
+    : { title: "Not found" };
 }
 
 export default async function EnvironmentSettingsPage(
   props: PageProps<"/environments/[key]/settings">,
 ) {
   const { key } = await props.params;
-  const now = new Date();
+  const { project } = await getScope();
 
-  const environment = getEnvironment(key, now);
+  if (!project) notFound();
+
+  const environment = await findEnvironment(project.key, key);
   if (!environment) notFound();
 
   return (
@@ -42,7 +49,10 @@ export default async function EnvironmentSettingsPage(
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.5fr)]">
         <div className="space-y-4">
-          <EnvironmentSettingsCard environment={environment} />
+          <EnvironmentSettingsCard
+            projectKey={project.key}
+            environment={environment}
+          />
           <EnvironmentDangerCard />
         </div>
 

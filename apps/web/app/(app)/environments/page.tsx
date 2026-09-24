@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PlusIcon } from "lucide-react";
-import { EnvironmentGrid } from "@/components/app/environments/environment-cards";
+import {
+  EnvironmentGrid,
+  type EnvironmentCardData,
+} from "@/components/app/environments/environment-cards";
+import { environmentFlagCounts } from "@/components/app/environments/capped-count";
 import { FlagCoverageCard } from "@/components/app/environments/coverage";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
-import {
-  getEnvironments,
-  getFlagCoverage,
-} from "@/lib/environment-data";
+import * as api from "@/lib/api";
+import { getScope } from "@/lib/scope";
 
 export const metadata: Metadata = {
   title: "Environments",
@@ -18,11 +20,36 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function EnvironmentsPage() {
-  // One `now` for the whole render keeps server output and hydration in step.
-  const now = new Date();
-  const environments = getEnvironments(now);
-  const coverage = getFlagCoverage(now);
+export default async function EnvironmentsPage() {
+  const { project, environments } = await getScope();
+
+  if (!project) return null;
+
+  const [flagPage, coveragePage] = await Promise.all([
+    api.flags.list(project.key, { limit: 100 }),
+    api.environments.coverage(project.key),
+  ]);
+
+  const flagsTruncated = flagPage.nextCursor !== null;
+
+  const cards: EnvironmentCardData[] = await Promise.all(
+    environments.map(async (environment) => {
+      const { connection } = await api.environments.get(
+        project.key,
+        environment.key,
+      );
+
+      return {
+        environment,
+        connection,
+        counts: environmentFlagCounts(
+          flagPage.data,
+          environment.key,
+          flagsTruncated,
+        ),
+      };
+    }),
+  );
 
   return (
     <>
@@ -38,9 +65,13 @@ export default function EnvironmentsPage() {
         </Button>
       </PageHeader>
 
-      <EnvironmentGrid environments={environments} />
+      <EnvironmentGrid environments={cards} />
 
-      <FlagCoverageCard environments={environments} rows={coverage} />
+      <FlagCoverageCard
+        environments={environments}
+        rows={coveragePage.data}
+        truncated={coveragePage.nextCursor !== null}
+      />
     </>
   );
 }
