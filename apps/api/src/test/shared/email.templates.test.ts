@@ -6,17 +6,11 @@ import type {
   EmailTemplateVariables,
 } from "../../modules/email/email.templates.js";
 
-// The Better Auth shape: validates the token, then redirects to the dashboard
-// with `?token=…`.
-const resetUrl =
-  "http://localhost:4000/api/auth/reset-password/abc123?callbackURL=%2Freset-password";
+const code = "481920";
 
 const samples: { [Id in EmailTemplateId]: EmailTemplateVariables<Id> } = {
-  passwordReset: { name: "Ada", url: resetUrl, expiresInMinutes: 30 },
-  verifyEmail: {
-    name: "Ada",
-    url: "http://localhost:4000/api/auth/verify-email?token=xyz",
-  },
+  passwordResetCode: { name: "Ada", code, expiresInMinutes: 10 },
+  verifyEmailCode: { name: "Ada", code, expiresInMinutes: 10 },
 };
 
 const renderer = new EmailRenderer();
@@ -29,8 +23,6 @@ describe("every registered template", () => {
       expect(rendered.subject.length).toBeGreaterThan(0);
       expect(rendered.text.length).toBeGreaterThan(0);
       expect(rendered.html.startsWith("<!doctype html>")).toBe(true);
-      expect(rendered.html).toContain(samples[id].url);
-      expect(rendered.text).toContain(samples[id].url);
       // A placeholder the schema does not supply would survive as literal text.
       expect(rendered.html).not.toContain("{{");
       expect(rendered.text).not.toContain("{{");
@@ -42,36 +34,36 @@ describe("every registered template", () => {
   });
 });
 
-describe("password reset template", () => {
-  it("forwards the Better Auth reset URL without rewriting it", async () => {
-    const { text, html } = await renderer.render("passwordReset", {
-      url: resetUrl,
-      expiresInMinutes: 30,
+describe("password reset code template", () => {
+  it("carries the code rather than anything to click", async () => {
+    const { text, html } = await renderer.render("passwordResetCode", {
+      code,
+      expiresInMinutes: 10,
     });
 
-    expect(text).toContain(resetUrl);
-    expect(html).toContain("/api/auth/reset-password/abc123");
-    expect(html).toContain("callbackURL=%2Freset-password");
-    expect(html).toContain(
-      'href="http://localhost:4000/api/auth/reset-password/abc123',
-    );
+    expect(text).toContain(code);
+    expect(html).toContain(code);
+    // The reset flow is a code now; an anchor here would send the user back out
+    // to the API origin, which is the whole thing this replaced.
+    expect(html).not.toContain("<a ");
+    expect(text).not.toContain("http");
   });
 
   it("quotes the configured expiry in both bodies", async () => {
-    const { text, html } = await renderer.render("passwordReset", {
-      url: resetUrl,
-      expiresInMinutes: 30,
+    const { text, html } = await renderer.render("passwordResetCode", {
+      code,
+      expiresInMinutes: 10,
     });
 
-    expect(text).toContain("expires in 30 minutes");
-    expect(html).toContain("expires in 30 minutes");
+    expect(text).toContain("expires in 10 minutes");
+    expect(html).toContain("expires in 10 minutes");
   });
 
   it("greets a named recipient and escapes the name", async () => {
-    const { text, html } = await renderer.render("passwordReset", {
+    const { text, html } = await renderer.render("passwordResetCode", {
       name: "Ada <ada@example.com>",
-      url: resetUrl,
-      expiresInMinutes: 30,
+      code,
+      expiresInMinutes: 10,
     });
 
     expect(text).toContain("Hi Ada <ada@example.com>,");
@@ -80,9 +72,9 @@ describe("password reset template", () => {
   });
 
   it("uses a neutral greeting when the name is unknown", async () => {
-    const { text, html } = await renderer.render("passwordReset", {
-      url: resetUrl,
-      expiresInMinutes: 30,
+    const { text, html } = await renderer.render("passwordResetCode", {
+      code,
+      expiresInMinutes: 10,
     });
 
     expect(text.startsWith("Hi,")).toBe(true);
@@ -90,15 +82,26 @@ describe("password reset template", () => {
   });
 });
 
-describe("verify email template", () => {
-  it("renders the confirmation link for later wiring", async () => {
-    const rendered = await renderer.render("verifyEmail", {
-      url: "http://localhost:4000/api/auth/verify-email?token=xyz",
+describe("verify email code template", () => {
+  it("renders the code the sign-up flow sends", async () => {
+    const rendered = await renderer.render("verifyEmailCode", {
+      code,
+      expiresInMinutes: 10,
       name: "Ada",
     });
 
-    expect(rendered.subject).toBe("Confirm your Dariise email address");
-    expect(rendered.text).toContain("token=xyz");
-    expect(rendered.html).toContain("token=xyz");
+    expect(rendered.subject).toBe("Your Dariise confirmation code");
+    expect(rendered.text).toContain(code);
+    expect(rendered.html).toContain(code);
+    expect(rendered.text).toContain("10 minutes");
+  });
+
+  it("uses a neutral greeting when the name is unknown", async () => {
+    const { text } = await renderer.render("verifyEmailCode", {
+      code,
+      expiresInMinutes: 10,
+    });
+
+    expect(text.startsWith("Hi,")).toBe(true);
   });
 });

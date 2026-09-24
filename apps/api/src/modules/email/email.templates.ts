@@ -2,60 +2,60 @@ import { z } from "zod";
 
 import type { EmailTemplate } from "./email.types.js";
 
+/**
+ * The variables every one-time-code email shares.
+ *
+ * Both codes carry the same three values, so the rule for them lives here once:
+ * a template that accepted a different shape would fail at send time rather
+ * than at render time, which is much harder to notice.
+ */
+const codeVariables = z
+  .strictObject({
+    name: z.string().trim().min(1).optional(),
+    code: z.string().trim().min(1),
+    expiresInMinutes: z.number().int().positive(),
+  })
+  .transform(({ name, code, expiresInMinutes }) => ({
+    name: name ?? "",
+    greeting: name ? `Hi ${name},` : "Hi,",
+    code,
+    expiresInMinutes: String(expiresInMinutes),
+  }));
+
 export const emailTemplates = {
-  passwordReset: {
-    file: "password-reset.mjml",
-    subject: "Reset your Dariise password",
+  passwordResetCode: {
+    file: "password-reset-code.mjml",
+    subject: "Your Dariise password reset code",
     text: [
       "{{greeting}}",
       "",
-      "We received a request to reset the password for your Dariise account.",
-      "Choose a new password here:",
+      "Enter this code to choose a new password for your Dariise account:",
       "",
-      "{{url}}",
+      "{{code}}",
       "",
-      "This link can be used once and expires in {{expiresInMinutes}} minutes.",
-      "If you did not request a password reset, you can ignore this email — your password will not change.",
+      "The code expires in {{expiresInMinutes}} minutes and can be used once.",
+      "If you did not ask for a password reset, you can ignore this email — your password will not change.",
       "",
       "— Dariise",
     ].join("\n"),
-    schema: z
-      .strictObject({
-        name: z.string().trim().min(1).optional(),
-        url: z.url(),
-        expiresInMinutes: z.number().int().positive(),
-      })
-      .transform(({ name, url, expiresInMinutes }) => ({
-        name: name ?? "",
-        greeting: name ? `Hi ${name},` : "Hi,",
-        url,
-        expiresInMinutes: String(expiresInMinutes),
-      })),
+    schema: codeVariables,
   },
-  verifyEmail: {
-    file: "verify-email.mjml",
-    subject: "Confirm your Dariise email address",
+  verifyEmailCode: {
+    file: "verify-email-code.mjml",
+    subject: "Your Dariise confirmation code",
     text: [
       "{{greeting}}",
       "",
-      "Confirm this address to finish setting up your Dariise account:",
+      "Enter this code to confirm your email address and finish setting up your Dariise account:",
       "",
-      "{{url}}",
+      "{{code}}",
       "",
+      "The code expires in {{expiresInMinutes}} minutes.",
       "If you did not create a Dariise account, you can ignore this email.",
       "",
       "— Dariise",
     ].join("\n"),
-    schema: z
-      .strictObject({
-        name: z.string().trim().min(1).optional(),
-        url: z.url(),
-      })
-      .transform(({ name, url }) => ({
-        name: name ?? "",
-        greeting: name ? `Hi ${name},` : "Hi,",
-        url,
-      })),
+    schema: codeVariables,
   },
 } as const satisfies Record<string, EmailTemplate>;
 

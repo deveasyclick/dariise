@@ -53,6 +53,7 @@ export interface AuthCredentialApi {
   changePassword: Auth["api"]["changePassword"];
 }
 
-// Exported because the email copy quotes the same duration; one value keeps the
-// two from drifting.
-export const RESET_TOKEN_TTL_SECONDS = 30 * 60;
+// How long a confirmation or reset code stays usable. Long enough to survive a
+// greylisting delay, short enough that a code left in an old inbox is not a
+// standing claim on the address.
+export const VERIFICATION_CODE_TTL_SECONDS = 10 * 60;

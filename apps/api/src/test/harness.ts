@@ -144,14 +144,24 @@ export async function loadApp() {
   return app;
 }
 
+/** An account whose address has not been confirmed yet, so it has no session. */
+export interface UnconfirmedUser {
+  userId: string;
+  email: string;
+}
+
 /**
- * Registers a user through Better Auth's own endpoint, so the cookie the tests
- * carry is one the session gate actually issued.
+ * Creates an account through Better Auth's own endpoint.
+ *
+ * `requireEmailVerification` is on, so this deliberately answers without a
+ * session and the password stays unusable until the address is confirmed. Use
+ * `signUp` for a usable session; reach for this when the confirmation itself is
+ * what the test is about.
  */
-export async function signUp(
+export async function registerUser(
   app: TestApp,
   name = "Test User",
-): Promise<TestSession> {
+): Promise<UnconfirmedUser> {
   const email = `test-${randomUUID()}@example.com`;
 
   const response = await app.request("/api/auth/sign-up/email", {
@@ -166,10 +176,76 @@ export async function signUp(
     );
   }
 
-  const cookies = readSetCookie(response);
   const body = (await response.json()) as { user?: { id?: string } };
 
-  return { cookie: cookies, userId: body.user?.id ?? "", email };
+  return { userId: body.user?.id ?? "", email };
+}
+
+/**
+ * Registers a user and confirms the address.
+ *
+ * The code is read back the way the recipient would read the email — see
+ * `verificationCode` — and spent on the real `/email-otp/verify-email`
+ * endpoint, which is what issues the session.
+ */
+export async function signUp(
+  app: TestApp,
+  name = "Test User",
+): Promise<TestSession> {
+  const { userId, email } = await registerUser(app, name);
+
+  const verified = await app.request("/api/auth/email-otp/verify-email", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, otp: await verificationCode(email) }),
+  });
+
+  if (!verified.ok) {
+    throw new Error(
+      `Confirmation failed with ${verified.status}: ${await verified.text()}`,
+    );
+  }
+
+  return { cookie: readSetCookie(verified), userId, email };
+}
+
+/** The kinds of one-time code this deployment issues. */
+export type VerificationCodeType = "email-verification" | "forget-password";
+
+/** How long to wait for a code the API issues off the response path. */
+const CODE_TIMEOUT_MS = 2_000;
+
+/**
+ * The code an email would have carried.
+ *
+ * Read through Better Auth's own server-only endpoint rather than out of the
+ * `verification` table: the codes are encrypted at rest, and the point of that
+ * is that nothing but the application can recover them. Reading them this way
+ * keeps the storage honest and the test on the real verification path.
+ *
+ * A code is issued off the response path, so the row may not exist yet when
+ * this is called; the wait is for the write, not the mail.
+ */
+export async function verificationCode(
+  email: string,
+  type: VerificationCodeType = "email-verification",
+): Promise<string> {
+  const { auth } = await import("../app.js");
+  const deadline = Date.now() + CODE_TIMEOUT_MS;
+
+  for (;;) {
+    const { otp } = await auth.api.getVerificationOTP({
+      query: { email, type },
+    });
+
+    if (otp) return otp;
+
+    if (Date.now() > deadline) {
+      throw new Error(`No ${type} code was issued for ${email}.`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 }
 
 /**

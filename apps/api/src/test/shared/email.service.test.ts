@@ -8,9 +8,9 @@ import type {
   TransactionalEmail,
 } from "../../shared/types/email.js";
 
-const url = "http://localhost:4000/api/auth/reset-password/secret-token";
+const code = "481920";
 
-const variables = { name: "Ada", url, expiresInMinutes: 30 };
+const variables = { name: "Ada", code, expiresInMinutes: 10 };
 
 /** A transport that records what it was asked to send. */
 function recordingTransport(messages: TransactionalEmail[]): EmailTransport {
@@ -35,7 +35,7 @@ describe("EmailService", () => {
   it("hands the rendered message to the transport", async () => {
     const messages: TransactionalEmail[] = [];
     const result = await service(recordingTransport(messages)).send({
-      template: "passwordReset",
+      template: "passwordResetCode",
       to: "ada@example.com",
       toName: "Ada",
       variables,
@@ -45,20 +45,18 @@ describe("EmailService", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]?.to).toBe("ada@example.com");
     expect(messages[0]?.toName).toBe("Ada");
-    expect(messages[0]?.subject).toBe("Reset your Dariise password");
-    expect(messages[0]?.text).toContain(url);
-    expect(messages[0]?.html).toContain(
-      "/api/auth/reset-password/secret-token",
-    );
+    expect(messages[0]?.subject).toBe("Your Dariise password reset code");
+    expect(messages[0]?.text).toContain(code);
+    expect(messages[0]?.html).toContain(code);
   });
 
   it("reports an invalid variable bag as a failure instead of throwing", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const messages: TransactionalEmail[] = [];
     const result = await service(recordingTransport(messages)).send({
-      template: "passwordReset",
+      template: "passwordResetCode",
       to: "ada@example.com",
-      variables: { name: "Ada", url, expiresInMinutes: 0 },
+      variables: { name: "Ada", code, expiresInMinutes: 0 },
     });
 
     expect(result.status).toBe("failed");
@@ -68,7 +66,7 @@ describe("EmailService", () => {
     );
   });
 
-  it("reports a provider failure without throwing or leaking the token", async () => {
+  it("reports a provider failure without throwing or leaking the code", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const failing: EmailTransport = {
       async send() {
@@ -76,12 +74,12 @@ describe("EmailService", () => {
       },
     };
     const result = await service(failing).send({
-      template: "passwordReset",
+      template: "passwordResetCode",
       to: "ada@example.com",
       variables,
     });
 
     expect(result.status).toBe("failed");
-    expect(logged.mock.calls.flat().join("\n")).not.toContain("secret-token");
+    expect(logged.mock.calls.flat().join("\n")).not.toContain(code);
   });
 });

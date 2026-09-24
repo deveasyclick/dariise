@@ -66,7 +66,7 @@ describe("account module", () => {
     await expect(renamed.json()).resolves.toMatchObject({
       name: "Ada Lovelace",
       email: session.email,
-      emailVerified: false,
+      emailVerified: true,
     });
 
     const me = await app.request("/v1/me", {

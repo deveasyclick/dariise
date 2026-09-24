@@ -3,7 +3,7 @@ export { createAuthConfig, type Auth } from "./auth.config.js";
 export { AuthController } from "./auth.controller.js";
 export { AuthService } from "./auth.service.js";
 export { AuthRepository } from "./auth.repository.js";
-export { RESET_TOKEN_TTL_SECONDS } from "./auth.types.js";
+export { VERIFICATION_CODE_TTL_SECONDS } from "./auth.types.js";
 export type {
   AuthCredentialApi,
   AuthHandler,

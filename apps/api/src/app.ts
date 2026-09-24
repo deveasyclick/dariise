@@ -68,7 +68,15 @@ console.info(
   `[email] Brevo transport configured, sending from ${env.emailFrom}`,
 );
 
-const auth = createAuthConfig(emailService);
+/**
+ * The Better Auth instance behind `/api/auth/*`.
+ *
+ * Exported alongside `app` because the plugin endpoints this deployment relies
+ * on include server-only ones — `getVerificationOTP` most of all, which is how
+ * a test reads the code an email would have carried without reaching into the
+ * verification table or weakening the storage to make it readable.
+ */
+export const auth = createAuthConfig(emailService);
 const authRepository = new AuthRepository();
 const projectAccessRepository = new ProjectAccessRepository();
 const projectsRepository = new ProjectsRepository();
