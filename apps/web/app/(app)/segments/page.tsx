@@ -4,7 +4,8 @@ import { PlusIcon } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { SegmentList } from "@/components/app/segments/segment-list";
 import { Button } from "@/components/ui/button";
-import { getSegmentSummaries } from "@/lib/segment-data";
+import * as api from "@/lib/api";
+import { getScope } from "@/lib/scope";
 
 export const metadata: Metadata = {
   title: "Segments",
@@ -14,8 +15,13 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function SegmentsPage() {
-  const segments = getSegmentSummaries(new Date());
+export default async function SegmentsPage(props: PageProps<"/segments">) {
+  const { project } = await getScope();
+  if (!project) return null;
+
+  const { q } = await props.searchParams;
+  const search = typeof q === "string" ? q : undefined;
+  const page = await api.segments.list(project.key, { search });
 
   return (
     <>
@@ -31,7 +37,12 @@ export default function SegmentsPage() {
         </Button>
       </PageHeader>
 
-      <SegmentList segments={segments} />
+      <SegmentList
+        segments={page.data}
+        search={search ?? ""}
+        nextCursor={page.nextCursor}
+        now={new Date().toISOString()}
+      />
     </>
   );
 }

@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { LayersIcon } from "lucide-react";
 import { cn } from "cn";
+import type { SegmentFlag, TargetingCondition } from "@dariise/contracts";
 import { SegmentGlyph } from "@/components/app/segments/segment-glyph";
+import {
+  matchingSampleUsers,
+  operatorLabels,
+  sampleAudience,
+} from "@/components/app/segments/segment-sample";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -11,57 +17,55 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { SegmentFlagRef, SegmentView } from "@/lib/segment-data";
 
 const headerClass =
   "text-muted-foreground h-8 px-3 text-[10px] font-medium tracking-[0.1em] uppercase";
 const cellClass = "px-3 py-2.5 text-[12px]";
 
-/** Environment and status chips shared by "Used by flags" and the Flags tab. */
-export function FlagStatusCells({ flag }: { flag: SegmentFlagRef }) {
+const flagStatusPresentation: Record<
+  SegmentFlag["status"],
+  { label: string; variant: "ok" | "outline" }
+> = {
+  active: { label: "Active", variant: "ok" },
+  archived: { label: "Archived", variant: "outline" },
+};
+
+export function FlagEnvironmentBadge({
+  environmentKey,
+}: {
+  environmentKey: string;
+}) {
   return (
-    <>
-      <span className="bg-muted text-muted-foreground inline-flex rounded-md px-2 py-0.5 text-[10px] capitalize">
-        {flag.environment}
-      </span>
-      <span
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px]",
-          flag.isRollout
-            ? "bg-warn-ink/10 text-warn-ink"
-            : "bg-ok-ink/10 text-ok-ink",
-        )}
-      >
-        <span
-          aria-hidden="true"
-          className={cn(
-            "size-1.5 rounded-full",
-            flag.isRollout ? "bg-warn-ink" : "bg-ok-ink",
-          )}
-        />
-        {flag.status}
-      </span>
-    </>
+    <span className="bg-muted text-muted-foreground inline-flex rounded-md px-2 py-0.5 text-[10px] capitalize">
+      {environmentKey}
+    </span>
   );
 }
 
-/** Definition tab — the segment's rules as a read-only table. */
-export function SegmentRuleTable({ segment }: { segment: SegmentView }) {
+export function FlagStatusBadge({ flag }: { flag: SegmentFlag }) {
+  const presentation = flagStatusPresentation[flag.status];
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Badge variant={presentation.variant}>{presentation.label}</Badge>
+      {flag.isRollout ? <Badge variant="warn">Rollout</Badge> : null}
+    </span>
+  );
+}
+
+/** Definition tab — the segment's conditions as a read-only table. */
+export function SegmentRuleTable({
+  conditions,
+}: {
+  conditions: TargetingCondition[];
+}) {
   return (
     <section className="bg-card rounded-lg border p-4">
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="text-[13px] font-medium">Segment rules</h2>
-        <Link
-          href="/segments/new"
-          className="text-primary text-[11px] font-medium hover:underline"
-        >
-          Edit rules
-        </Link>
-      </div>
+      <h2 className="text-[13px] font-medium">Segment conditions</h2>
 
-      {segment.rules.length === 0 ? (
+      {conditions.length === 0 ? (
         <p className="text-muted-foreground mt-4 rounded-lg border border-dashed p-4 text-[12px]">
-          This segment has no rules.
+          This segment has no conditions, so no user matches it.
         </p>
       ) : (
         <Table className="mt-3">
@@ -73,16 +77,21 @@ export function SegmentRuleTable({ segment }: { segment: SegmentView }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {segment.rules.map((rule) => (
-              <TableRow key={rule.id} className="hover:bg-transparent">
+            {conditions.map((condition) => (
+              <TableRow key={condition.id} className="hover:bg-transparent">
                 <TableCell className={cn(cellClass, "font-mono text-[11px]")}>
-                  {rule.attribute}
+                  {condition.attribute}
+                  <span className="text-muted-foreground block font-sans text-[10px]">
+                    {condition.attributeType}
+                  </span>
                 </TableCell>
                 <TableCell className={cn(cellClass, "text-muted-foreground")}>
-                  {rule.operator}
+                  {operatorLabels[condition.operator]}
                 </TableCell>
                 <TableCell className={cn(cellClass, "font-mono text-[11px]")}>
-                  {rule.values.length > 0 ? rule.values.join(", ") : "any"}
+                  {condition.values.length > 0
+                    ? condition.values.join(", ")
+                    : "any"}
                 </TableCell>
               </TableRow>
             ))}
@@ -94,25 +103,25 @@ export function SegmentRuleTable({ segment }: { segment: SegmentView }) {
 }
 
 /** Definition tab — the flags that reference this segment. */
-export function SegmentUsedByFlags({ segment }: { segment: SegmentView }) {
+export function SegmentUsedByFlags({ flags }: { flags: SegmentFlag[] }) {
   return (
     <section className="bg-card rounded-lg border p-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[13px] font-medium">Used by flags</h2>
         <span className="text-muted-foreground text-[11px]">
-          {segment.flags.length} flag{segment.flags.length === 1 ? "" : "s"}
+          {flags.length} flag{flags.length === 1 ? "" : "s"}
         </span>
       </div>
 
-      {segment.flags.length === 0 ? (
+      {flags.length === 0 ? (
         <p className="text-muted-foreground mt-3 rounded-lg border border-dashed p-4 text-[12px]">
           No flags reference this segment yet.
         </p>
       ) : (
         <ul className="mt-3 divide-y">
-          {segment.flags.map((flag) => (
+          {flags.map((flag) => (
             <li
-              key={`${flag.key}-${flag.environment}`}
+              key={`${flag.key}-${flag.environmentKey}`}
               className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
             >
               <SegmentGlyph segmentKey={flag.key} className="size-6" />
@@ -122,7 +131,8 @@ export function SegmentUsedByFlags({ segment }: { segment: SegmentView }) {
               >
                 {flag.key}
               </Link>
-              <FlagStatusCells flag={flag} />
+              <FlagEnvironmentBadge environmentKey={flag.environmentKey} />
+              <FlagStatusBadge flag={flag} />
             </li>
           ))}
         </ul>
@@ -131,25 +141,38 @@ export function SegmentUsedByFlags({ segment }: { segment: SegmentView }) {
   );
 }
 
-/** Members tab — every sample user that satisfies the rules. */
-export function SegmentMembers({ segment }: { segment: SegmentView }) {
+/**
+ * Members tab.
+ *
+ * The API has no membership endpoint, so there is nothing real to list. The
+ * rows are a local sample estimate and the header says so.
+ */
+export function SegmentMembers({
+  conditions,
+}: {
+  conditions: TargetingCondition[];
+}) {
+  const members = matchingSampleUsers(conditions);
+
   return (
     <section className="bg-card rounded-lg border">
-      <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
         <div>
           <h2 className="text-[13px] font-medium">Members</h2>
-          <p className="text-muted-foreground mt-0.5 text-[11px]">
-            Sample users currently matching this segment.
+          <p className="text-muted-foreground mt-0.5 max-w-2xl text-[11px]">
+            Sample estimate. The API exposes no membership endpoint, so these
+            rows are evaluated locally against a fixed sample audience — not
+            this project&apos;s real users.
           </p>
         </div>
         <span className="text-muted-foreground text-[11px]">
-          {segment.memberCount} member{segment.memberCount === 1 ? "" : "s"}
+          {members.length} of {sampleAudience.length} sample users
         </span>
       </header>
 
-      {segment.members.length === 0 ? (
+      {members.length === 0 ? (
         <p className="text-muted-foreground p-4 text-[12px]">
-          No sample users match this segment.
+          No sample users match these conditions.
         </p>
       ) : (
         <Table>
@@ -165,7 +188,7 @@ export function SegmentMembers({ segment }: { segment: SegmentView }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {segment.members.map((user) => (
+            {members.map((user) => (
               <TableRow key={user.id}>
                 <TableCell className={cellClass}>
                   <span className="block font-mono text-[11px]">{user.id}</span>
@@ -194,20 +217,19 @@ export function SegmentMembers({ segment }: { segment: SegmentView }) {
   );
 }
 
-/** Flags tab — a fuller view of the referencing flags. */
-export function SegmentFlags({ segment }: { segment: SegmentView }) {
+/** Flags tab — every flag and environment that references this segment. */
+export function SegmentFlags({ flags }: { flags: SegmentFlag[] }) {
   return (
     <section className="bg-card rounded-lg border">
-      <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <div>
-          <h2 className="text-[13px] font-medium">Flags using this segment</h2>
-          <p className="text-muted-foreground mt-0.5 text-[11px]">
-            Disabling the segment changes how these flags evaluate.
-          </p>
-        </div>
+      <header className="border-b px-4 py-3">
+        <h2 className="text-[13px] font-medium">Flags using this segment</h2>
+        <p className="text-muted-foreground mt-0.5 text-[11px]">
+          One row per flag and environment whose targeting rules reference this
+          segment key.
+        </p>
       </header>
 
-      {segment.flags.length === 0 ? (
+      {flags.length === 0 ? (
         <p className="text-muted-foreground p-4 text-[12px]">
           No flags reference this segment yet.
         </p>
@@ -221,8 +243,8 @@ export function SegmentFlags({ segment }: { segment: SegmentView }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {segment.flags.map((flag) => (
-              <TableRow key={`${flag.key}-${flag.environment}`}>
+            {flags.map((flag) => (
+              <TableRow key={`${flag.key}-${flag.environmentKey}`}>
                 <TableCell className={cellClass}>
                   <Link
                     href={`/flags/${flag.key}`}
@@ -235,13 +257,11 @@ export function SegmentFlags({ segment }: { segment: SegmentView }) {
                     {flag.key}
                   </Link>
                 </TableCell>
-                <TableCell className={cn(cellClass, "capitalize")}>
-                  {flag.environment}
+                <TableCell className={cellClass}>
+                  <FlagEnvironmentBadge environmentKey={flag.environmentKey} />
                 </TableCell>
                 <TableCell className={cellClass}>
-                  <span className="inline-flex gap-2">
-                    <FlagStatusCells flag={flag} />
-                  </span>
+                  <FlagStatusBadge flag={flag} />
                 </TableCell>
               </TableRow>
             ))}

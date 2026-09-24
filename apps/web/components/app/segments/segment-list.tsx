@@ -1,13 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
+  LoaderCircleIcon,
   MoreHorizontalIcon,
   PencilIcon,
   SearchIcon,
 } from "lucide-react";
 import { cn } from "cn";
+import type { SegmentSummary } from "@dariise/contracts";
 import { SegmentGlyph } from "@/components/app/segments/segment-glyph";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,26 +29,59 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { SegmentSummary } from "@/lib/segment-data";
+import { formatRelativeTime } from "@/lib/format";
+
+const SEARCH_DEBOUNCE_MS = 250;
 
 const headerClass =
   "text-muted-foreground h-8 px-3 text-[10px] font-medium tracking-[0.1em] uppercase";
 const cellClass = "px-3 py-2.5 text-[12px]";
 
-export function SegmentList({ segments }: { segments: SegmentSummary[] }) {
-  const [query, setQuery] = useState("");
+interface SegmentListProps {
+  segments: SegmentSummary[];
+  search: string;
+  nextCursor: string | null;
+  /** Passed in so relative labels stay stable across hydration. */
+  now: string;
+}
 
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return segments;
+export function SegmentList({
+  segments,
+  search,
+  nextCursor,
+  now,
+}: SegmentListProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [query, setQuery] = useState(search);
+  const [pending, startTransition] = useTransition();
+  const nowDate = useMemo(() => new Date(now), [now]);
+  const lastServerSearch = useRef(search);
 
-    return segments.filter((segment) =>
-      [segment.name, segment.description, segment.key, segment.ruleSummary]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle),
-    );
-  }, [segments, query]);
+  // Keeps the input in step with history navigation, which changes `search`
+  // without going through this component.
+  useEffect(() => {
+    if (lastServerSearch.current === search) return;
+    lastServerSearch.current = search;
+    setQuery(search);
+  }, [search]);
+
+  useEffect(() => {
+    const next = query.trim();
+    if (next === search.trim()) return;
+
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (next) params.set("q", next);
+      const tail = params.toString();
+
+      startTransition(() =>
+        router.replace(tail ? `${pathname}?${tail}` : pathname),
+      );
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [query, search, pathname, router, startTransition]);
 
   return (
     <section className="bg-card rounded-lg border">
@@ -59,14 +95,20 @@ export function SegmentList({ segments }: { segments: SegmentSummary[] }) {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label="Search segments"
-            placeholder="Search segments…"
+            aria-label="Search segments by name or key"
+            placeholder="Search segments by name or key…"
             className="h-8 pl-8 text-[13px]"
           />
         </div>
 
-        <p className="text-muted-foreground text-[11px] sm:ml-auto">
-          {visible.length} of {segments.length} segments
+        <p className="text-muted-foreground flex items-center gap-1.5 text-[11px] sm:ml-auto">
+          {pending ? (
+            <LoaderCircleIcon
+              aria-hidden="true"
+              className="size-3.5 animate-spin"
+            />
+          ) : null}
+          {segments.length} segment{segments.length === 1 ? "" : "s"}
         </p>
       </div>
 
@@ -74,25 +116,27 @@ export function SegmentList({ segments }: { segments: SegmentSummary[] }) {
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead className={headerClass}>Segment</TableHead>
-            <TableHead className={cn(headerClass, "text-right")}>Members</TableHead>
-            <TableHead className={cn(headerClass, "text-right")}>Flags</TableHead>
-            <TableHead className={headerClass}>Rule summary</TableHead>
+            <TableHead className={cn(headerClass, "text-right")}>
+              Conditions
+            </TableHead>
             <TableHead className={headerClass}>Updated</TableHead>
             <TableHead className={cn(headerClass, "w-16 text-right")}> </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {visible.length === 0 ? (
+          {segments.length === 0 ? (
             <TableRow className="hover:bg-transparent">
               <TableCell
-                colSpan={6}
+                colSpan={4}
                 className="text-muted-foreground py-10 text-center text-[12px]"
               >
-                No segments match your search.
+                {search
+                  ? `No segments match "${search}".`
+                  : "This project has no segments yet."}
               </TableCell>
             </TableRow>
           ) : (
-            visible.map((segment) => (
+            segments.map((segment) => (
               <TableRow key={segment.key}>
                 <TableCell className={cellClass}>
                   <div className="flex items-start gap-2.5">
@@ -105,30 +149,19 @@ export function SegmentList({ segments }: { segments: SegmentSummary[] }) {
                         {segment.name}
                       </Link>
                       <span className="text-muted-foreground block text-[11px]">
-                        {segment.description}
+                        <span className="font-mono">{segment.key}</span>
+                        {segment.description ? ` · ${segment.description}` : ""}
                       </span>
                     </div>
                   </div>
                 </TableCell>
 
                 <TableCell className={cn(cellClass, "text-right font-medium")}>
-                  {segment.memberCount.toLocaleString("en-GB")}
-                </TableCell>
-
-                <TableCell className={cn(cellClass, "text-right")}>
-                  {segment.flags.length}
-                </TableCell>
-
-                <TableCell
-                  className={cn(cellClass, "text-muted-foreground max-w-72")}
-                >
-                  <span className="block truncate font-mono text-[11px]">
-                    {segment.ruleSummary}
-                  </span>
+                  {segment.conditionCount}
                 </TableCell>
 
                 <TableCell className={cn(cellClass, "text-muted-foreground")}>
-                  {segment.updatedLabel}
+                  {formatRelativeTime(segment.updatedAt, nowDate)}
                 </TableCell>
 
                 <TableCell className={cn(cellClass, "text-right")}>
@@ -166,6 +199,13 @@ export function SegmentList({ segments }: { segments: SegmentSummary[] }) {
           )}
         </TableBody>
       </Table>
+
+      {nextCursor ? (
+        <p className="text-muted-foreground border-t px-3 py-2 text-[11px]">
+          Showing the first {segments.length} segments. Refine the search to
+          narrow the list.
+        </p>
+      ) : null}
     </section>
   );
 }

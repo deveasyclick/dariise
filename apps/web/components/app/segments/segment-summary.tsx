@@ -1,12 +1,22 @@
-import { UserCheckIcon } from "lucide-react";
-import type { SegmentView } from "@/lib/segment-data";
+import type { SegmentFlag, TargetingCondition } from "@dariise/contracts";
+import { formatRelativeTime } from "@/lib/format";
 
-/** Definition tab — the summary grid shown beside the rules. */
-export function SegmentSummaryCard({ segment }: { segment: SegmentView }) {
+/** Definition tab — the summary grid shown beside the conditions. */
+export function SegmentSummaryCard({
+  conditions,
+  flags,
+  updatedAt,
+  now,
+}: {
+  conditions: TargetingCondition[];
+  flags: SegmentFlag[];
+  updatedAt: string;
+  now: Date;
+}) {
   const cells: Array<[string, string | number]> = [
-    ["Members", segment.memberCount.toLocaleString("en-GB")],
-    ["Flags", segment.flags.length],
-    ["Updated", segment.updatedLabel],
+    ["Conditions", conditions.length],
+    ["Flags", flags.length],
+    ["Updated", formatRelativeTime(updatedAt, now)],
     ["Type", "Dynamic"],
   ];
 
@@ -25,15 +35,10 @@ export function SegmentSummaryCard({ segment }: { segment: SegmentView }) {
         ))}
       </dl>
 
-      <div className="mt-3 flex items-center justify-between border-t pt-3">
-        <span className="text-muted-foreground text-[11px]">Owner</span>
-        <span className="inline-flex items-center gap-1.5 text-[11px]">
-          <span className="bg-primary-ink/10 text-primary-ink flex size-5 items-center justify-center rounded-full">
-            <UserCheckIcon aria-hidden="true" className="size-3" />
-          </span>
-          {segment.owner}
-        </span>
-      </div>
+      <p className="text-muted-foreground mt-3 border-t pt-3 text-[10px]">
+        Membership is not shown here: the API exposes no endpoint that reports a
+        segment&apos;s members.
+      </p>
     </section>
   );
 }

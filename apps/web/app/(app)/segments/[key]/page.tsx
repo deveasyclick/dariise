@@ -3,27 +3,32 @@ import { notFound } from "next/navigation";
 import { SegmentArchive } from "@/components/app/segments/segment-archive";
 import { SegmentDetailHeader } from "@/components/app/segments/segment-headers";
 import {
+  loadSegment,
+  loadSegmentFlags,
+} from "@/components/app/segments/segment-loader";
+import {
   SegmentRuleTable,
   SegmentUsedByFlags,
 } from "@/components/app/segments/segment-panels";
 import { SegmentLivePreview } from "@/components/app/segments/segment-preview";
 import { SegmentSummaryCard } from "@/components/app/segments/segment-summary";
 import { SegmentTabs } from "@/components/app/segments/segment-tabs";
-import { getSegment } from "@/lib/segment-data";
+import { getScope } from "@/lib/scope";
 
 export const dynamic = "force-dynamic";
-
-const PREVIEW_MEMBERS = 3;
 
 export async function generateMetadata(
   props: PageProps<"/segments/[key]">,
 ): Promise<Metadata> {
   const { key } = await props.params;
-  const segment = getSegment(key, new Date());
+  const { project } = await getScope();
+  if (!project) return { title: "Segment not found" };
+
+  const segment = await loadSegment(project.key, key);
 
   return {
     title: segment ? `${segment.name} · Segments` : "Segment not found",
-    description: segment?.description,
+    description: segment?.description ?? undefined,
   };
 }
 
@@ -32,8 +37,14 @@ export default async function SegmentDefinitionPage(
   props: PageProps<"/segments/[key]">,
 ) {
   const { key } = await props.params;
-  const segment = getSegment(key, new Date(), { memberLimit: PREVIEW_MEMBERS });
+  const { project } = await getScope();
+  if (!project) return null;
+
+  const segment = await loadSegment(project.key, key);
   if (!segment) notFound();
+
+  const flags = await loadSegmentFlags(project.key, segment.key);
+  const archived = segment.archivedAt !== null;
 
   return (
     <>
@@ -41,19 +52,29 @@ export default async function SegmentDefinitionPage(
         segmentKey={segment.key}
         name={segment.name}
         description={segment.description}
+        archived={archived}
       />
       <SegmentTabs segmentKey={segment.key} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.62fr)]">
         <div className="space-y-4">
-          <SegmentRuleTable segment={segment} />
-          <SegmentUsedByFlags segment={segment} />
+          <SegmentRuleTable conditions={segment.conditions} />
+          <SegmentUsedByFlags flags={flags} />
         </div>
 
         <div className="space-y-4">
-          <SegmentSummaryCard segment={segment} />
-          <SegmentLivePreview members={segment.members} rules={segment.rules} />
-          <SegmentArchive />
+          <SegmentSummaryCard
+            conditions={segment.conditions}
+            flags={flags}
+            updatedAt={segment.updatedAt}
+            now={new Date()}
+          />
+          <SegmentLivePreview conditions={segment.conditions} />
+          <SegmentArchive
+            projectKey={project.key}
+            segmentKey={segment.key}
+            archived={archived}
+          />
         </div>
       </div>
     </>

@@ -69,7 +69,8 @@ export function CreateSegmentHeader({
 interface SegmentDetailHeaderProps {
   segmentKey: string;
   name: string;
-  description: string;
+  description: string | null;
+  archived: boolean;
 }
 
 /** Identity and status strip above the segment detail tabs. */
@@ -77,6 +78,7 @@ export function SegmentDetailHeader({
   segmentKey,
   name,
   description,
+  archived,
 }: SegmentDetailHeaderProps) {
   return (
     <div className="bg-card mb-4 rounded-lg border p-4">
@@ -96,15 +98,30 @@ export function SegmentDetailHeader({
             <h1 className="text-lg font-semibold tracking-tight">{name}</h1>
             <Badge variant="secondary">Dynamic</Badge>
           </div>
-          <p className="text-muted-foreground mt-0.5 text-[13px]">
-            {description}
-          </p>
+          {description ? (
+            <p className="text-muted-foreground mt-0.5 text-[13px]">
+              {description}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <span className="bg-ok-ink/10 text-ok-ink inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px]">
-            <span aria-hidden="true" className="bg-ok-ink size-1.5 rounded-full" />
-            Live
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px]",
+              archived
+                ? "bg-muted text-muted-foreground"
+                : "bg-ok-ink/10 text-ok-ink",
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "size-1.5 rounded-full",
+                archived ? "bg-muted-foreground" : "bg-ok-ink",
+              )}
+            />
+            {archived ? "Archived" : "Active"}
           </span>
           <Button
             variant="outline"

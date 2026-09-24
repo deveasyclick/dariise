@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { CreateSegmentForm } from "@/components/app/segments/create-segment-form";
-import { getSegmentKeys } from "@/lib/segment-data";
+import { getScope } from "@/lib/scope";
 
 export const metadata: Metadata = {
   title: "Create segment",
@@ -9,10 +9,13 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function CreateSegmentPage() {
+export default async function CreateSegmentPage() {
+  const { project } = await getScope();
+  if (!project) return null;
+
   return (
     <div className="mx-auto max-w-5xl">
-      <CreateSegmentForm existingKeys={getSegmentKeys()} />
+      <CreateSegmentForm projectKey={project.key} />
     </div>
   );
 }

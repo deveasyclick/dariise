@@ -9,7 +9,23 @@ import {
   RocketIcon,
   XIcon,
 } from "lucide-react";
+import {
+  createSegmentSchema,
+  toFieldErrors,
+  toWorkspaceSlug,
+  type FieldErrors,
+  type TargetingConditionInput,
+  type TargetingOperator,
+} from "@dariise/contracts";
 import { CreateSegmentHeader } from "@/components/app/segments/segment-headers";
+import {
+  attributeTypeOf,
+  countMatchingSampleUsers,
+  formatRuleSummary,
+  operatorsForAttributeType,
+  sampleAudience,
+  segmentAttributeOptions,
+} from "@/components/app/segments/segment-sample";
 import { SdkPreview } from "@/components/app/flags/sdk-preview";
 import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
@@ -22,34 +38,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  formatRuleSummary,
-  matchingUsers,
-  type SegmentOperator,
-  type SegmentRule,
-} from "@/lib/segment-data";
-import { createSegment as createSegmentRequest } from "@/lib/segment-stub";
-import { isRequired, isValidWorkspaceSlug, toWorkspaceSlug } from "@/lib/validation";
+import { ApiError, segments } from "@/lib/api";
 
-const steps = ["Details", "Rules", "Review"] as const;
-
-const operators: SegmentOperator[] = [
-  "is",
-  "is not",
-  "is one of",
-  "ends with",
-  "starts with",
-  "greater than",
-  "less than",
-];
-
-const attributeOptions = [
-  "user.beta",
-  "user.email",
-  "user.plan",
-  "region",
-  "sessions",
-];
+const steps = ["Details", "Conditions", "Review"] as const;
 
 const tips = [
   "Segments update automatically as attributes change.",
@@ -57,38 +48,86 @@ const tips = [
   "Combine conditions with AND (+) to narrow the audience.",
 ] as const;
 
-interface CreateSegmentErrors {
-  form?: string;
-  name?: string;
-  key?: string;
-  rules?: string;
+type SegmentField = "name" | "key" | "description" | "rules";
+
+interface RuleDraft {
+  id: string;
+  attribute: string;
+  operator: TargetingOperator;
+  /** Raw comma-separated input, split on submit. */
+  values: string;
 }
 
-function newRule(index: number): SegmentRule {
+function validate(input: unknown): FieldErrors<SegmentField> | null {
+  const result = createSegmentSchema.safeParse(input);
+
+  return result.success ? null : toFieldErrors<SegmentField>(result.error);
+}
+
+function toConditions(rules: RuleDraft[]): TargetingConditionInput[] {
+  return rules.map((rule) => ({
+    attribute: rule.attribute,
+    attributeType: attributeTypeOf(rule.attribute),
+    operator: rule.operator,
+    values: rule.values
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  }));
+}
+
+function withAttribute(rule: RuleDraft, attribute: string): RuleDraft {
+  const allowed = operatorsForAttributeType(attributeTypeOf(attribute)).map(
+    (option) => option.value,
+  );
+
   return {
-    id: `r-${index}`,
-    attribute: "user.beta",
-    operator: "is",
-    values: [""],
+    ...rule,
+    attribute,
+    operator: allowed.includes(rule.operator)
+      ? rule.operator
+      : (allowed[0] ?? rule.operator),
   };
 }
 
-export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) {
+export function CreateSegmentForm({ projectKey }: { projectKey: string }) {
+  const ruleIdRef = useRef(1);
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
   const [description, setDescription] = useState("");
-  const [rules, setRules] = useState<SegmentRule[]>([newRule(1)]);
+  const [rules, setRules] = useState<RuleDraft[]>([
+    { id: "rule-1", attribute: "user.beta", operator: "equals", values: "" },
+  ]);
   const [editedKey, setEditedKey] = useState(false);
-  const [errors, setErrors] = useState<CreateSegmentErrors>({});
+  const [errors, setErrors] = useState<FieldErrors<SegmentField>>({});
   const [pending, setPending] = useState(false);
-  const [created, setCreated] = useState(false);
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
-  const reach = useMemo(() => matchingUsers(rules).length, [rules]);
+  const conditions = useMemo(() => toConditions(rules), [rules]);
+  const reach = useMemo(
+    () => countMatchingSampleUsers(conditions),
+    [conditions],
+  );
 
-  function clearError(field: keyof CreateSegmentErrors) {
-    setErrors((previous) => ({ ...previous, form: undefined, [field]: undefined }));
+  function newRule(): RuleDraft {
+    ruleIdRef.current += 1;
+
+    return {
+      id: `rule-${ruleIdRef.current}`,
+      attribute: "user.beta",
+      operator: "equals",
+      values: "",
+    };
+  }
+
+  function clearError(field: SegmentField) {
+    setErrors((previous) => ({
+      ...previous,
+      form: undefined,
+      [field]: undefined,
+    }));
   }
 
   function handleNameChange(value: string) {
@@ -98,7 +137,7 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
     clearError("name");
   }
 
-  function updateRule(id: string, patch: Partial<SegmentRule>) {
+  function updateRule(id: string, patch: Partial<RuleDraft>) {
     setRules((previous) =>
       previous.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)),
     );
@@ -106,49 +145,69 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
   }
 
   function addRule() {
-    setRules((previous) => [...previous, newRule(previous.length + 1)]);
+    setRules((previous) => [...previous, newRule()]);
   }
 
   function removeRule(id: string) {
     setRules((previous) => previous.filter((rule) => rule.id !== id));
   }
 
-  function validate(): CreateSegmentErrors {
-    const next: CreateSegmentErrors = {
-      name: isRequired(name, "Segment name") ?? undefined,
-      key: isValidWorkspaceSlug(key) ?? undefined,
+  function payload() {
+    const trimmedDescription = description.trim();
+
+    return {
+      name: name.trim(),
+      key: key.trim(),
+      description: trimmedDescription ? trimmedDescription : null,
+      rules: toConditions(rules),
     };
+  }
 
-    if (!next.key && existingKeys.includes(key.trim())) {
-      next.key = "A segment with this key already exists.";
-    }
+  function validateForm(): FieldErrors<SegmentField> {
+    const valueMissing = rules.some((rule) => !rule.values.trim());
+    const next = { ...validate(payload()) };
 
-    const incomplete = rules.some(
-      (rule) => rule.values.every((value) => !value.trim()),
-    );
-    if (incomplete) {
-      next.rules = "Every rule needs a value.";
-    }
+    if (valueMissing) next.rules = "Every condition needs a value.";
 
     return next;
   }
 
   function goToStep(next: number) {
-    const nextErrors = validate();
+    const nextErrors = validateForm();
     setErrors(nextErrors);
-    if (next > 0 && (nextErrors.name || nextErrors.key)) return;
+    if (next > 0 && (nextErrors.name || nextErrors.key || nextErrors.description)) {
+      return;
+    }
     if (next > 1 && nextErrors.rules) return;
     setStep(next);
+  }
+
+  function reset() {
+    setStep(0);
+    setName("");
+    setKey("");
+    setDescription("");
+    setRules([newRule()]);
+    setEditedKey(false);
+    setErrors({});
+    setCreatedKey(null);
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
 
-    const nextErrors = validate();
-    if (nextErrors.name || nextErrors.key || nextErrors.rules) {
+    const nextErrors = validateForm();
+    if (
+      nextErrors.name ||
+      nextErrors.key ||
+      nextErrors.description ||
+      nextErrors.rules
+    ) {
       setErrors(nextErrors);
-      setStep(nextErrors.name || nextErrors.key ? 0 : 1);
+      setStep(
+        nextErrors.name || nextErrors.key || nextErrors.description ? 0 : 1,
+      );
       return;
     }
 
@@ -159,25 +218,27 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
     controllerRef.current = controller;
 
     try {
-      await createSegmentRequest(
-        {
-          name: name.trim(),
-          key: key.trim(),
-          description: description.trim(),
-          rules,
-        },
-        controller.signal,
-      );
-      setCreated(true);
+      const created = await segments.create(projectKey, payload(), {
+        signal: controller.signal,
+      });
+      setCreatedKey(created.key);
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
-      setErrors({ form: "Something went wrong. Please try again." });
+
+      if (error instanceof ApiError) {
+        setErrors(
+          error.status === 409 ? { key: error.message } : { form: error.message },
+        );
+        if (error.status === 409) setStep(0);
+      } else {
+        setErrors({ form: "The segment could not be created. Please try again." });
+      }
     } finally {
       setPending(false);
     }
   }
 
-  if (created) {
+  if (createdKey) {
     return (
       <>
         <CreateSegmentHeader steps={[...steps]} currentStep={2} />
@@ -186,29 +247,21 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
             <CheckIcon aria-hidden="true" className="size-4.5" />
           </span>
           <h2 className="mt-3 text-base font-semibold tracking-tight">
-            {name || key} created
+            {name || createdKey} created
           </h2>
           <p className="text-muted-foreground mt-1 max-w-md text-[13px]">
-            The segment exists in this preview only — the API is not wired up
-            yet, so nothing was saved and no flag can target it.
+            The segment is saved. Any flag in this project can now reference it
+            as <span className="font-mono text-[12px]">{createdKey}</span> from
+            its targeting rules.
           </p>
           <div className="mt-5 flex items-center gap-2">
             <Button asChild size="sm">
+              <Link href={`/segments/${createdKey}`}>View segment</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
               <Link href="/segments">Back to segments</Link>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setCreated(false);
-                setStep(0);
-                setName("");
-                setKey("");
-                setDescription("");
-                setRules([newRule(1)]);
-                setEditedKey(false);
-              }}
-            >
+            <Button variant="ghost" size="sm" onClick={reset}>
               Create another
             </Button>
           </div>
@@ -269,8 +322,15 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
                     rows={3}
                     placeholder="Who this segment is for and why it exists."
                     value={description}
-                    onChange={(event) => setDescription(event.target.value)}
+                    aria-invalid={errors.description ? true : undefined}
+                    onChange={(event) => {
+                      setDescription(event.target.value);
+                      clearError("description");
+                    }}
                   />
+                  {errors.description ? (
+                    <FieldError>{errors.description}</FieldError>
+                  ) : null}
                 </div>
               </div>
             </section>
@@ -280,9 +340,9 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
             <section className="bg-card rounded-lg border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-[13px] font-medium">Rules</h2>
+                  <h2 className="text-[13px] font-medium">Conditions</h2>
                   <p className="text-muted-foreground mt-1 text-[11px]">
-                    A user belongs to the segment when every rule matches.
+                    A user belongs to the segment when every condition matches.
                   </p>
                 </div>
                 <span className="bg-primary/10 text-primary rounded-md px-2 py-0.5 text-[10px]">
@@ -303,20 +363,20 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
                     <Select
                       value={rule.attribute}
                       onValueChange={(value) =>
-                        updateRule(rule.id, { attribute: value })
+                        updateRule(rule.id, withAttribute(rule, value))
                       }
                     >
                       <SelectTrigger
                         size="sm"
-                        aria-label={`Attribute for rule ${index + 1}`}
+                        aria-label={`Attribute for condition ${index + 1}`}
                         className="text-[11px]"
                       >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {attributeOptions.map((attribute) => (
-                          <SelectItem key={attribute} value={attribute}>
-                            {attribute}
+                        {segmentAttributeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.value}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -326,34 +386,34 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
                       value={rule.operator}
                       onValueChange={(value) =>
                         updateRule(rule.id, {
-                          operator: value as SegmentOperator,
+                          operator: value as TargetingOperator,
                         })
                       }
                     >
                       <SelectTrigger
                         size="sm"
-                        aria-label={`Operator for rule ${index + 1}`}
+                        aria-label={`Operator for condition ${index + 1}`}
                         className="text-[11px]"
                       >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {operators.map((operator) => (
-                          <SelectItem key={operator} value={operator}>
-                            {operator}
+                        {operatorsForAttributeType(
+                          attributeTypeOf(rule.attribute),
+                        ).map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
 
                     <input
-                      value={rule.values.join(", ")}
+                      value={rule.values}
                       onChange={(event) =>
-                        updateRule(rule.id, {
-                          values: event.target.value.split(","),
-                        })
+                        updateRule(rule.id, { values: event.target.value })
                       }
-                      aria-label={`Value for rule ${index + 1}`}
+                      aria-label={`Value for condition ${index + 1}`}
                       placeholder="true"
                       className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-7 min-w-28 flex-1 rounded-lg border bg-transparent px-2 font-mono text-[11px] outline-none focus-visible:ring-3"
                     />
@@ -361,7 +421,7 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
                     <button
                       type="button"
                       onClick={() => removeRule(rule.id)}
-                      aria-label={`Remove rule ${index + 1}`}
+                      aria-label={`Remove condition ${index + 1}`}
                       className="text-muted-foreground hover:text-danger-ink rounded p-1 transition-colors"
                     >
                       <XIcon aria-hidden="true" className="size-3.5" />
@@ -369,6 +429,10 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
                   </li>
                 ))}
               </ul>
+
+              <p className="text-muted-foreground mt-2 text-[10px]">
+                Separate multiple values with commas.
+              </p>
 
               <button
                 type="button"
@@ -398,7 +462,7 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
                 {[
                   ["Name", name || "—"],
                   ["Key", key || "—"],
-                  ["Rules", formatRuleSummary(rules)],
+                  ["Conditions", formatRuleSummary(conditions)],
                   ["Description", description || "—"],
                 ].map(([label, value]) => (
                   <div
@@ -414,20 +478,7 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
               <div className="mt-4">
                 <SdkPreview
                   title="Segment to be created"
-                  lines={JSON.stringify(
-                    {
-                      key: key.trim() || "segment-key",
-                      name: name.trim(),
-                      type: "dynamic",
-                      rules: rules.map((rule) => ({
-                        attribute: rule.attribute,
-                        operator: rule.operator,
-                        values: rule.values.map((value) => value.trim()),
-                      })),
-                    },
-                    null,
-                    2,
-                  ).split("\n")}
+                  lines={JSON.stringify(payload(), null, 2).split("\n")}
                 />
               </div>
             </section>
@@ -482,16 +533,18 @@ export function CreateSegmentForm({ existingKeys }: { existingKeys: string[] }) 
 
         <div className="space-y-4">
           <section className="bg-card rounded-lg border p-4">
-            <h2 className="text-[13px] font-medium">Estimated reach</h2>
+            <h2 className="text-[13px] font-medium">Estimated sample reach</h2>
             <p className="mt-2 text-2xl font-semibold tracking-tight">
               {reach.toLocaleString("en-GB")}
             </p>
             <p className="text-muted-foreground mt-0.5 text-[11px]">
-              {reach === 1 ? "user matches" : "users match"} these rules
+              {reach === 1 ? "sample user matches" : "sample users match"} these
+              conditions
             </p>
             <p className="text-muted-foreground mt-3 border-t pt-3 text-[10px]">
-              Based on the sample audience. Real reach is computed by the API
-              once it exists.
+              Evaluated in this browser against a fixed sample audience of{" "}
+              {sampleAudience.length} users. The API has no membership endpoint,
+              so this is not real reach.
             </p>
           </section>
 
