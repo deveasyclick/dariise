@@ -1,6 +1,6 @@
 import { UndoIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { AuditEventView } from "@/lib/audit-log-data";
+import type { AuditEventView } from "@/components/app/audit-log/audit-log-types";
 
 /**
  * Detail panel for the selected event.
@@ -23,7 +23,11 @@ export function ChangeDetailsPanel({ event }: { event: AuditEventView | null }) 
   }
 
   const rows = [
-    { label: event.targetFieldLabel, value: event.target, mono: true },
+    {
+      label: event.targetFieldLabel,
+      value: event.target ?? "—",
+      mono: true,
+    },
     { label: "Environment", value: event.environmentName, mono: false },
     { label: "Changed by", value: event.actor, mono: false },
     { label: "Time", value: event.absoluteLabel, mono: true },
@@ -56,21 +60,22 @@ export function ChangeDetailsPanel({ event }: { event: AuditEventView | null }) 
           ))}
         </dl>
 
-        {event.change ? (
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="bg-muted rounded-md px-3 py-2">
-              <p className="text-muted-foreground text-[10px]">Before</p>
-              <p className="mt-1 text-[15px] font-semibold tracking-tight tabular-nums">
-                {event.change.before}
-              </p>
-            </div>
-            <div className="bg-ok-ink/10 rounded-md px-3 py-2">
-              <p className="text-ok-ink/80 text-[10px]">After</p>
-              <p className="text-ok-ink mt-1 text-[15px] font-semibold tracking-tight tabular-nums">
-                {event.change.after}
-              </p>
-            </div>
-          </div>
+        {event.changes.length > 0 ? (
+          <dl className="mt-3 space-y-2">
+            {event.changes.map((change) => (
+              <div
+                key={change.field}
+                className="bg-muted rounded-md px-3 py-2"
+              >
+                <dt className="text-muted-foreground font-mono text-[10px]">
+                  {change.field}
+                </dt>
+                <dd className="mt-0.5 text-[12px] break-words">
+                  {change.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
         ) : (
           <p className="text-muted-foreground mt-3 rounded-lg border border-dashed p-3 text-[11px]">
             No field changes recorded for this event.

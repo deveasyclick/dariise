@@ -9,6 +9,10 @@ import {
 } from "lucide-react";
 import { AuditTimeline } from "@/components/app/audit-log/audit-timeline";
 import { ChangeDetailsPanel } from "@/components/app/audit-log/change-details-panel";
+import {
+  groupEventsByDay,
+  type AuditLogViewProps,
+} from "@/components/app/audit-log/audit-log-types";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -18,10 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatInteger } from "@/lib/format";
-import {
-  groupEventsByDay,
-  type AuditLogView,
-} from "@/lib/audit-log-data";
 
 type RangeFilter = "24h" | "7d" | "30d";
 
@@ -44,7 +44,7 @@ const ALL = "all";
  *
  * The only client boundary on the page: search, the three filters and the
  * selected row are local state. Every label it renders arrives pre-formatted
- * from `getAuditLog`, so filtering never re-formats a date and the server render
+ * from the loader, so filtering never re-formats a date and the server render
  * and hydration stay in step.
  */
 export function AuditLogView({
@@ -52,7 +52,8 @@ export function AuditLogView({
   environments,
   actors,
   totalEvents,
-}: AuditLogView) {
+  hasMore,
+}: AuditLogViewProps) {
   const [query, setQuery] = useState("");
   const [environment, setEnvironment] = useState(ALL);
   const [actor, setActor] = useState(ALL);
@@ -65,14 +66,14 @@ export function AuditLogView({
     const needle = query.trim().toLowerCase();
 
     return events.filter((event) => {
-      if (environment !== ALL && event.environmentKey !== environment) {
+      if (environment !== ALL && event.environmentId !== environment) {
         return false;
       }
       if (actor !== ALL && event.actor !== actor) return false;
       if (event.ageHours > rangeHours[range]) return false;
       if (!needle) return true;
 
-      return [event.actor, event.verb, event.target, event.context]
+      return [event.actor, event.verb, event.target ?? "", event.context]
         .join(" ")
         .toLowerCase()
         .includes(needle);
@@ -90,6 +91,8 @@ export function AuditLogView({
   // A filtered-out selection falls back to the newest event still on screen.
   const selected =
     visible.find((event) => event.id === selectedId) ?? visible[0] ?? null;
+
+  const totalLabel = `${formatInteger(totalEvents)}${hasMore ? "+" : ""}`;
 
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.45fr)]">
@@ -124,7 +127,7 @@ export function AuditLogView({
             <SelectContent>
               <SelectItem value={ALL}>All environments</SelectItem>
               {environments.map((option) => (
-                <SelectItem key={option.key} value={option.key}>
+                <SelectItem key={option.id} value={option.id}>
                   {option.name}
                 </SelectItem>
               ))}
@@ -177,8 +180,8 @@ export function AuditLogView({
 
           <p className="text-muted-foreground text-[11px] sm:ml-auto">
             {filtered
-              ? `${visible.length} of ${formatInteger(totalEvents)} events`
-              : `${formatInteger(totalEvents)} events`}
+              ? `${formatInteger(visible.length)} of ${totalLabel} events`
+              : `${totalLabel} events`}
           </p>
         </div>
 

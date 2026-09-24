@@ -1,6 +1,9 @@
 import { cn } from "cn";
 import { auditActionMeta } from "@/components/app/audit-log/audit-action-meta";
-import type { AuditEventGroup, AuditEventView } from "@/lib/audit-log-data";
+import type {
+  AuditEventGroup,
+  AuditEventView,
+} from "@/components/app/audit-log/audit-log-types";
 
 interface AuditTimelineProps {
   groups: AuditEventGroup[];
@@ -19,6 +22,7 @@ function AuditRow({
 }) {
   const meta = auditActionMeta[event.action];
   const Icon = meta.icon;
+  const [firstChange] = event.changes;
 
   return (
     <button
@@ -43,18 +47,30 @@ function AuditRow({
       <span className="min-w-0 flex-1">
         <span className="block text-[12px]">
           <span className="font-medium">{event.actor}</span>{" "}
-          <span className="text-muted-foreground">{event.verb}</span>{" "}
-          <span className="text-muted-foreground">{event.target}</span>
+          <span className="text-muted-foreground">{event.verb}</span>
+          {event.target ? (
+            <>
+              {" "}
+              <span className="text-muted-foreground">{event.target}</span>
+            </>
+          ) : null}
         </span>
         <span className="text-muted-foreground mt-0.5 block truncate text-[11px]">
           {event.context}
         </span>
       </span>
 
-      {event.change ? (
-        <span className="bg-ok-ink/10 mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] tabular-nums">
-          <span className="text-muted-foreground">{event.change.before}</span>
-          <span className="text-ok-ink">→ {event.change.after}</span>
+      {firstChange ? (
+        <span className="bg-ok-ink/10 mt-0.5 hidden max-w-56 shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] tabular-nums sm:inline-flex">
+          <span className="text-muted-foreground truncate">
+            {firstChange.field}
+          </span>
+          <span className="text-ok-ink truncate">{firstChange.value}</span>
+          {event.changes.length > 1 ? (
+            <span className="text-muted-foreground">
+              +{event.changes.length - 1}
+            </span>
+          ) : null}
         </span>
       ) : null}
 

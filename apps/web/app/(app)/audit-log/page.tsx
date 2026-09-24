@@ -3,7 +3,7 @@ import { DownloadIcon } from "lucide-react";
 import { AuditLogView } from "@/components/app/audit-log/audit-log-view";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
-import { getAuditLog } from "@/lib/audit-log-data";
+import { loadAuditLog } from "./load-audit-log";
 
 export const metadata: Metadata = {
   title: "Audit Log",
@@ -13,9 +13,9 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function AuditLogPage() {
+export default async function AuditLogPage() {
   // One `now` for the whole render, so every relative label agrees.
-  const auditLog = getAuditLog(new Date());
+  const auditLog = await loadAuditLog(new Date());
 
   return (
     <>
