@@ -4,7 +4,6 @@ import { db } from "../../db/client.js";
 import {
   environment,
   flag,
-  flagEnvironmentConfig,
   flagIndividualTarget,
   project,
   segment,
@@ -12,13 +11,12 @@ import {
   targetingCondition,
   targetingRule,
 } from "../../db/schema/index.js";
-import {
-  DISABLED_CONFIG,
-  type EvaluationCondition,
-  type EvaluationConfig,
-  type EvaluationRule,
-  type EvaluationSegment,
-  type EvaluationTarget,
+import type {
+  EvaluationCondition,
+  EvaluationConfig,
+  EvaluationRule,
+  EvaluationSegment,
+  EvaluationTarget,
 } from "./evaluation.types.js";
 
 export interface EvaluationTargetData {
@@ -83,10 +81,15 @@ export class EvaluationRepository {
         flagKey: flag.key,
         flagStatus: flag.status,
         environmentId: environment.id,
+        enabled: flag.enabled,
+        offVariationKey: flag.offVariationKey,
+        defaultVariationKey: flag.defaultVariationKey,
+        rolloutPercentage: flag.rolloutPercentage,
+        bucketBy: flag.bucketBy,
       })
       .from(flag)
       .innerJoin(project, eq(project.id, flag.projectId))
-      .innerJoin(environment, eq(environment.projectId, project.id))
+      .innerJoin(environment, eq(environment.id, flag.environmentId))
       .where(and(...conditions))
       .orderBy(asc(project.key))
       .limit(1);
@@ -95,24 +98,7 @@ export class EvaluationRepository {
 
     if (!row) return null;
 
-    const [configRow] = await db
-      .select({
-        enabled: flagEnvironmentConfig.enabled,
-        offVariationKey: flagEnvironmentConfig.offVariationKey,
-        defaultVariationKey: flagEnvironmentConfig.defaultVariationKey,
-        rolloutPercentage: flagEnvironmentConfig.rolloutPercentage,
-        bucketBy: flagEnvironmentConfig.bucketBy,
-      })
-      .from(flagEnvironmentConfig)
-      .where(
-        and(
-          eq(flagEnvironmentConfig.flagId, row.flagId),
-          eq(flagEnvironmentConfig.environmentId, row.environmentId),
-        ),
-      )
-      .limit(1);
-
-    const rules = await this.listRules(row.flagId, row.environmentId);
+    const rules = await this.listRules(row.flagId);
     const targets = await db
       .select({
         userId: flagIndividualTarget.userId,
@@ -122,7 +108,6 @@ export class EvaluationRepository {
       .where(
         and(
           eq(flagIndividualTarget.flagId, row.flagId),
-          eq(flagIndividualTarget.environmentId, row.environmentId),
         ),
       );
 
@@ -132,25 +117,22 @@ export class EvaluationRepository {
     return {
       flagKey: row.flagKey,
       flagStatus: row.flagStatus,
-      config: configRow
-        ? {
-            enabled: configRow.enabled,
-            offVariation: configRow.offVariationKey,
-            defaultVariation: configRow.defaultVariationKey,
-            rolloutPercentage: configRow.rolloutPercentage,
-            bucketBy: configRow.bucketBy,
-          }
-        : DISABLED_CONFIG,
+      // The configuration lives on the flag now, and a flag only exists in the
+      // environment it was created in, so a resolved flag always has one.
+      config: {
+        enabled: row.enabled,
+        offVariation: row.offVariationKey,
+        defaultVariation: row.defaultVariationKey,
+        rolloutPercentage: row.rolloutPercentage,
+        bucketBy: row.bucketBy,
+      },
       rules,
       targets,
       segments,
     };
   }
 
-  private async listRules(
-    flagId: string,
-    environmentId: string,
-  ): Promise<EvaluationRule[]> {
+  private async listRules(flagId: string): Promise<EvaluationRule[]> {
     const rules = await db
       .select({
         id: targetingRule.id,
@@ -163,7 +145,6 @@ export class EvaluationRepository {
       .where(
         and(
           eq(targetingRule.flagId, flagId),
-          eq(targetingRule.environmentId, environmentId),
         ),
       )
       .orderBy(asc(targetingRule.priority));

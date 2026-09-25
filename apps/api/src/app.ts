@@ -15,6 +15,12 @@ import { AccountController } from "./modules/account/account.controller.js";
 import { AccountRepository } from "./modules/account/account.repository.js";
 import { createAccountRoutes } from "./modules/account/account.routes.js";
 import { AccountService } from "./modules/account/account.service.js";
+import {
+  ChangeRequestsController,
+  ChangeRequestsRepository,
+  ChangeRequestsService,
+  createChangeRequestsRoutes,
+} from "./modules/change-requests/index.js";
 import { AuditLogController } from "./modules/audit-log/audit-log.controller.js";
 import { AuditLogRepository } from "./modules/audit-log/audit-log.repository.js";
 import { createAuditLogRoutes } from "./modules/audit-log/audit-log.routes.js";
@@ -85,19 +91,29 @@ const environmentsRepository = new EnvironmentsRepository();
 const segmentsRepository = new SegmentsRepository();
 const apiKeysRepository = new ApiKeysRepository();
 const auditLogRepository = new AuditLogRepository();
+const changeRequestsRepository = new ChangeRequestsRepository();
 const accountRepository = new AccountRepository();
 const projectMembersRepository = new ProjectMembersRepository();
 const evaluationRepository = new EvaluationRepository();
 const workspaceRepository = new WorkspaceRepository();
 
 const projectAccessService = new ProjectAccessService(projectAccessRepository);
-const environmentsService = new EnvironmentsService(
-  environmentsRepository,
-  projectAccessService,
-);
 const segmentsService = new SegmentsService(
   segmentsRepository,
   projectAccessService,
+);
+// Injected so the flags module never imports the segments module.
+const flagsService = new FlagsService(
+  flagsRepository,
+  projectAccessService,
+  (projectId, keys) => segmentsService.findUnknownKeys(projectId, keys),
+);
+const environmentsService = new EnvironmentsService(
+  environmentsRepository,
+  projectAccessService,
+  // Injected so the environments module never imports the flags module: the
+  // flags module is what knows what a flag is made of.
+  (tx, input) => flagsService.copyEnvironmentFlags(tx, input),
 );
 const apiKeysService = new ApiKeysService(
   apiKeysRepository,
@@ -115,13 +131,32 @@ const projectsService = new ProjectsService(
   projectAccessService,
 );
 const workspaceService = new WorkspaceService(workspaceRepository);
-// Injected so the flags module never imports the segments module.
-const flagsService = new FlagsService(
-  flagsRepository,
-  projectAccessService,
-  (projectId, keys) => segmentsService.findUnknownKeys(projectId, keys),
-);
 
+// The change-requests module authorises the change; the flags module performs
+// it. `app.ts` joins them so neither module imports the other.
+const changeRequestsService = new ChangeRequestsService(
+  changeRequestsRepository,
+  projectAccessService,
+  {
+    validate: (actor, change) =>
+      flagsService.validateProposedChange(
+        actor,
+        change.projectKey,
+        change.flagKey,
+        change.environmentKey,
+        change.payload,
+      ),
+    apply: (tx, actor, change) =>
+      flagsService.publishApprovedChange(
+        tx,
+        actor,
+        change.projectKey,
+        change.flagKey,
+        change.environmentKey,
+        change.payload,
+      ),
+  },
+);
 const authService = new AuthService(
   authRepository,
   (organizationId) => projectsService.hasProject(organizationId),
@@ -145,6 +180,9 @@ const environmentsController = new EnvironmentsController(environmentsService);
 const segmentsController = new SegmentsController(segmentsService);
 const apiKeysController = new ApiKeysController(apiKeysService);
 const auditLogController = new AuditLogController(auditLogService);
+const changeRequestsController = new ChangeRequestsController(
+  changeRequestsService,
+);
 const accountController = new AccountController(accountService);
 const projectMembersController = new ProjectMembersController(
   projectMembersService,
@@ -178,6 +216,11 @@ const environmentRoutes = createEnvironmentsRoutes({
 });
 const segmentRoutes = createSegmentsRoutes({
   controller: segmentsController,
+  sessionMiddleware,
+});
+// A fourth router under `/v1/projects`, for the approval flow.
+const changeRequestRoutes = createChangeRequestsRoutes({
+  controller: changeRequestsController,
   sessionMiddleware,
 });
 const apiKeyRoutes = createApiKeysRoutes({
@@ -250,6 +293,7 @@ app.route("/v1/projects", projectRoutes);
 app.route("/v1/projects", environmentRoutes);
 app.route("/v1/projects", segmentRoutes);
 app.route("/v1/projects", apiKeyRoutes);
+app.route("/v1/projects", changeRequestRoutes);
 app.route("/", auditLogRoutes);
 app.route("/", accountRoutes);
 app.route("/v1/projects", projectMemberRoutes);

@@ -5,8 +5,7 @@ import {
   type CreateEnvironmentInput,
   type EnvironmentDetail,
   type EnvironmentSummary,
-  type FlagCoveragePage,
-  type InitialFlagState,
+  type UpdateEnvironmentInput,
   type UpdateEnvironmentSettingsInput,
 } from "@dariise/contracts";
 
@@ -18,18 +17,18 @@ import type { Page } from "../../shared/types/pagination.js";
 import type { Transaction } from "../../shared/types/db.js";
 import type { ProjectAccessService } from "../project-access/index.js";
 import {
-  toCoverageRows,
   toEnvironmentDetail,
   toEnvironmentSummary,
 } from "./environments.mapper.js";
 import type { EnvironmentsRepository } from "./environments.repository.js";
 import {
   DEFAULT_ENVIRONMENT_SETTINGS,
-  DEFAULT_ROLLOUT_BUCKET,
-  DEFAULT_VARIATIONS,
+  toEnvironmentRef,
+  type CopyEnvironmentFlags,
   type EnvironmentActorContext,
   type EnvironmentConnectionUrls,
-  type VariationRecord,
+  type EnvironmentDetails,
+  type EnvironmentRow,
 } from "./environments.types.js";
 
 /**
@@ -40,6 +39,8 @@ export class EnvironmentsService {
   constructor(
     private readonly repository: EnvironmentsRepository,
     private readonly projectAccess: ProjectAccessService,
+    /** Injected by `app.ts` so environments never imports the flags module. */
+    private readonly copyFlags: CopyEnvironmentFlags,
   ) {}
 
   async list(
@@ -47,6 +48,7 @@ export class EnvironmentsService {
     projectKey: string,
     limit: number,
     cursor: string | undefined,
+    includeArchived: boolean,
   ): Promise<Page<EnvironmentSummary>> {
     const { project } = await this.projectAccess.require({
       ...context,
@@ -58,6 +60,7 @@ export class EnvironmentsService {
       project.id,
       limit,
       decodeCursor(cursor),
+      includeArchived,
     );
     const page = toPage(rows, limit, (row) => row.key);
 
@@ -83,8 +86,13 @@ export class EnvironmentsService {
       throw ApiError.conflict("An environment with that key already exists.");
     }
 
+    // Resolved before anything is written: copying from an environment that
+    // does not exist has to fail the request, not half-create a new one.
+    const source = input.copyFrom
+      ? await this.requireEnvironment(project.id, input.copyFrom)
+      : null;
+
     const existing = await this.repository.countForProject(project.id);
-    const source = await this.resolveSource(project.id, input);
 
     const id = randomUUID();
 
@@ -100,25 +108,37 @@ export class EnvironmentsService {
         settings: DEFAULT_ENVIRONMENT_SETTINGS,
       });
 
-      await this.seedFlagConfiguration(
-        tx,
-        project.id,
-        id,
-        source?.id ?? null,
-        input.initialFlagStatus,
-      );
+      // A new environment starts empty unless the caller named one to copy.
+      // Nothing is duplicated into it silently: the flags of every other
+      // environment simply do not exist here until they are promoted.
+      const copiedFlags = source
+        ? await this.copyFlags(tx, {
+            projectId: project.id,
+            source: toEnvironmentRef(source),
+            target: {
+              id,
+              key: input.key,
+              name: input.name,
+              isProtected: false,
+              archivedAt: null,
+            },
+            author: context.userId,
+          })
+        : 0;
 
       await writeAuditLog(tx, {
         organizationId: context.organizationId,
         projectId: project.id,
         actor: context.userId,
+        actorName: context.userName,
         action: "environment.created",
         target: id,
         changes: {
           key: input.key,
           name: input.name,
-          copyFrom: source?.key ?? null,
           initialFlagStatus: input.initialFlagStatus,
+          copyFrom: source?.key ?? null,
+          copiedFlags,
         },
       });
     });
@@ -155,6 +175,7 @@ export class EnvironmentsService {
     });
 
     const row = await this.requireEnvironment(project.id, environmentKey);
+    this.assertActive(row);
 
     await db.transaction(async (tx) => {
       await this.repository.updateSettings(tx, row.id, input);
@@ -164,6 +185,7 @@ export class EnvironmentsService {
         projectId: project.id,
         environmentId: row.id,
         actor: context.userId,
+        actorName: context.userName,
         action: "environment.updated",
         target: row.id,
         changes: input,
@@ -173,39 +195,153 @@ export class EnvironmentsService {
     return this.loadDetail(project.id, environmentKey, origin);
   }
 
-  async coverage(
+  async update(
     context: EnvironmentActorContext,
     projectKey: string,
-    limit: number,
-    cursor: string | undefined,
-  ): Promise<FlagCoveragePage> {
+    environmentKey: string,
+    input: UpdateEnvironmentInput,
+    origin: string,
+  ): Promise<EnvironmentDetail> {
     const { project } = await this.projectAccess.require({
       ...context,
       projectKey,
-      minimumRole: "viewer",
+      minimumRole: "admin",
     });
 
-    const flags = await this.repository.listFlagPage(
-      project.id,
-      limit,
-      decodeCursor(cursor),
-    );
-    const page = toPage(flags, limit, (row) => row.key);
-    const environments = await this.repository.listAll(project.id);
-    const configs = await this.repository.listCoverageConfigs(
-      project.id,
-      page.data.map((row) => row.id),
-    );
+    const row = await this.requireEnvironment(project.id, environmentKey);
+    this.assertActive(row);
 
-    return {
-      data: toCoverageRows(
-        page.data,
-        environments.map((environment) => environment.key),
-        configs,
-      ),
-      nextCursor: page.nextCursor,
+    const details: EnvironmentDetails = {
+      name: input.name,
+      // An absent description means "leave it"; an empty one means "clear it".
+      description:
+        input.description === undefined
+          ? row.description
+          : input.description || null,
     };
+
+    await db.transaction(async (tx) => {
+      await this.repository.updateDetails(tx, row.id, details);
+
+      await writeAuditLog(tx, {
+        organizationId: context.organizationId,
+        projectId: project.id,
+        environmentId: row.id,
+        actor: context.userId,
+        actorName: context.userName,
+        action: "environment.updated",
+        target: row.id,
+        changes: details,
+      });
+    });
+
+    return this.loadDetail(project.id, environmentKey, origin);
   }
+
+  /**
+   * Archiving is the reversible half of deletion: configuration is preserved
+   * and the environment's own credentials stop working. The active count is
+   * read inside the transaction so two concurrent archives cannot empty a
+   * project of environments.
+   */
+  async archive(
+    context: EnvironmentActorContext,
+    projectKey: string,
+    environmentKey: string,
+    origin: string,
+  ): Promise<EnvironmentDetail> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "admin",
+    });
+
+    const row = await this.requireEnvironment(project.id, environmentKey);
+
+    if (row.archivedAt) {
+      throw ApiError.conflict("That environment is already archived.");
+    }
+
+    await db.transaction(async (tx) => {
+      const active = await this.repository.listActiveInTransaction(
+        tx,
+        project.id,
+      );
+
+      if (active.length <= 1) {
+        throw ApiError.conflict(
+          "A project must have at least one active environment.",
+        );
+      }
+
+      const revokedKeys = await this.repository.revokeKeysForEnvironment(
+        tx,
+        row.id,
+      );
+
+      await this.repository.setArchived(tx, row.id, new Date());
+
+      // The default badge follows the project, so it never stays on an
+      // archived environment while an active one could carry it.
+      const successor = active.find((entry) => entry.id !== row.id);
+
+      if (row.isDefault && successor) {
+        await this.repository.setDefault(tx, row.id, false);
+        await this.repository.setDefault(tx, successor.id, true);
+      }
+
+      await writeAuditLog(tx, {
+        organizationId: context.organizationId,
+        projectId: project.id,
+        environmentId: row.id,
+        actor: context.userId,
+        actorName: context.userName,
+        action: "environment.archived",
+        target: row.id,
+        changes: { key: row.key, revokedKeys },
+      });
+    });
+
+    return this.loadDetail(project.id, environmentKey, origin);
+  }
+
+  /** Restoring is not a rollback: keys revoked by the archive stay revoked. */
+  async unarchive(
+    context: EnvironmentActorContext,
+    projectKey: string,
+    environmentKey: string,
+    origin: string,
+  ): Promise<EnvironmentDetail> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "admin",
+    });
+
+    const row = await this.requireEnvironment(project.id, environmentKey);
+
+    if (!row.archivedAt) {
+      throw ApiError.conflict("That environment is not archived.");
+    }
+
+    await db.transaction(async (tx) => {
+      await this.repository.setArchived(tx, row.id, null);
+
+      await writeAuditLog(tx, {
+        organizationId: context.organizationId,
+        projectId: project.id,
+        environmentId: row.id,
+        actor: context.userId,
+        actorName: context.userName,
+        action: "environment.unarchived",
+        target: row.id,
+        changes: { key: row.key },
+      });
+    });
+
+    return this.loadDetail(project.id, environmentKey, origin);
+  }
+
 
   /**
    * The first environment of a new project, created inside the project's
@@ -230,7 +366,6 @@ export class EnvironmentsService {
       settings: DEFAULT_ENVIRONMENT_SETTINGS,
     });
 
-    await this.seedFlagConfiguration(tx, projectId, id, null, "all-off");
   }
 
   private async loadDetail(
@@ -239,10 +374,7 @@ export class EnvironmentsService {
     origin: string,
   ): Promise<EnvironmentDetail> {
     const row = await this.requireEnvironment(projectId, environmentKey);
-    const prefix = await this.repository.findUsableKeyPrefix(
-      projectId,
-      row.id,
-    );
+    const prefix = await this.repository.findUsableKeyPrefix(projectId, row.id);
 
     const connection: EnvironmentConnectionUrls = {
       baseUrl: origin,
@@ -255,79 +387,7 @@ export class EnvironmentsService {
     return toEnvironmentDetail(row, connection);
   }
 
-  /** `copyFrom` wins; a bare copy-source falls back to the project's default. */
-  private async resolveSource(
-    projectId: string,
-    input: CreateEnvironmentInput,
-  ) {
-    if (input.copyFrom) {
-      const source = await this.repository.findByKey(
-        projectId,
-        input.copyFrom,
-      );
 
-      if (!source) {
-        throw ApiError.notFound("The environment to copy from was not found.");
-      }
-
-      return source;
-    }
-
-    if (input.initialFlagStatus !== "copy-source") return null;
-
-    const [first] = await this.repository.listAll(projectId);
-
-    return first ?? null;
-  }
-
-  private async seedFlagConfiguration(
-    tx: Transaction,
-    projectId: string,
-    environmentId: string,
-    sourceEnvironmentId: string | null,
-    initialFlagStatus: InitialFlagState,
-  ): Promise<void> {
-    const flags = await this.repository.listFlags(projectId);
-    const sourceConfigs = sourceEnvironmentId
-      ? await this.repository.listConfigs(sourceEnvironmentId)
-      : [];
-    const sourceVariations = sourceEnvironmentId
-      ? await this.repository.listVariations(sourceEnvironmentId)
-      : [];
-
-    for (const flag of flags) {
-      const source = sourceConfigs.find(
-        (config) => config.flagId === flag.id,
-      );
-      const copy = initialFlagStatus === "copy-source" && source !== undefined;
-
-      await this.repository.insertConfig(tx, {
-        flagId: flag.id,
-        environmentId,
-        enabled: copy ? source.enabled : initialFlagStatus === "all-on",
-        offVariationKey: copy ? source.offVariationKey : "off",
-        defaultVariationKey: copy ? source.defaultVariationKey : "on",
-        rolloutPercentage: copy ? source.rolloutPercentage : 0,
-        bucketBy: copy ? source.bucketBy : DEFAULT_ROLLOUT_BUCKET,
-      });
-
-      const variations: VariationRecord[] = copy
-        ? sourceVariations
-            .filter((variation) => variation.flagId === flag.id)
-            .map((variation) => ({ ...variation, environmentId }))
-        : DEFAULT_VARIATIONS.map((variation) => ({
-            flagId: flag.id,
-            environmentId,
-            key: variation.key,
-            name: variation.name,
-            value: variation.value,
-            description: null,
-            priority: variation.priority,
-          }));
-
-      await this.repository.insertVariations(tx, variations);
-    }
-  }
 
   private async requireEnvironment(projectId: string, key: string) {
     const row = await this.repository.findByKey(projectId, key);
@@ -337,5 +397,13 @@ export class EnvironmentsService {
     }
 
     return row;
+  }
+
+  private assertActive(row: EnvironmentRow): void {
+    if (row.archivedAt) {
+      throw ApiError.conflict(
+        "That environment is archived. Unarchive it before making changes.",
+      );
+    }
   }
 }

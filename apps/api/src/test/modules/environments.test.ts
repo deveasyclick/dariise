@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { EnvironmentDetail, FlagDetail } from "@dariise/contracts";
+import type {
+  ApiKey,
+  EnvironmentDetail,
+  EnvironmentSummary,
+  FlagDetail,
+} from "@dariise/contracts";
 
 import {
   closeTestDatabase,
@@ -68,6 +73,61 @@ const VARIATIONS = [
   { key: "off", name: "Off", value: false, description: null },
 ];
 
+async function listEnvironments(
+  projectKey: string,
+  session: TestSession,
+  query = "",
+): Promise<EnvironmentSummary[]> {
+  const response = await app.request(
+    `/v1/projects/${projectKey}/environments${query}`,
+    { headers: { cookie: session.cookie } },
+  );
+
+  expect(response.status).toBe(200);
+  const body = (await response.json()) as { data: EnvironmentSummary[] };
+
+  return body.data;
+}
+
+/** A second active environment, so the first one is allowed to be archived. */
+async function addProduction(
+  projectKey: string,
+  session: TestSession,
+): Promise<void> {
+  const response = await app.request(
+    `/v1/projects/${projectKey}/environments`,
+    {
+      method: "POST",
+      headers: headers(session),
+      body: JSON.stringify({ name: "Production", key: "production" }),
+    },
+  );
+
+  expect(response.status).toBe(201);
+}
+
+async function archive(
+  projectKey: string,
+  environmentKey: string,
+  session: TestSession,
+): Promise<Response> {
+  return app.request(
+    `/v1/projects/${projectKey}/environments/${environmentKey}/archive`,
+    { method: "POST", headers: { cookie: session.cookie } },
+  );
+}
+
+async function unarchive(
+  projectKey: string,
+  environmentKey: string,
+  session: TestSession,
+): Promise<Response> {
+  return app.request(
+    `/v1/projects/${projectKey}/environments/${environmentKey}/unarchive`,
+    { method: "POST", headers: { cookie: session.cookie } },
+  );
+}
+
 describe("environments module", () => {
   it("creates the project's first environment during onboarding", async () => {
     const { session, projectKey } = await ownerWithProject();
@@ -91,17 +151,22 @@ describe("environments module", () => {
     });
   });
 
-  it("copies or clears flag configuration according to initialFlagStatus", async () => {
+  it("copies flag configuration from a named source and starts empty otherwise", async () => {
     const { session, projectKey } = await ownerWithProject();
 
     await app.request(`/v1/projects/${projectKey}/flags`, {
       method: "POST",
       headers: headers(session),
-      body: JSON.stringify({ key: "checkout-v2", name: "Checkout v2", type: "boolean" }),
+      body: JSON.stringify({
+        environmentKey: "development",
+        key: "checkout-v2",
+        name: "Checkout v2",
+        type: "boolean",
+      }),
     });
 
     await app.request(
-      `/v1/projects/${projectKey}/flags/checkout-v2/environments/development`,
+      `/v1/projects/${projectKey}/environments/development/flags/checkout-v2/config`,
       {
         method: "PATCH",
         headers: headers(session),
@@ -116,56 +181,76 @@ describe("environments module", () => {
       },
     );
 
-    const copied = await app.request(`/v1/projects/${projectKey}/environments`, {
-      method: "POST",
-      headers: headers(session),
-      body: JSON.stringify({
-        name: "Production",
-        key: "production",
-        copyFrom: "development",
-        initialFlagStatus: "copy-source",
-      }),
-    });
+    const copied = await app.request(
+      `/v1/projects/${projectKey}/environments`,
+      {
+        method: "POST",
+        headers: headers(session),
+        body: JSON.stringify({
+          name: "Production",
+          key: "production",
+          copyFrom: "development",
+          initialFlagStatus: "copy-source",
+        }),
+      },
+    );
     expect(copied.status).toBe(201);
 
-    const cleared = await app.request(`/v1/projects/${projectKey}/environments`, {
-      method: "POST",
-      headers: headers(session),
-      body: JSON.stringify({
-        name: "Staging",
-        key: "staging",
-        copyFrom: "development",
-        initialFlagStatus: "all-off",
-      }),
-    });
-    expect(cleared.status).toBe(201);
-
-    const detail = await app.request(
-      `/v1/projects/${projectKey}/flags/checkout-v2`,
-      { headers: { cookie: session.cookie } },
+    const empty = await app.request(
+      `/v1/projects/${projectKey}/environments`,
+      {
+        method: "POST",
+        headers: headers(session),
+        body: JSON.stringify({ name: "Staging", key: "staging" }),
+      },
     );
-    const flag = (await detail.json()) as FlagDetail;
+    expect(empty.status).toBe(201);
 
-    const byKey = Object.fromEntries(
-      flag.environments.map((entry) => [entry.environmentKey, entry]),
+    const read = (key: string) =>
+      app.request(
+        `/v1/projects/${projectKey}/environments/${key}/flags/checkout-v2`,
+        { headers: { cookie: session.cookie } },
+      );
+
+    // Copying carries the whole state, not merely the flag's existence.
+    const production = (await (await read("production")).json()) as FlagDetail;
+    expect(production).toMatchObject({ enabled: true, rolloutPercentage: 100 });
+    expect(production.variations).toHaveLength(2);
+
+    // Nothing is copied unless a source is named: the new environment is empty.
+    expect((await read("staging")).status).toBe(404);
+  });
+
+  it("refuses copy-source without an environment to copy", async () => {
+    const { session, projectKey } = await ownerWithProject();
+
+    const response = await app.request(
+      `/v1/projects/${projectKey}/environments`,
+      {
+        method: "POST",
+        headers: headers(session),
+        body: JSON.stringify({
+          name: "Staging",
+          key: "staging",
+          initialFlagStatus: "copy-source",
+        }),
+      },
     );
 
-    expect(byKey.development?.enabled).toBe(true);
-    expect(byKey.production?.enabled).toBe(true);
-    expect(byKey.staging?.enabled).toBe(false);
-    // Copying carries the rollout, clearing does not.
-    expect(byKey.production?.rolloutPercentage).toBe(100);
-    expect(byKey.staging?.rolloutPercentage).toBe(0);
+    expect(response.status).toBe(400);
   });
 
   it("refuses a duplicate environment key with 409", async () => {
     const { session, projectKey } = await ownerWithProject();
 
-    const response = await app.request(`/v1/projects/${projectKey}/environments`, {
-      method: "POST",
-      headers: headers(session),
-      body: JSON.stringify({ name: "Development again", key: "development" }),
-    });
+    const response = await app.request(
+      `/v1/projects/${projectKey}/environments`,
+      {
+        method: "POST",
+        headers: headers(session),
+        body: JSON.stringify({ name: "Development again", key: "development" }),
+      },
+    );
 
     expect(response.status).toBe(409);
   });
@@ -180,8 +265,6 @@ describe("environments module", () => {
         headers: headers(session),
         body: JSON.stringify({
           protectedEnvironment: true,
-          requireApprovals: true,
-          singleUseSdkKeys: false,
         }),
       },
     );
@@ -189,11 +272,7 @@ describe("environments module", () => {
     expect(response.status).toBe(200);
     const detail = (await response.json()) as EnvironmentDetail;
 
-    expect(detail.settings).toEqual({
-      protectedEnvironment: true,
-      requireApprovals: true,
-      singleUseSdkKeys: false,
-    });
+    expect(detail.settings).toEqual({ protectedEnvironment: true });
     expect(detail.isProtected).toBe(true);
     expect(detail.connection.evalUrl).toMatch(/\/v1\/evaluate$/);
     // Streaming and keys do not exist yet, so neither is advertised.
@@ -210,58 +289,8 @@ describe("environments module", () => {
     ]);
   });
 
-  it("reports coverage per environment, including a partial rollout", async () => {
-    const { session, projectKey } = await ownerWithProject();
-
-    await app.request(`/v1/projects/${projectKey}/flags`, {
-      method: "POST",
-      headers: headers(session),
-      body: JSON.stringify({ key: "checkout-v2", name: "Checkout v2", type: "boolean" }),
-    });
-
-    await app.request(
-      `/v1/projects/${projectKey}/flags/checkout-v2/environments/development`,
-      {
-        method: "PATCH",
-        headers: headers(session),
-        body: JSON.stringify({
-          enabled: true,
-          offVariation: "off",
-          defaultVariation: "on",
-          rolloutPercentage: 25,
-          bucketBy: "userId",
-          variations: VARIATIONS,
-        }),
-      },
-    );
-
-    await app.request(`/v1/projects/${projectKey}/environments`, {
-      method: "POST",
-      headers: headers(session),
-      body: JSON.stringify({ name: "Production", key: "production" }),
-    });
-
-    const response = await app.request(`/v1/projects/${projectKey}/coverage`, {
-      headers: { cookie: session.cookie },
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      data: [
-        {
-          key: "checkout-v2",
-          states: {
-            development: { kind: "percentage", percentage: 25 },
-            production: { kind: "off" },
-          },
-        },
-      ],
-      nextCursor: null,
-    });
-  });
-
   it("lets a viewer read but not create, and hides other workspaces", async () => {
-    const { organizationId, projectKey, projectId } =
+    const { session, organizationId, projectKey, projectId } =
       await ownerWithProject();
     const { db } = await import("../../db/client.js");
     const { member, projectMember } = await import("../../db/schema/index.js");
@@ -293,6 +322,21 @@ describe("environments module", () => {
     });
     expect(write.status).toBe(403);
 
+    await addProduction(projectKey, session);
+
+    const rename = await app.request(
+      `/v1/projects/${projectKey}/environments/development`,
+      {
+        method: "PATCH",
+        headers: headers(viewer),
+        body: JSON.stringify({ name: "Nope" }),
+      },
+    );
+    expect(rename.status).toBe(403);
+
+    const archiveResponse = await archive(projectKey, "development", viewer);
+    expect(archiveResponse.status).toBe(403);
+
     const outsider = await signUp(app);
     await seedWorkspace(outsider.userId, "owner");
 
@@ -301,5 +345,270 @@ describe("environments module", () => {
       { headers: { cookie: outsider.cookie } },
     );
     expect(foreign.status).toBe(404);
+  });
+
+  it("renames an environment and edits its description, never its key", async () => {
+    const { session, projectKey } = await ownerWithProject();
+
+    const response = await app.request(
+      `/v1/projects/${projectKey}/environments/development`,
+      {
+        method: "PATCH",
+        headers: headers(session),
+        // `key` is not part of the identity update and must be ignored.
+        body: JSON.stringify({
+          name: "Local Development",
+          description: "Used for local development and testing.",
+          key: "dev",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      key: "development",
+      name: "Local Development",
+      description: "Used for local development and testing.",
+    });
+
+    const byOriginalKey = await app.request(
+      `/v1/projects/${projectKey}/environments/development`,
+      { headers: { cookie: session.cookie } },
+    );
+    expect(byOriginalKey.status).toBe(200);
+
+    const byRejectedKey = await app.request(
+      `/v1/projects/${projectKey}/environments/dev`,
+      { headers: { cookie: session.cookie } },
+    );
+    expect(byRejectedKey.status).toBe(404);
+
+    const cleared = await app.request(
+      `/v1/projects/${projectKey}/environments/development`,
+      {
+        method: "PATCH",
+        headers: headers(session),
+        body: JSON.stringify({ name: "Local Development", description: "" }),
+      },
+    );
+    await expect(cleared.json()).resolves.toMatchObject({
+      description: null,
+    });
+
+    const { db } = await import("../../db/client.js");
+    const { auditLog } = await import("../../db/schema/index.js");
+    const audits = await db.select().from(auditLog);
+
+    expect(
+      audits.filter((row) => row.action === "environment.updated"),
+    ).toHaveLength(2);
+  });
+
+  it("archives reversibly: revokes its own keys, keeps configuration, promotes the default", async () => {
+    const { session, projectKey } = await ownerWithProject();
+
+    await app.request(`/v1/projects/${projectKey}/flags`, {
+      method: "POST",
+      headers: headers(session),
+      body: JSON.stringify({
+        environmentKey: "development",
+        key: "checkout-v2",
+        name: "Checkout v2",
+        type: "boolean",
+      }),
+    });
+
+    await app.request(
+      `/v1/projects/${projectKey}/environments/development/flags/checkout-v2/config`,
+      {
+        method: "PATCH",
+        headers: headers(session),
+        body: JSON.stringify({
+          enabled: true,
+          offVariation: "off",
+          defaultVariation: "on",
+          rolloutPercentage: 100,
+          bucketBy: "userId",
+          variations: VARIATIONS,
+        }),
+      },
+    );
+
+    const scoped = await app.request(`/v1/projects/${projectKey}/api-keys`, {
+      method: "POST",
+      headers: headers(session),
+      body: JSON.stringify({
+        name: "Development SDK",
+        environmentKey: "development",
+        scopes: ["flags:read"],
+      }),
+    });
+    expect(scoped.status).toBe(201);
+
+    const projectWide = await app.request(
+      `/v1/projects/${projectKey}/api-keys`,
+      {
+        method: "POST",
+        headers: headers(session),
+        body: JSON.stringify({ name: "Everywhere", scopes: ["flags:read"] }),
+      },
+    );
+    expect(projectWide.status).toBe(201);
+
+    await addProduction(projectKey, session);
+
+    const response = await archive(projectKey, "development", session);
+    expect(response.status).toBe(200);
+
+    const detail = (await response.json()) as EnvironmentDetail;
+    expect(detail.archivedAt).not.toBeNull();
+
+    // Only the key that named this environment is withdrawn.
+    const keys = await app.request(
+      `/v1/projects/${projectKey}/api-keys?includeRevoked=true`,
+      { headers: { cookie: session.cookie } },
+    );
+    const keyList = (await keys.json()) as { data: ApiKey[] };
+    const byName = new Map(keyList.data.map((key) => [key.name, key]));
+
+    expect(byName.get("Development SDK")?.revokedAt).not.toBeNull();
+    expect(byName.get("Everywhere")?.revokedAt).toBeNull();
+
+    // Configuration survives the archive, which is what makes it reversible.
+    const flag = await app.request(
+      `/v1/projects/${projectKey}/environments/development/flags/checkout-v2`,
+      { headers: { cookie: session.cookie } },
+    );
+
+    await expect(flag.json()).resolves.toMatchObject({
+      environmentKey: "development",
+      enabled: true,
+      rolloutPercentage: 100,
+    });
+
+    // The archived environment leaves the list and hands the default over.
+    const active = await listEnvironments(projectKey, session);
+    expect(active.map((environment) => environment.key)).toEqual([
+      "production",
+    ]);
+    expect(active[0]?.isDefault).toBe(true);
+
+    const { db } = await import("../../db/client.js");
+    const { auditLog } = await import("../../db/schema/index.js");
+    const audits = await db.select().from(auditLog);
+    const archivedRow = audits.find(
+      (row) => row.action === "environment.archived",
+    );
+
+    expect(archivedRow?.changes).toMatchObject({
+      key: "development",
+      revokedKeys: 1,
+    });
+  });
+
+  it("keeps the last active environment from being archived", async () => {
+    const { session, projectKey } = await ownerWithProject();
+
+    const response = await archive(projectKey, "development", session);
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        message: "A project must have at least one active environment.",
+      },
+    });
+
+    const active = await listEnvironments(projectKey, session);
+    expect(active).toMatchObject([
+      { key: "development", archivedAt: null, isDefault: true },
+    ]);
+  });
+
+  it("makes an archived environment read-only until it is restored", async () => {
+    const { session, projectKey } = await ownerWithProject();
+    await addProduction(projectKey, session);
+
+    await app.request(`/v1/projects/${projectKey}/flags`, {
+      method: "POST",
+      headers: headers(session),
+      body: JSON.stringify({
+        environmentKey: "development",
+        key: "checkout-v2",
+        name: "Checkout v2",
+        type: "boolean",
+      }),
+    });
+
+    expect((await archive(projectKey, "development", session)).status).toBe(
+      200,
+    );
+
+    // Hidden by default, offered when the caller asks for the archive.
+    expect(
+      (await listEnvironments(projectKey, session)).map((e) => e.key),
+    ).toEqual(["production"]);
+    expect(
+      (
+        await listEnvironments(projectKey, session, "?includeArchived=true")
+      ).map((environment) => environment.key),
+    ).toEqual(["development", "production"]);
+    // "false" is a non-empty string; coercing it would include the archive.
+    expect(
+      (
+        await listEnvironments(projectKey, session, "?includeArchived=false")
+      ).map((environment) => environment.key),
+    ).toEqual(["production"]);
+
+    // Anything but true or false is rejected rather than guessed at.
+    const garbage = await app.request(
+      `/v1/projects/${projectKey}/environments?includeArchived=maybe`,
+      { headers: { cookie: session.cookie } },
+    );
+    expect(garbage.status).toBe(400);
+
+    for (const [path, body] of [
+      ["", { name: "Renamed while archived" }],
+      ["/settings", { protectedEnvironment: true }],
+    ] as const) {
+      const write = await app.request(
+        `/v1/projects/${projectKey}/environments/development${path}`,
+        {
+          method: "PATCH",
+          headers: headers(session),
+          body: JSON.stringify(body),
+        },
+      );
+      expect(write.status).toBe(409);
+    }
+
+    expect((await archive(projectKey, "development", session)).status).toBe(
+      409,
+    );
+
+    const restored = await unarchive(projectKey, "development", session);
+    expect(restored.status).toBe(200);
+    await expect(restored.json()).resolves.toMatchObject({ archivedAt: null });
+
+    expect((await unarchive(projectKey, "development", session)).status).toBe(
+      409,
+    );
+
+    // Restoring reopens editing, and the released default is not claimed back.
+    const renamed = await app.request(
+      `/v1/projects/${projectKey}/environments/development`,
+      {
+        method: "PATCH",
+        headers: headers(session),
+        body: JSON.stringify({ name: "Development" }),
+      },
+    );
+    expect(renamed.status).toBe(200);
+
+    const active = await listEnvironments(projectKey, session);
+    expect(
+      active.map((environment) => [environment.key, environment.isDefault]),
+    ).toEqual([
+      ["development", false],
+      ["production", true],
+    ]);
   });
 });

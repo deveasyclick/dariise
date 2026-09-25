@@ -115,6 +115,7 @@ export class ProjectsService {
         organizationId: context.organizationId,
         projectId: project.id,
         actor: context.userId,
+        actorName: context.userName,
         action: "project.updated",
         target: project.id,
         changes: input,
@@ -134,12 +135,11 @@ export class ProjectsService {
   }
 
   async create(
-    organizationId: string,
-    actor: string,
+    context: ProjectsActorContext,
     input: CreateProjectInput,
   ): Promise<ProjectRow> {
     return db.transaction(async (tx) => {
-      const key = await this.resolveKey(tx, organizationId, input.name);
+      const key = await this.resolveKey(tx, context.organizationId, input.name);
 
       const created = {
         id: randomUUID(),
@@ -148,12 +148,15 @@ export class ProjectsService {
         environmentName: input.environmentName,
       };
 
-      await this.repository.insert(tx, { organizationId, ...created });
+      await this.repository.insert(tx, {
+        organizationId: context.organizationId,
+        ...created,
+      });
 
       await this.repository.insertOwner(tx, {
         id: randomUUID(),
         projectId: created.id,
-        userId: actor,
+        userId: context.userId,
       });
 
       // Same transaction: a project with no environment cannot hold a flag, and
@@ -161,8 +164,9 @@ export class ProjectsService {
       await this.createDefaultEnvironment(tx, created.id, input.environmentName);
 
       await writeAuditLog(tx, {
-        organizationId,
-        actor,
+        organizationId: context.organizationId,
+        actor: context.userId,
+        actorName: context.userName,
         action: "project.created",
         projectId: created.id,
         target: created.id,

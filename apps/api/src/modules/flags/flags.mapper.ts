@@ -1,32 +1,37 @@
-import type {
-  FlagDetail,
-  FlagIndividualTarget,
-  FlagStatus,
-  FlagSummary,
-  FlagType,
-  FlagVariation,
-  FlagVariationValue,
-  FlagVersion,
-  TargetingAttributeType,
-  TargetingCondition,
-  TargetingOperator,
-  TargetingRule,
-  WorkspaceFlagSummary,
+import {
+  flagVariationValueSchema,
+  type FlagDetail,
+  type FlagIndividualTarget,
+  type FlagStatus,
+  type FlagSummary,
+  type FlagType,
+  type FlagVariation,
+  type FlagVariationValue,
+  type FlagVersion,
+  type TargetingAttributeType,
+  type TargetingCondition,
+  type TargetingOperator,
+  type TargetingRule,
+  type WorkspaceFlagSummary,
 } from "@dariise/contracts";
 
 import type {
-  EnvironmentConfigDetail,
-  EnvironmentConfigSummary,
+  EnvironmentRef,
+  FlagListRow,
   FlagRow,
   FlagVersionSummary,
+  IndividualTargetRow,
   RuleWithConditions,
   VariationRow,
 } from "./flags.types.js";
 
 function toVariationValue(value: unknown): FlagVariationValue {
-  if (typeof value === "boolean" || typeof value === "number") return value;
+  const parsed = flagVariationValueSchema.safeParse(value);
 
-  return typeof value === "string" ? value : JSON.stringify(value);
+  // `jsonb` can only hold JSON, so this never fails for a stored row; it is
+  // checked rather than asserted so a value written before the contract widened
+  // still cannot reach the client unvalidated.
+  return parsed.success ? parsed.data : null;
 }
 
 function toConditionValues(value: unknown): string[] {
@@ -72,6 +77,10 @@ export function toTargetingRule(entry: RuleWithConditions): TargetingRule {
             bucketBy: entry.rule.bucketBy ?? "userId",
           },
   };
+}
+
+export function toTargetingRules(entries: RuleWithConditions[]): TargetingRule[] {
+  return entries.map(toTargetingRule);
 }
 
 export function toIndividualTargets(
@@ -121,52 +130,47 @@ function toIdentity(row: FlagRow) {
 }
 
 /**
- * A list row carries the flag's identity plus one summary per environment, so
- * the list screen can show where a flag is on without a request per row.
+ * A list row carries the flag's identity plus where it lives and whether it is
+ * on there, so the list screen needs no request per row.
  */
-export function toFlagSummary(
-  row: FlagRow,
-  configs: EnvironmentConfigSummary[],
-): FlagSummary {
+export function toFlagSummary(row: FlagListRow): FlagSummary {
   return {
     ...toIdentity(row),
-    environments: configs
-      .filter((config) => config.flagId === row.id)
-      .map((config) => ({
-        environmentKey: config.environmentKey,
-        environmentName: config.environmentName,
-        enabled: config.enabled,
-        rolloutPercentage: config.rolloutPercentage,
-      })),
+    environmentKey: row.environmentKey,
+    environmentName: row.environmentName,
+    enabled: row.enabled,
+    rolloutPercentage: row.rolloutPercentage,
   };
 }
 
-/** The workspace-wide list needs the project key: flag keys collide across projects. */
+/** The workspace-wide list spans projects, so each row carries its project key. */
 export function toWorkspaceFlagSummary(
-  row: FlagRow,
+  row: FlagListRow,
   projectKey: string,
-  configs: EnvironmentConfigSummary[],
 ): WorkspaceFlagSummary {
-  return { ...toFlagSummary(row, configs), projectKey };
+  return { ...toFlagSummary(row), projectKey };
 }
 
 export function toFlagDetail(
   row: FlagRow,
-  environments: EnvironmentConfigDetail[],
+  environment: EnvironmentRef,
+  parts: {
+    variations: VariationRow[];
+    rules: RuleWithConditions[];
+    targets: IndividualTargetRow[];
+  },
 ): FlagDetail {
   return {
     ...toIdentity(row),
-    environments: environments.map((entry) => ({
-      environmentKey: entry.environment.key,
-      environmentName: entry.environment.name,
-      enabled: entry.config.enabled,
-      offVariation: entry.config.offVariationKey,
-      defaultVariation: entry.config.defaultVariationKey,
-      rolloutPercentage: entry.config.rolloutPercentage,
-      bucketBy: entry.config.bucketBy,
-      variations: toVariations(entry.variations),
-      rules: entry.rules.map(toTargetingRule),
-      individualTargets: toIndividualTargets(entry.targets),
-    })),
+    environmentKey: environment.key,
+    environmentName: environment.name,
+    enabled: row.enabled,
+    offVariation: row.offVariationKey,
+    defaultVariation: row.defaultVariationKey,
+    rolloutPercentage: row.rolloutPercentage,
+    bucketBy: row.bucketBy,
+    variations: toVariations(parts.variations),
+    rules: toTargetingRules(parts.rules),
+    individualTargets: toIndividualTargets(parts.targets),
   };
 }

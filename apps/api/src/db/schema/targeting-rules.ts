@@ -6,10 +6,9 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 
-import { environment } from "./environments.js";
 import { flag } from "./flags.js";
 
-// Ordered per environment. Conditions are AND-ed; a referenced segment adds a
+// Ordered within the flag's environment. Conditions are AND-ed; a referenced segment adds a
 // membership condition to this rule.
 export const targetingRule = pgTable(
   "targeting_rules",
@@ -18,9 +17,6 @@ export const targetingRule = pgTable(
     flagId: text("flag_id")
       .notNull()
       .references(() => flag.id, { onDelete: "cascade" }),
-    environmentId: text("environment_id")
-      .notNull()
-      .references(() => environment.id, { onDelete: "cascade" }),
     priority: integer("priority").notNull().default(0),
     description: text("description"),
     variationKey: text("variation_key").notNull(),
@@ -35,6 +31,6 @@ export const targetingRule = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index("targeting_rule_flag_env_idx").on(table.flagId, table.environmentId),
+    index("targeting_rule_flag_id_idx").on(table.flagId),
   ],
 );

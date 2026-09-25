@@ -64,6 +64,7 @@ export class AuditLogRepository {
         environmentId: auditLog.environmentId,
         action: auditLog.action,
         actor: auditLog.actor,
+        actorName: auditLog.actorName,
         target: auditLog.target,
         changes: auditLog.changes,
         createdAt: auditLog.createdAt,

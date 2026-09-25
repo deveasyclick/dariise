@@ -21,6 +21,8 @@ export const auditLog = pgTable(
     action: text("action").notNull(),
     /** Free-form actor identifier: a user id or an API key id. */
     actor: text("actor").notNull(),
+    /** The actor's name at the time, so a rename does not rewrite history. */
+    actorName: text("actor_name"),
     target: text("target"),
     changes: jsonb("changes"),
     createdAt: timestamp("created_at", { withTimezone: true })

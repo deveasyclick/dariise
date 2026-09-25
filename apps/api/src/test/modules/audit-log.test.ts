@@ -97,7 +97,12 @@ describe("audit log module", () => {
     await app.request(`/v1/projects/${underTest.projectKey}/flags`, {
       method: "POST",
       headers: headers(underTest.session),
-      body: JSON.stringify({ key: "checkout-v2", name: "Checkout", type: "boolean" }),
+      body: JSON.stringify({
+        environmentKey: "development",
+        key: "checkout-v2",
+        name: "Checkout",
+        type: "boolean",
+      }),
     });
     await tick();
     await app.request(
@@ -148,7 +153,12 @@ describe("audit log module", () => {
     await app.request(`/v1/projects/${underTest.projectKey}/flags`, {
       method: "POST",
       headers: headers(underTest.session),
-      body: JSON.stringify({ key: "checkout-v2", name: "Checkout", type: "boolean" }),
+      body: JSON.stringify({
+        environmentKey: "development",
+        key: "checkout-v2",
+        name: "Checkout",
+        type: "boolean",
+      }),
     });
 
     const environments = await pageOf("/v1/audit-logs", underTest.session).then(
@@ -179,7 +189,8 @@ describe("audit log module", () => {
       `/v1/projects/${underTest.projectKey}/audit-logs?environmentId=${environmentId}`,
       underTest.session,
     );
-    expect(byEnvironment.data).toHaveLength(0);
+    expect(byEnvironment.data).toHaveLength(1);
+    expect(byEnvironment.data[0]?.action).toBe("flag.created");
 
     const bad = await app.request(
       `/v1/projects/${underTest.projectKey}/audit-logs?from=not-a-date`,
@@ -196,7 +207,12 @@ describe("audit log module", () => {
       await app.request(`/v1/projects/${underTest.projectKey}/flags`, {
         method: "POST",
         headers: headers(underTest.session),
-        body: JSON.stringify({ key, name: key, type: "boolean" }),
+        body: JSON.stringify({
+          environmentKey: "development",
+          key,
+          name: key,
+          type: "boolean",
+        }),
       });
     }
 
@@ -256,5 +272,42 @@ describe("audit log module", () => {
 
     const foreignWorkspace = await pageOf("/v1/audit-logs", outsider);
     expect(foreignWorkspace.data).toHaveLength(0);
+  });
+
+  it("snapshots the actor's name, so a later rename does not rewrite the row", async () => {
+    const session = await signUp(app, "Ada Lovelace");
+    await seedWorkspace(session.userId, "owner");
+    const project = await createProject(session);
+
+    await app.request(`/v1/projects/${project.key}/flags`, {
+      method: "POST",
+      headers: headers(session),
+      body: JSON.stringify({
+        environmentKey: "development",
+        key: "checkout-v2",
+        name: "Checkout",
+        type: "boolean",
+      }),
+    });
+
+    const before = await pageOf(
+      `/v1/projects/${project.key}/audit-logs?action=flag.created`,
+      session,
+    );
+    expect(before.data[0]?.actor).toBe(session.userId);
+    expect(before.data[0]?.actorName).toBe("Ada Lovelace");
+
+    const renamed = await app.request("/v1/me", {
+      method: "PATCH",
+      headers: headers(session),
+      body: JSON.stringify({ name: "Ada Byron", email: session.email }),
+    });
+    expect(renamed.status).toBe(200);
+
+    const after = await pageOf(
+      `/v1/projects/${project.key}/audit-logs?action=flag.created`,
+      session,
+    );
+    expect(after.data[0]?.actorName).toBe("Ada Lovelace");
   });
 });

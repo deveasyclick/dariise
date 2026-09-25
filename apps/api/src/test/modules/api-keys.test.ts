@@ -143,6 +143,13 @@ describe("api-keys module", () => {
     await expect(all.json()).resolves.toMatchObject({
       data: [expect.objectContaining({ id: created.id })],
     });
+
+    // "false" is a non-empty string; coercing it would include the row.
+    const explicitFalse = await app.request(
+      `/v1/projects/${underTest.projectKey}/api-keys?includeRevoked=false`,
+      { headers: { cookie: underTest.session.cookie } },
+    );
+    await expect(explicitFalse.json()).resolves.toMatchObject({ data: [] });
   });
 
   it("makes revocation idempotent without a second audit row", async () => {

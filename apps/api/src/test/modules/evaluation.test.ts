@@ -61,7 +61,12 @@ async function createFlag(
   const response = await app.request(`/v1/projects/${projectKey}/flags`, {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({ key, name: key, type: "boolean" }),
+    body: JSON.stringify({
+      environmentKey: "development",
+      key,
+      name: key,
+      type: "boolean",
+    }),
   });
 
   expect(response.status).toBe(201);
@@ -74,7 +79,7 @@ async function publishConfig(
   enabled: boolean,
 ): Promise<void> {
   const response = await app.request(
-    `/v1/projects/${projectKey}/flags/${flagKey}/environments/development`,
+    `/v1/projects/${projectKey}/environments/development/flags/${flagKey}/config`,
     {
       method: "PATCH",
       headers: headers(session),

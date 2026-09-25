@@ -36,16 +36,17 @@ function headers(session: TestSession): Record<string, string> {
   return { "content-type": "application/json", cookie: session.cookie };
 }
 
-async function seedEnvironment(projectId: string, key: string): Promise<void> {
+async function seedEnvironment(
+  projectId: string,
+  key: string,
+): Promise<string> {
   const { db } = await import("../../db/client.js");
   const { environment } = await import("../../db/schema/index.js");
+  const id = randomUUID();
 
-  await db.insert(environment).values({
-    id: randomUUID(),
-    projectId,
-    key,
-    name: key,
-  });
+  await db.insert(environment).values({ id, projectId, key, name: key });
+
+  return id;
 }
 
 interface Fixture {
@@ -53,28 +54,43 @@ interface Fixture {
   organizationId: string;
   projectKey: string;
   projectId: string;
+  environmentId: string;
 }
 
 async function fixture(role = "owner"): Promise<Fixture> {
   const session = await signUp(app);
   const workspace = await seedWorkspace(session.userId, role);
   const project = await seedProject(workspace.organizationId);
-
-  await seedEnvironment(project.projectId, "staging");
+  const environmentId = await seedEnvironment(project.projectId, "staging");
 
   return {
     session,
     organizationId: workspace.organizationId,
     projectKey: project.key,
     projectId: project.projectId,
+    environmentId,
   };
+}
+
+/** A flag is addressed inside the environment it belongs to. */
+function flagPath(
+  fixtureUnderTest: Fixture,
+  flagKey: string,
+  suffix = "",
+): string {
+  return `/v1/projects/${fixtureUnderTest.projectKey}/environments/staging/flags/${flagKey}${suffix}`;
 }
 
 async function createFlag(fixtureUnderTest: Fixture, key: string) {
   return app.request(`/v1/projects/${fixtureUnderTest.projectKey}/flags`, {
     method: "POST",
     headers: headers(fixtureUnderTest.session),
-    body: JSON.stringify({ key, name: key, type: "boolean" }),
+    body: JSON.stringify({
+      environmentKey: "staging",
+      key,
+      name: key,
+      type: "boolean",
+    }),
   });
 }
 
@@ -123,7 +139,7 @@ describe("flags targeting", () => {
     await createFlag(underTest, "checkout-v2");
     await createSegment(underTest, "beta-users");
 
-    const path = `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/staging/rules`;
+    const path = flagPath(underTest, "checkout-v2", "/rules");
 
     const replaced = await app.request(path, {
       method: "PUT",
@@ -159,14 +175,13 @@ describe("flags targeting", () => {
     const rules = (await read.json()) as Array<{ id: string }>;
     expect(rules).toHaveLength(2);
 
-    // The detail screen embeds the same rules per environment.
-    const detail = await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2`,
-      { headers: { cookie: underTest.session.cookie } },
-    );
+    // The detail screen embeds the same rules: the flag is that environment's.
+    const detail = await app.request(flagPath(underTest, "checkout-v2"), {
+      headers: { cookie: underTest.session.cookie },
+    });
     const body = (await detail.json()) as FlagDetail;
 
-    expect(body.environments[0]?.rules).toHaveLength(2);
+    expect(body.rules).toHaveLength(2);
   });
 
   it("refuses a rule that serves a variation the environment does not define", async () => {
@@ -174,7 +189,7 @@ describe("flags targeting", () => {
     await createFlag(underTest, "checkout-v2");
 
     const response = await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/staging/rules`,
+      flagPath(underTest, "checkout-v2", "/rules"),
       {
         method: "PUT",
         headers: headers(underTest.session),
@@ -191,12 +206,14 @@ describe("flags targeting", () => {
     const underTest = await fixture();
     await createFlag(underTest, "checkout-v2");
 
-    const path = `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/staging/targets`;
+    const path = flagPath(underTest, "checkout-v2", "/targets");
 
     const replaced = await app.request(path, {
       method: "PUT",
       headers: headers(underTest.session),
-      body: JSON.stringify({ targets: [{ userId: "user-42", variationKey: "on" }] }),
+      body: JSON.stringify({
+        targets: [{ userId: "user-42", variationKey: "on" }],
+      }),
     });
 
     expect(replaced.status).toBe(200);
@@ -204,13 +221,12 @@ describe("flags targeting", () => {
       { userId: "user-42", variationKey: "on" },
     ]);
 
-    const detail = await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2`,
-      { headers: { cookie: underTest.session.cookie } },
-    );
+    const detail = await app.request(flagPath(underTest, "checkout-v2"), {
+      headers: { cookie: underTest.session.cookie },
+    });
     const body = (await detail.json()) as FlagDetail;
 
-    expect(body.environments[0]?.individualTargets).toEqual([
+    expect(body.individualTargets).toEqual([
       { userId: "user-42", variationKey: "on" },
     ]);
   });
@@ -220,36 +236,30 @@ describe("flags targeting", () => {
     await createFlag(underTest, "checkout-v2");
     await createSegment(underTest, "beta-users");
 
-    await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/staging`,
-      {
-        method: "PATCH",
-        headers: headers(underTest.session),
-        body: JSON.stringify({
-          enabled: true,
-          offVariation: "off",
-          defaultVariation: "on",
-          rolloutPercentage: 10,
-          bucketBy: "userId",
-          variations: [
-            { key: "on", name: "On", value: true, description: null },
-            { key: "off", name: "Off", value: false, description: null },
-          ],
-        }),
-      },
-    );
+    await app.request(flagPath(underTest, "checkout-v2", "/config"), {
+      method: "PATCH",
+      headers: headers(underTest.session),
+      body: JSON.stringify({
+        enabled: true,
+        offVariation: "off",
+        defaultVariation: "on",
+        rolloutPercentage: 10,
+        bucketBy: "userId",
+        variations: [
+          { key: "on", name: "On", value: true, description: null },
+          { key: "off", name: "Off", value: false, description: null },
+        ],
+      }),
+    });
 
-    await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/staging/rules`,
-      {
-        method: "PUT",
-        headers: headers(underTest.session),
-        body: JSON.stringify(RULES),
-      },
-    );
+    await app.request(flagPath(underTest, "checkout-v2", "/rules"), {
+      method: "PUT",
+      headers: headers(underTest.session),
+      body: JSON.stringify(RULES),
+    });
 
     const response = await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/versions`,
+      flagPath(underTest, "checkout-v2", "/versions"),
       { headers: { cookie: underTest.session.cookie } },
     );
 
@@ -277,6 +287,7 @@ describe("flags targeting", () => {
       await db.insert(flag).values({
         id: randomUUID(),
         projectId: underTest.projectId,
+        environmentId: underTest.environmentId,
         key,
         name: key,
         type: "boolean",
@@ -301,7 +312,7 @@ describe("flags targeting", () => {
     ]);
 
     const response = await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/dependencies`,
+      flagPath(underTest, "checkout-v2", "/dependencies"),
       { headers: { cookie: underTest.session.cookie } },
     );
 
@@ -331,7 +342,12 @@ describe("workspace-wide flag list", () => {
       const response = await app.request(`/v1/projects/${project.key}/flags`, {
         method: "POST",
         headers: headers(session),
-        body: JSON.stringify({ key: "shared-key", name: "Shared", type: "boolean" }),
+        body: JSON.stringify({
+          environmentKey: "staging",
+          key: "shared-key",
+          name: "Shared",
+          type: "boolean",
+        }),
       });
       expect(response.status).toBe(201);
     }
@@ -357,13 +373,14 @@ describe("workspace-wide flag list", () => {
     expect(ambiguous.status).toBe(400);
 
     const resolved = await app.request(
-      `/v1/flags/shared-key?projectKey=${second.key}`,
+      `/v1/flags/shared-key?projectKey=${second.key}&environmentKey=staging`,
       { headers: { cookie: session.cookie } },
     );
     expect(resolved.status).toBe(200);
     await expect(resolved.json()).resolves.toMatchObject({
       key: "shared-key",
       projectId: second.projectId,
+      environmentKey: "staging",
     });
   });
 

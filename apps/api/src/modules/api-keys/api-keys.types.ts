@@ -42,6 +42,7 @@ export interface ApiKeyActorContext {
   organizationId: string;
   workspaceRole: string;
   userId: string;
+  userName: string;
 }
 
 export const DEFAULT_API_KEY_KIND: ApiKeyKind = "management";

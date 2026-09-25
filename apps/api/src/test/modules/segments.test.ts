@@ -143,11 +143,16 @@ describe("segments module", () => {
     await app.request(`/v1/projects/${underTest.projectKey}/flags`, {
       method: "POST",
       headers: headers(underTest.session),
-      body: JSON.stringify({ key: "checkout-v2", name: "Checkout", type: "boolean" }),
+      body: JSON.stringify({
+        environmentKey: "staging",
+        key: "checkout-v2",
+        name: "Checkout",
+        type: "boolean",
+      }),
     });
 
     const rules = await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/staging/rules`,
+      `/v1/projects/${underTest.projectKey}/environments/staging/flags/checkout-v2/rules`,
       {
         method: "PUT",
         headers: headers(underTest.session),
@@ -194,6 +199,13 @@ describe("segments module", () => {
       data: [expect.objectContaining({ key: "beta-users" })],
     });
 
+    // "false" is a non-empty string; coercing it would include the row.
+    const explicitFalse = await app.request(
+      `/v1/projects/${underTest.projectKey}/segments?includeArchived=false`,
+      { headers: { cookie: underTest.session.cookie } },
+    );
+    await expect(explicitFalse.json()).resolves.toMatchObject({ data: [] });
+
     // The row survives, so rules that reference it by key stay resolvable.
     const detail = await app.request(
       `/v1/projects/${underTest.projectKey}/segments/beta-users`,
@@ -217,11 +229,16 @@ describe("segments module", () => {
     await app.request(`/v1/projects/${underTest.projectKey}/flags`, {
       method: "POST",
       headers: headers(underTest.session),
-      body: JSON.stringify({ key: "checkout-v2", name: "Checkout", type: "boolean" }),
+      body: JSON.stringify({
+        environmentKey: "staging",
+        key: "checkout-v2",
+        name: "Checkout",
+        type: "boolean",
+      }),
     });
 
     await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/staging/rules`,
+      `/v1/projects/${underTest.projectKey}/environments/staging/flags/checkout-v2/rules`,
       {
         method: "PUT",
         headers: headers(underTest.session),

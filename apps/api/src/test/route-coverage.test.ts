@@ -81,7 +81,12 @@ async function createFlag(
     {
       method: "POST",
       headers: headers(underTest.session),
-      body: JSON.stringify({ key, name: key, type: "boolean" }),
+      body: JSON.stringify({
+        environmentKey: "development",
+        key,
+        name: key,
+        type: "boolean",
+      }),
     },
   );
   expect(response.status).toBe(201);
@@ -112,7 +117,7 @@ describe("route coverage: flag identity", () => {
     await createFlag(underTest, "checkout-v2");
 
     const response = await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2`,
+      `/v1/projects/${underTest.projectKey}/environments/development/flags/checkout-v2`,
       {
         method: "PATCH",
         headers: headers(underTest.session),
@@ -132,10 +137,9 @@ describe("route coverage: flag identity", () => {
       description: "Now with a description",
       tags: ["release", "payments"],
       owner: "platform",
-      // The per-environment state is untouched by an identity update.
-      environments: [
-        expect.objectContaining({ environmentKey: "development", enabled: false }),
-      ],
+      // An identity update leaves the flag where it lives, and its state with it.
+      environmentKey: "development",
+      enabled: false,
     });
 
     const { db } = await import("../db/client.js");
@@ -150,7 +154,7 @@ describe("route coverage: flag identity", () => {
     await createFlag(underTest, "checkout-v2");
 
     const response = await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/nope`,
+      `/v1/projects/${underTest.projectKey}/environments/nope/flags/checkout-v2`,
       { headers: { cookie: underTest.session.cookie } },
     );
 
@@ -186,7 +190,7 @@ describe("route coverage: flag identity", () => {
     });
 
     const response = await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2`,
+      `/v1/projects/${underTest.projectKey}/environments/development/flags/checkout-v2`,
       { method: "DELETE", headers: { cookie: viewer.cookie } },
     );
 
@@ -362,11 +366,88 @@ describe("route coverage: compound project create", () => {
 });
 
 describe("route coverage: environment seeding modes", () => {
-  it("seeds an environment with every flag already on", async () => {
+  it("starts a new environment empty by default, and copies one when asked", async () => {
     const underTest = await fixture();
     await createFlag(underTest, "checkout-v2");
 
-    const created = await app.request(
+    // Turn the flag on in development, so a copy is distinguishable from the
+    // off-by-default state a fresh flag gets.
+    const published = await app.request(
+      `/v1/projects/${underTest.projectKey}/environments/development/flags/checkout-v2/config`,
+      {
+        method: "PATCH",
+        headers: headers(underTest.session),
+        body: JSON.stringify({
+          enabled: true,
+          offVariation: "off",
+          defaultVariation: "on",
+          rolloutPercentage: 40,
+          bucketBy: "userId",
+          variations: [
+            { key: "on", name: "On", value: true, description: null },
+            { key: "off", name: "Off", value: false, description: null },
+          ],
+        }),
+      },
+    );
+    expect(published.status).toBe(200);
+
+    const empty = await app.request(
+      `/v1/projects/${underTest.projectKey}/environments`,
+      {
+        method: "POST",
+        headers: headers(underTest.session),
+        body: JSON.stringify({ name: "QA", key: "qa" }),
+      },
+    );
+    expect(empty.status).toBe(201);
+    const emptyDetail = (await empty.json()) as EnvironmentDetail;
+    expect(emptyDetail.settings.protectedEnvironment).toBe(false);
+
+    // Nothing was duplicated into it: the flag simply is not there.
+    const missing = await app.request(
+      `/v1/projects/${underTest.projectKey}/environments/qa/flags/checkout-v2`,
+      { headers: { cookie: underTest.session.cookie } },
+    );
+    expect(missing.status).toBe(404);
+
+    const copied = await app.request(
+      `/v1/projects/${underTest.projectKey}/environments`,
+      {
+        method: "POST",
+        headers: headers(underTest.session),
+        body: JSON.stringify({
+          name: "Staging",
+          key: "staging",
+          initialFlagStatus: "copy-source",
+          copyFrom: "development",
+        }),
+      },
+    );
+    expect(copied.status).toBe(201);
+
+    const copy = await app.request(
+      `/v1/projects/${underTest.projectKey}/environments/staging/flags/checkout-v2`,
+      { headers: { cookie: underTest.session.cookie } },
+    );
+    expect(copy.status).toBe(200);
+
+    const body = (await copy.json()) as FlagDetail;
+    expect(body).toMatchObject({
+      environmentKey: "staging",
+      enabled: true,
+      rolloutPercentage: 40,
+    });
+    expect(body.variations.map((variation) => variation.key)).toEqual([
+      "on",
+      "off",
+    ]);
+  });
+
+  it("refuses copy-source without an environment to copy", async () => {
+    const underTest = await fixture();
+
+    const response = await app.request(
       `/v1/projects/${underTest.projectKey}/environments`,
       {
         method: "POST",
@@ -374,27 +455,12 @@ describe("route coverage: environment seeding modes", () => {
         body: JSON.stringify({
           name: "QA",
           key: "qa",
-          initialFlagStatus: "all-on",
+          initialFlagStatus: "copy-source",
         }),
       },
     );
-    expect(created.status).toBe(201);
 
-    const detail = (await created.json()) as EnvironmentDetail;
-    expect(detail.settings.protectedEnvironment).toBe(false);
-
-    const flag = await app.request(
-      `/v1/projects/${underTest.projectKey}/flags/checkout-v2`,
-      { headers: { cookie: underTest.session.cookie } },
-    );
-    const body = (await flag.json()) as FlagDetail;
-    const qa = body.environments.find((entry) => entry.environmentKey === "qa");
-
-    expect(qa).toMatchObject({ enabled: true, rolloutPercentage: 0 });
-    expect(qa?.variations.map((variation) => variation.key)).toEqual([
-      "on",
-      "off",
-    ]);
+    expect(response.status).toBe(400);
   });
 });
 

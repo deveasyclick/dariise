@@ -1,6 +1,7 @@
 import {
   createEnvironmentSchema,
-  paginationQuerySchema,
+  environmentListQuerySchema,
+  updateEnvironmentSchema,
   updateEnvironmentSettingsSchema,
 } from "@dariise/contracts";
 import type { Context } from "hono";
@@ -16,7 +17,7 @@ export class EnvironmentsController {
 
   async list(c: Context<SessionEnv>): Promise<Response> {
     const actor = await this.actor(c);
-    const parsed = paginationQuerySchema.safeParse(c.req.query());
+    const parsed = environmentListQuerySchema.safeParse(c.req.query());
 
     if (!parsed.success) {
       throw ApiError.badRequest(this.firstIssue(parsed.error.issues));
@@ -28,6 +29,7 @@ export class EnvironmentsController {
         this.param(c, "projectKey"),
         parsed.data.limit,
         parsed.data.cursor,
+        parsed.data.includeArchived ?? false,
       ),
     );
   }
@@ -65,7 +67,9 @@ export class EnvironmentsController {
 
   async updateSettings(c: Context<SessionEnv>): Promise<Response> {
     const actor = await this.actor(c);
-    const parsed = updateEnvironmentSettingsSchema.safeParse(await this.body(c));
+    const parsed = updateEnvironmentSettingsSchema.safeParse(
+      await this.body(c),
+    );
 
     if (!parsed.success) {
       throw ApiError.badRequest(this.firstIssue(parsed.error.issues));
@@ -82,31 +86,62 @@ export class EnvironmentsController {
     );
   }
 
-  async coverage(c: Context<SessionEnv>): Promise<Response> {
+  async update(c: Context<SessionEnv>): Promise<Response> {
     const actor = await this.actor(c);
-    const parsed = paginationQuerySchema.safeParse(c.req.query());
+    const parsed = updateEnvironmentSchema.safeParse(await this.body(c));
 
     if (!parsed.success) {
       throw ApiError.badRequest(this.firstIssue(parsed.error.issues));
     }
 
     return c.json(
-      await this.service.coverage(
+      await this.service.update(
         actor,
         this.param(c, "projectKey"),
-        parsed.data.limit,
-        parsed.data.cursor,
+        this.param(c, "environmentKey"),
+        parsed.data,
+        this.origin(c),
       ),
     );
   }
 
-  private async actor(c: Context<SessionEnv>): Promise<EnvironmentActorContext> {
+  async archive(c: Context<SessionEnv>): Promise<Response> {
+    const actor = await this.actor(c);
+
+    return c.json(
+      await this.service.archive(
+        actor,
+        this.param(c, "projectKey"),
+        this.param(c, "environmentKey"),
+        this.origin(c),
+      ),
+    );
+  }
+
+  async unarchive(c: Context<SessionEnv>): Promise<Response> {
+    const actor = await this.actor(c);
+
+    return c.json(
+      await this.service.unarchive(
+        actor,
+        this.param(c, "projectKey"),
+        this.param(c, "environmentKey"),
+        this.origin(c),
+      ),
+    );
+  }
+
+
+  private async actor(
+    c: Context<SessionEnv>,
+  ): Promise<EnvironmentActorContext> {
     const context = await requireWorkspace(c);
 
     return {
       organizationId: context.workspace.id,
       workspaceRole: context.workspace.role,
       userId: context.user.id,
+      userName: context.user.name,
     };
   }
 

@@ -5,6 +5,7 @@ export interface AuditLogRow {
   environmentId: string | null;
   action: string;
   actor: string;
+  actorName: string | null;
   target: string | null;
   changes: unknown;
   createdAt: Date;

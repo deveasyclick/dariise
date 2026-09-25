@@ -43,11 +43,7 @@ export class ProjectsController {
       throw ApiError.badRequest(this.firstIssue(parsed.error.issues));
     }
 
-    const created = await this.service.create(
-      context.workspace.id,
-      context.user.id,
-      parsed.data,
-    );
+    const created = await this.service.create(this.actor(context), parsed.data);
 
     return c.json(created, 201);
   }
@@ -76,6 +72,7 @@ export class ProjectsController {
       organizationId: context.workspace.id,
       workspaceRole: context.workspace.role,
       userId: context.user.id,
+      userName: context.user.name,
     };
   }
 

@@ -105,6 +105,7 @@ export class SegmentsController {
       organizationId: context.workspace.id,
       workspaceRole: context.workspace.role,
       userId: context.user.id,
+      userName: context.user.name,
     };
   }
 

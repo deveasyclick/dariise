@@ -17,6 +17,7 @@ export async function writeAuditLog(
     environmentId: entry.environmentId ?? null,
     action: entry.action,
     actor: entry.actor,
+    actorName: entry.actorName ?? null,
     target: entry.target ?? null,
     changes: entry.changes ?? null,
   });

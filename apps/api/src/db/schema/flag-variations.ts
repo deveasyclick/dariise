@@ -7,11 +7,10 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-import { environment } from "./environments.js";
 import { flag } from "./flags.js";
 
-// Variations are per environment: the same flag can offer different values in
-// development and production.
+// Variations belong to the flag, and a flag belongs to one environment, so
+// these are that environment's values.
 export const flagVariation = pgTable(
   "flag_variations",
   {
@@ -19,9 +18,6 @@ export const flagVariation = pgTable(
     flagId: text("flag_id")
       .notNull()
       .references(() => flag.id, { onDelete: "cascade" }),
-    environmentId: text("environment_id")
-      .notNull()
-      .references(() => environment.id, { onDelete: "cascade" }),
     key: text("key").notNull(),
     name: text("name").notNull(),
     value: jsonb("value").notNull(),
@@ -35,10 +31,6 @@ export const flagVariation = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("flag_variation_flag_env_key_idx").on(
-      table.flagId,
-      table.environmentId,
-      table.key,
-    ),
+    uniqueIndex("flag_variation_flag_key_idx").on(table.flagId, table.key),
   ],
 );

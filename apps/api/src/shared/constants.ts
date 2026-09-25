@@ -6,16 +6,15 @@ export const ERROR_CODE = {
   forbidden: "forbidden",
   notFound: "not_found",
   conflict: "conflict",
+  approvalRequired: "approval_required",
   internalError: "internal_error",
 } as const;
 
 export const enabledProviders = {
   github:
-    env.githubClientId !== undefined &&
-    env.githubClientSecret !== undefined,
+    env.githubClientId !== undefined && env.githubClientSecret !== undefined,
   google:
-    env.googleClientId !== undefined &&
-    env.googleClientSecret !== undefined,
+    env.googleClientId !== undefined && env.googleClientSecret !== undefined,
 } as const;
 
 export type OAuthProviderName = keyof typeof enabledProviders;

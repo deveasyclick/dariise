@@ -12,6 +12,7 @@ export interface ProjectMemberActorContext {
   organizationId: string;
   workspaceRole: string;
   userId: string;
+  userName: string;
 }
 
 export interface NewProjectMemberRecord {

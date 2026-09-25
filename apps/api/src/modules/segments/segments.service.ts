@@ -99,6 +99,7 @@ export class SegmentsService {
         organizationId: context.organizationId,
         projectId: project.id,
         actor: context.userId,
+        actorName: context.userName,
         action: "segment.created",
         target: id,
         changes: { key: input.key, name: input.name, rules: input.rules },
@@ -150,6 +151,7 @@ export class SegmentsService {
         organizationId: context.organizationId,
         projectId: project.id,
         actor: context.userId,
+        actorName: context.userName,
         action: "segment.updated",
         target: row.id,
         changes: {
@@ -183,6 +185,7 @@ export class SegmentsService {
         organizationId: context.organizationId,
         projectId: project.id,
         actor: context.userId,
+        actorName: context.userName,
         action: "segment.archived",
         target: row.id,
         changes: { key: row.key },

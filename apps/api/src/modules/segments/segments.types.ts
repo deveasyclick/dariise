@@ -58,5 +58,6 @@ export interface SegmentActorContext {
   organizationId: string;
   workspaceRole: string;
   userId: string;
+  userName: string;
 }
 

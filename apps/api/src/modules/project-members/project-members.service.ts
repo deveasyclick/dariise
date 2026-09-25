@@ -87,6 +87,7 @@ export class ProjectMembersService {
         organizationId: context.organizationId,
         projectId: project.id,
         actor: context.userId,
+        actorName: context.userName,
         action: "project_member.added",
         target: input.userId,
         changes: { role: input.role },
@@ -117,6 +118,7 @@ export class ProjectMembersService {
         organizationId: context.organizationId,
         projectId: project.id,
         actor: context.userId,
+        actorName: context.userName,
         action: "project_member.updated",
         target: userId,
         changes: { role: input.role },
@@ -147,6 +149,7 @@ export class ProjectMembersService {
         organizationId: context.organizationId,
         projectId: project.id,
         actor: context.userId,
+        actorName: context.userName,
         action: "project_member.removed",
         target: userId,
       });

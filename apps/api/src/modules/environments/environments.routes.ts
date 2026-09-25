@@ -22,11 +22,19 @@ export function createEnvironmentsRoutes({
   routes.get("/:projectKey/environments/:environmentKey", (c) =>
     controller.get(c),
   );
+  routes.patch("/:projectKey/environments/:environmentKey", (c) =>
+    controller.update(c),
+  );
   routes.patch("/:projectKey/environments/:environmentKey/settings", (c) =>
     controller.updateSettings(c),
   );
+  routes.post("/:projectKey/environments/:environmentKey/archive", (c) =>
+    controller.archive(c),
+  );
+  routes.post("/:projectKey/environments/:environmentKey/unarchive", (c) =>
+    controller.unarchive(c),
+  );
 
-  routes.get("/:projectKey/coverage", (c) => controller.coverage(c));
 
   return routes;
 }

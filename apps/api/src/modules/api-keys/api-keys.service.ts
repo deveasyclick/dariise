@@ -113,6 +113,7 @@ export class ApiKeysService {
         projectId: project.id,
         environmentId,
         actor: context.userId,
+        actorName: context.userName,
         action: "api_key.created",
         target: id,
         // Never the secret, and never the hash.
@@ -157,6 +158,7 @@ export class ApiKeysService {
         projectId: project.id,
         environmentId: row.environmentId,
         actor: context.userId,
+        actorName: context.userName,
         action: "api_key.revoked",
         target: row.id,
         changes: { prefix: row.prefix },

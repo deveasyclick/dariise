@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type {
   AuditLogEntry,
   EvaluationResult,
-  FlagDetail,
+  FlagSummary,
   ProjectMember,
 } from "@dariise/contracts";
 
@@ -127,13 +127,13 @@ describe("acceptance: two-axis isolation", () => {
     const stranger = await workspaceWithProject("Other Platform");
     const colleague = await person(ours, "member");
 
-    const foreign = await app.request(`/v1/projects/${ours.projectKey}/flags`, {
+    const foreign = await app.request(`/v1/projects/${ours.projectKey}/flags?environmentKey=development`, {
       headers: { cookie: stranger.session.cookie },
     });
     // 404, never 403: a 403 would confirm the project exists.
     expect(foreign.status).toBe(404);
 
-    const nonMember = await app.request(`/v1/projects/${ours.projectKey}/flags`, {
+    const nonMember = await app.request(`/v1/projects/${ours.projectKey}/flags?environmentKey=development`, {
       headers: { cookie: colleague.cookie },
     });
     expect(nonMember.status).toBe(404);
@@ -145,7 +145,7 @@ describe("acceptance: the role matrix", () => {
     const workspace = await workspaceWithProject();
     const viewer = await person(workspace, "member", "viewer");
 
-    const read = await app.request(`/v1/projects/${workspace.projectKey}/flags`, {
+    const read = await app.request(`/v1/projects/${workspace.projectKey}/flags?environmentKey=development`, {
       headers: { cookie: viewer.cookie },
     });
     expect(read.status).toBe(200);
@@ -154,7 +154,12 @@ describe("acceptance: the role matrix", () => {
       app.request(`/v1/projects/${workspace.projectKey}/flags`, {
         method: "POST",
         headers: headers(viewer),
-        body: JSON.stringify({ key: "beta", name: "Beta", type: "boolean" }),
+        body: JSON.stringify({
+          environmentKey: "development",
+          key: "beta",
+          name: "Beta",
+          type: "boolean",
+        }),
       }),
       app.request(`/v1/projects/${workspace.projectKey}/segments`, {
         method: "POST",
@@ -190,7 +195,12 @@ describe("acceptance: the role matrix", () => {
     const flag = await app.request(`/v1/projects/${workspace.projectKey}/flags`, {
       method: "POST",
       headers: headers(engineer),
-      body: JSON.stringify({ key: "beta", name: "Beta", type: "boolean" }),
+      body: JSON.stringify({
+        environmentKey: "development",
+        key: "beta",
+        name: "Beta",
+        type: "boolean",
+      }),
     });
     expect(flag.status).toBe(201);
 
@@ -293,18 +303,23 @@ describe("acceptance: secrets and pagination", () => {
         {
           method: "POST",
           headers: headers(workspace.session),
-          body: JSON.stringify({ key, name: key, type: "boolean" }),
+          body: JSON.stringify({
+            environmentKey: "development",
+            key,
+            name: key,
+            type: "boolean",
+          }),
         },
       );
       expect(created.status).toBe(201);
     }
 
     const first = await app.request(
-      `/v1/projects/${workspace.projectKey}/flags?limit=2`,
+      `/v1/projects/${workspace.projectKey}/flags?environmentKey=development&limit=2`,
       { headers: { cookie: workspace.session.cookie } },
     );
     const firstPage = (await first.json()) as {
-      data: FlagDetail[];
+      data: FlagSummary[];
       nextCursor: string | null;
     };
 
@@ -312,11 +327,11 @@ describe("acceptance: secrets and pagination", () => {
     expect(firstPage.nextCursor).not.toBeNull();
 
     const second = await app.request(
-      `/v1/projects/${workspace.projectKey}/flags?limit=2&cursor=${encodeURIComponent(firstPage.nextCursor ?? "")}`,
+      `/v1/projects/${workspace.projectKey}/flags?environmentKey=development&limit=2&cursor=${encodeURIComponent(firstPage.nextCursor ?? "")}`,
       { headers: { cookie: workspace.session.cookie } },
     );
     const secondPage = (await second.json()) as {
-      data: FlagDetail[];
+      data: FlagSummary[];
       nextCursor: string | null;
     };
 
@@ -337,7 +352,12 @@ describe("acceptance: audit", () => {
     await app.request(`/v1/projects/${workspace.projectKey}/flags`, {
       method: "POST",
       headers: headers(workspace.session),
-      body: JSON.stringify({ key: "beta", name: "Beta", type: "boolean" }),
+      body: JSON.stringify({
+        environmentKey: "development",
+        key: "beta",
+        name: "Beta",
+        type: "boolean",
+      }),
     });
 
     const rejected = await app.request(
@@ -345,7 +365,12 @@ describe("acceptance: audit", () => {
       {
         method: "POST",
         headers: headers(workspace.session),
-        body: JSON.stringify({ key: "beta", name: "Beta again", type: "boolean" }),
+        body: JSON.stringify({
+          environmentKey: "development",
+          key: "beta",
+          name: "Beta again",
+          type: "boolean",
+        }),
       },
     );
     expect(rejected.status).toBe(409);
@@ -363,11 +388,16 @@ describe("acceptance: configuration reaches evaluation", () => {
     await app.request(`/v1/projects/${workspace.projectKey}/flags`, {
       method: "POST",
       headers: headers(workspace.session),
-      body: JSON.stringify({ key: "checkout-v2", name: "Checkout", type: "boolean" }),
+      body: JSON.stringify({
+        environmentKey: "development",
+        key: "checkout-v2",
+        name: "Checkout",
+        type: "boolean",
+      }),
     });
 
     await app.request(
-      `/v1/projects/${workspace.projectKey}/flags/checkout-v2/environments/development`,
+      `/v1/projects/${workspace.projectKey}/environments/development/flags/checkout-v2/config`,
       {
         method: "PATCH",
         headers: headers(workspace.session),
@@ -403,7 +433,7 @@ describe("acceptance: configuration reaches evaluation", () => {
     });
 
     await app.request(
-      `/v1/projects/${workspace.projectKey}/flags/checkout-v2/environments/development/rules`,
+      `/v1/projects/${workspace.projectKey}/environments/development/flags/checkout-v2/rules`,
       {
         method: "PUT",
         headers: headers(workspace.session),
@@ -464,7 +494,7 @@ describe("acceptance: membership", () => {
     const colleague = await person(workspace, "member", "viewer");
 
     const readBefore = await app.request(
-      `/v1/projects/${workspace.projectKey}/flags`,
+      `/v1/projects/${workspace.projectKey}/flags?environmentKey=development`,
       { headers: { cookie: colleague.cookie } },
     );
     expect(readBefore.status).toBe(200);
@@ -484,7 +514,7 @@ describe("acceptance: membership", () => {
 
     // Membership is resolved per request, never from a session claim.
     const readAfter = await app.request(
-      `/v1/projects/${workspace.projectKey}/flags`,
+      `/v1/projects/${workspace.projectKey}/flags?environmentKey=development`,
       { headers: { cookie: colleague.cookie } },
     );
     expect(readAfter.status).toBe(404);

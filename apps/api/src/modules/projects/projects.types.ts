@@ -37,6 +37,7 @@ export interface ProjectsActorContext {
   organizationId: string;
   workspaceRole: string;
   userId: string;
+  userName: string;
 }
 
 export interface EnvironmentRef {

@@ -114,7 +114,7 @@ async function setProjectRole(
 }
 
 function readFlags(session: TestSession, projectKey: string) {
-  return app.request(`/v1/projects/${projectKey}/flags`, {
+  return app.request(`/v1/projects/${projectKey}/flags?environmentKey=development`, {
     headers: { cookie: session.cookie },
   });
 }
@@ -123,7 +123,12 @@ function createFlag(session: TestSession, projectKey: string, key: string) {
   return app.request(`/v1/projects/${projectKey}/flags`, {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({ key, name: key, type: "boolean" }),
+    body: JSON.stringify({
+      environmentKey: "development",
+      key,
+      name: key,
+      type: "boolean",
+    }),
   });
 }
 

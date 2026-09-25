@@ -17,7 +17,6 @@ import { db } from "../../db/client.js";
 import {
   environment,
   flag,
-  flagEnvironmentConfig,
   segment,
   segmentCondition,
   targetingRule,
@@ -188,19 +187,12 @@ export class SegmentsRepository {
         key: flag.key,
         environmentKey: environment.key,
         status: flag.status,
-        rolloutPercentage: flagEnvironmentConfig.rolloutPercentage,
+        rolloutPercentage: flag.rolloutPercentage,
         ruleRolloutPercentage: targetingRule.rolloutPercentage,
       })
       .from(targetingRule)
       .innerJoin(flag, eq(flag.id, targetingRule.flagId))
-      .innerJoin(environment, eq(environment.id, targetingRule.environmentId))
-      .leftJoin(
-        flagEnvironmentConfig,
-        and(
-          eq(flagEnvironmentConfig.flagId, flag.id),
-          eq(flagEnvironmentConfig.environmentId, environment.id),
-        ),
-      )
+      .innerJoin(environment, eq(environment.id, flag.environmentId))
       .where(
         and(
           eq(flag.projectId, projectId),

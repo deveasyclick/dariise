@@ -2,6 +2,7 @@ import {
   createFlagSchema,
   flagListQuerySchema,
   paginationQuerySchema,
+  promoteFlagSchema,
   replaceIndividualTargetsSchema,
   replaceTargetingRulesSchema,
   updateFlagConfigSchema,
@@ -49,6 +50,10 @@ export class FlagsController {
     return c.json(created, 201);
   }
 
+  /**
+   * The canonical read: a flag is addressed inside the environment it lives in,
+   * which is what its key is unique within.
+   */
   async get(c: Context<SessionEnv>): Promise<Response> {
     const actor = await this.actor(c);
 
@@ -56,6 +61,7 @@ export class FlagsController {
       await this.service.get(
         actor,
         this.param(c, "projectKey"),
+        this.param(c, "environmentKey"),
         this.param(c, "flagKey"),
       ),
     );
@@ -73,6 +79,7 @@ export class FlagsController {
       await this.service.update(
         actor,
         this.param(c, "projectKey"),
+        this.param(c, "environmentKey"),
         this.param(c, "flagKey"),
         parsed.data,
       ),
@@ -86,20 +93,8 @@ export class FlagsController {
       await this.service.archive(
         actor,
         this.param(c, "projectKey"),
-        this.param(c, "flagKey"),
-      ),
-    );
-  }
-
-  async getEnvironmentConfig(c: Context<SessionEnv>): Promise<Response> {
-    const actor = await this.actor(c);
-
-    return c.json(
-      await this.service.getEnvironmentConfig(
-        actor,
-        this.param(c, "projectKey"),
-        this.param(c, "flagKey"),
         this.param(c, "environmentKey"),
+        this.param(c, "flagKey"),
       ),
     );
   }
@@ -116,10 +111,30 @@ export class FlagsController {
       await this.service.updateEnvironmentConfig(
         actor,
         this.param(c, "projectKey"),
-        this.param(c, "flagKey"),
         this.param(c, "environmentKey"),
+        this.param(c, "flagKey"),
         parsed.data,
       ),
+    );
+  }
+
+  async promote(c: Context<SessionEnv>): Promise<Response> {
+    const actor = await this.actor(c);
+    const parsed = promoteFlagSchema.safeParse(await this.body(c));
+
+    if (!parsed.success) {
+      throw ApiError.badRequest(this.firstIssue(parsed.error.issues));
+    }
+
+    return c.json(
+      await this.service.promote(
+        actor,
+        this.param(c, "projectKey"),
+        this.param(c, "environmentKey"),
+        this.param(c, "flagKey"),
+        parsed.data,
+      ),
+      201,
     );
   }
 
@@ -134,17 +149,27 @@ export class FlagsController {
     return c.json(await this.service.listWorkspace(actor, parsed.data));
   }
 
-  /** Flag keys are unique per project, so this route requires the project key. */
+  /** Flag keys are unique per environment, so this route needs project and environment. */
   async resolve(c: Context<SessionEnv>): Promise<Response> {
     const actor = await this.actor(c);
     const projectKey = c.req.query("projectKey");
+    const environmentKey = c.req.query("environmentKey");
 
     if (!projectKey) {
       throw ApiError.badRequest("A projectKey query parameter is required.");
     }
 
+    if (!environmentKey) {
+      throw ApiError.badRequest("An environmentKey query parameter is required.");
+    }
+
     return c.json(
-      await this.service.resolve(actor, this.param(c, "flagKey"), projectKey),
+      await this.service.resolve(
+        actor,
+        this.param(c, "flagKey"),
+        projectKey,
+        environmentKey,
+      ),
     );
   }
 
@@ -155,8 +180,8 @@ export class FlagsController {
       await this.service.getRules(
         actor,
         this.param(c, "projectKey"),
-        this.param(c, "flagKey"),
         this.param(c, "environmentKey"),
+        this.param(c, "flagKey"),
       ),
     );
   }
@@ -173,8 +198,8 @@ export class FlagsController {
       await this.service.replaceRules(
         actor,
         this.param(c, "projectKey"),
-        this.param(c, "flagKey"),
         this.param(c, "environmentKey"),
+        this.param(c, "flagKey"),
         parsed.data,
       ),
     );
@@ -187,8 +212,8 @@ export class FlagsController {
       await this.service.getTargets(
         actor,
         this.param(c, "projectKey"),
-        this.param(c, "flagKey"),
         this.param(c, "environmentKey"),
+        this.param(c, "flagKey"),
       ),
     );
   }
@@ -205,8 +230,8 @@ export class FlagsController {
       await this.service.replaceTargets(
         actor,
         this.param(c, "projectKey"),
-        this.param(c, "flagKey"),
         this.param(c, "environmentKey"),
+        this.param(c, "flagKey"),
         parsed.data,
       ),
     );
@@ -219,6 +244,7 @@ export class FlagsController {
       await this.service.getDependencies(
         actor,
         this.param(c, "projectKey"),
+        this.param(c, "environmentKey"),
         this.param(c, "flagKey"),
       ),
     );
@@ -236,6 +262,7 @@ export class FlagsController {
       await this.service.listVersions(
         actor,
         this.param(c, "projectKey"),
+        this.param(c, "environmentKey"),
         this.param(c, "flagKey"),
         parsed.data.limit,
         parsed.data.cursor,
@@ -250,6 +277,7 @@ export class FlagsController {
       organizationId: context.workspace.id,
       workspaceRole: context.workspace.role,
       userId: context.user.id,
+      userName: context.user.name,
     };
   }
 

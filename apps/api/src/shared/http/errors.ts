@@ -42,6 +42,20 @@ export class ApiError extends Error {
   static conflict(message: string, details?: unknown): ApiError {
     return new ApiError(409, ERROR_CODE.conflict, message, details);
   }
+
+  /**
+   * A protected environment refused a direct publish. Carries its own code so
+   * the dashboard can offer the change-request flow instead of showing a
+   * conflict the user cannot act on.
+   */
+  static approvalRequired(environmentKey: string): ApiError {
+    return new ApiError(
+      409,
+      ERROR_CODE.approvalRequired,
+      `"${environmentKey}" is a protected environment. Propose the change for approval instead of publishing it directly.`,
+      { environmentKey },
+    );
+  }
 }
 
 export function errorResponse(c: Context, error: unknown) {

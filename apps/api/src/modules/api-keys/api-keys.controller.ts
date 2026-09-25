@@ -59,6 +59,7 @@ export class ApiKeysController {
       organizationId: context.workspace.id,
       workspaceRole: context.workspace.role,
       userId: context.user.id,
+      userName: context.user.name,
     };
   }
 

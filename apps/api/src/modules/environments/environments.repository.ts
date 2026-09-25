@@ -1,23 +1,24 @@
-import { randomUUID } from "node:crypto";
-
-import { and, asc, count, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  isNull,
+  or,
+} from "drizzle-orm";
 
 import { db } from "../../db/client.js";
 import {
   apiKey,
   environment,
-  flag,
-  flagEnvironmentConfig,
-  flagVariation,
 } from "../../db/schema/index.js";
 import type { Transaction } from "../../shared/types/db.js";
 import type {
-  CoverageConfigRow,
+  EnvironmentDetails,
   EnvironmentRow,
-  FlagConfigRecord,
-  FlagRef,
   NewEnvironmentRecord,
-  VariationRecord,
 } from "./environments.types.js";
 
 export class EnvironmentsRepository {
@@ -26,8 +27,13 @@ export class EnvironmentsRepository {
     projectId: string,
     limit: number,
     cursor: string | null,
+    includeArchived = false,
   ): Promise<EnvironmentRow[]> {
     const conditions = [eq(environment.projectId, projectId)];
+
+    if (!includeArchived) {
+      conditions.push(isNull(environment.archivedAt));
+    }
 
     if (cursor) {
       conditions.push(gt(environment.key, cursor));
@@ -41,11 +47,40 @@ export class EnvironmentsRepository {
       .limit(limit + 1);
   }
 
+  /**
+   * Active environments, in key order. An archived environment is out of
+   * service, so it is not offered as a flag's source.
+   */
   async listAll(projectId: string): Promise<EnvironmentRow[]> {
     return db
       .select()
       .from(environment)
-      .where(eq(environment.projectId, projectId))
+      .where(
+        and(
+          eq(environment.projectId, projectId),
+          isNull(environment.archivedAt),
+        ),
+      )
+      .orderBy(asc(environment.key));
+  }
+
+  /**
+   * The same read inside a transaction, so archive sees its own writes and the
+   * "one environment stays active" invariant is checked against committed state.
+   */
+  async listActiveInTransaction(
+    tx: Transaction,
+    projectId: string,
+  ): Promise<EnvironmentRow[]> {
+    return tx
+      .select()
+      .from(environment)
+      .where(
+        and(
+          eq(environment.projectId, projectId),
+          isNull(environment.archivedAt),
+        ),
+      )
       .orderBy(asc(environment.key));
   }
 
@@ -73,10 +108,7 @@ export class EnvironmentsRepository {
     return row?.value ?? 0;
   }
 
-  async insert(
-    tx: Transaction,
-    record: NewEnvironmentRecord,
-  ): Promise<void> {
+  async insert(tx: Transaction, record: NewEnvironmentRecord): Promise<void> {
     await tx.insert(environment).values(record);
   }
 
@@ -95,109 +127,56 @@ export class EnvironmentsRepository {
       .where(eq(environment.id, id));
   }
 
-  async listFlags(projectId: string): Promise<FlagRef[]> {
-    return db
-      .select({ id: flag.id, key: flag.key })
-      .from(flag)
-      .where(eq(flag.projectId, projectId))
-      .orderBy(asc(flag.key));
-  }
-
-  async listFlagPage(
-    projectId: string,
-    limit: number,
-    cursor: string | null,
-  ): Promise<FlagRef[]> {
-    const conditions = [eq(flag.projectId, projectId)];
-
-    if (cursor) {
-      conditions.push(gt(flag.key, cursor));
-    }
-
-    return db
-      .select({ id: flag.id, key: flag.key })
-      .from(flag)
-      .where(and(...conditions))
-      .orderBy(asc(flag.key))
-      .limit(limit + 1);
-  }
-
-  async listConfigs(environmentId: string): Promise<FlagConfigRecord[]> {
-    return db
-      .select({
-        flagId: flagEnvironmentConfig.flagId,
-        environmentId: flagEnvironmentConfig.environmentId,
-        enabled: flagEnvironmentConfig.enabled,
-        offVariationKey: flagEnvironmentConfig.offVariationKey,
-        defaultVariationKey: flagEnvironmentConfig.defaultVariationKey,
-        rolloutPercentage: flagEnvironmentConfig.rolloutPercentage,
-        bucketBy: flagEnvironmentConfig.bucketBy,
-      })
-      .from(flagEnvironmentConfig)
-      .where(eq(flagEnvironmentConfig.environmentId, environmentId));
-  }
-
-  async listVariations(environmentId: string): Promise<VariationRecord[]> {
-    return db
-      .select({
-        flagId: flagVariation.flagId,
-        environmentId: flagVariation.environmentId,
-        key: flagVariation.key,
-        name: flagVariation.name,
-        value: flagVariation.value,
-        description: flagVariation.description,
-        priority: flagVariation.priority,
-      })
-      .from(flagVariation)
-      .where(eq(flagVariation.environmentId, environmentId))
-      .orderBy(asc(flagVariation.priority));
-  }
-
-  async insertConfig(
+  async updateDetails(
     tx: Transaction,
-    record: FlagConfigRecord,
+    id: string,
+    details: EnvironmentDetails,
   ): Promise<void> {
-    await tx.insert(flagEnvironmentConfig).values({
-      id: randomUUID(),
-      ...record,
-    });
+    await tx
+      .update(environment)
+      .set({ ...details, updatedAt: new Date() })
+      .where(eq(environment.id, id));
   }
 
-  async insertVariations(
+  async setArchived(
     tx: Transaction,
-    records: VariationRecord[],
+    id: string,
+    archivedAt: Date | null,
   ): Promise<void> {
-    if (records.length === 0) return;
-
-    await tx.insert(flagVariation).values(
-      records.map((record) => ({ id: randomUUID(), ...record })),
-    );
+    await tx
+      .update(environment)
+      .set({ archivedAt, updatedAt: new Date() })
+      .where(eq(environment.id, id));
   }
 
-  async listCoverageConfigs(
-    projectId: string,
-    flagIds: string[],
-  ): Promise<CoverageConfigRow[]> {
-    if (flagIds.length === 0) return [];
+  async setDefault(
+    tx: Transaction,
+    id: string,
+    isDefault: boolean,
+  ): Promise<void> {
+    await tx
+      .update(environment)
+      .set({ isDefault, updatedAt: new Date() })
+      .where(eq(environment.id, id));
+  }
 
-    return db
-      .select({
-        flagId: flagEnvironmentConfig.flagId,
-        environmentKey: environment.key,
-        enabled: flagEnvironmentConfig.enabled,
-        rolloutPercentage: flagEnvironmentConfig.rolloutPercentage,
-      })
-      .from(flagEnvironmentConfig)
-      .innerJoin(
-        environment,
-        eq(environment.id, flagEnvironmentConfig.environmentId),
-      )
+  /**
+   * Archiving withdraws an environment's credentials. Project-wide keys are
+   * left alone: they were never scoped to this environment in the first place.
+   */
+  async revokeKeysForEnvironment(
+    tx: Transaction,
+    environmentId: string,
+  ): Promise<number> {
+    const revoked = await tx
+      .update(apiKey)
+      .set({ revokedAt: new Date() })
       .where(
-        and(
-          eq(environment.projectId, projectId),
-          inArray(flagEnvironmentConfig.flagId, flagIds),
-        ),
-      );
+        and(eq(apiKey.environmentId, environmentId), isNull(apiKey.revokedAt)),
+      )
+      .returning({ id: apiKey.id });
+
+    return revoked.length;
   }
 
   /**
@@ -221,7 +200,7 @@ export class EnvironmentsRepository {
           isNull(apiKey.revokedAt),
         ),
       )
-      .orderBy(asc(apiKey.createdAt))
+      .orderBy(desc(apiKey.createdAt))
       .limit(1);
 
     return rows[0]?.prefix ?? null;
