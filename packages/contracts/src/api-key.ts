@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { environmentKeySchema } from "#environment";
 import { paginationQuerySchema } from "#pagination";
+import { booleanQueryParamSchema } from "#query";
 
 export const API_KEY_SCOPES = [
   "flags:read",
@@ -74,7 +75,7 @@ export const createdApiKeySchema = apiKeySchema.extend({
 export type CreatedApiKey = z.infer<typeof createdApiKeySchema>;
 
 export const apiKeyListQuerySchema = paginationQuerySchema.extend({
-  includeRevoked: z.coerce.boolean().optional(),
+  includeRevoked: booleanQueryParamSchema.optional(),
 });
 
 export type ApiKeyListQuery = z.infer<typeof apiKeyListQuerySchema>;

@@ -6,6 +6,7 @@ import {
   targetingConditionSchema,
 } from "#flag";
 import { paginationQuerySchema } from "#pagination";
+import { booleanQueryParamSchema } from "#query";
 import { resourceKeySchema } from "#slug";
 
 const segmentIdentitySchema = z.object({
@@ -73,7 +74,7 @@ export type SegmentArchiveResponse = z.infer<
 
 export const segmentListQuerySchema = paginationQuerySchema.extend({
   search: z.string().trim().optional(),
-  includeArchived: z.coerce.boolean().optional(),
+  includeArchived: booleanQueryParamSchema.optional(),
 });
 
 export type SegmentListQuery = z.infer<typeof segmentListQuerySchema>;

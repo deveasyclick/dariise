@@ -1,5 +1,6 @@
 export * from "#api-key";
 export * from "#audit-log";
+export * from "#change-request";
 export * from "#auth";
 export * from "#environment";
 export * from "#errors";
@@ -12,6 +13,7 @@ export * from "#oauth";
 export * from "#pagination";
 export * from "#project";
 export * from "#project-member";
+export * from "#query";
 export * from "#segment";
 export * from "#session";
 export * from "#slug";

@@ -12,6 +12,7 @@
   "imports": {
     "#api-key": "./src/api-key.ts",
     "#audit-log": "./src/audit-log.ts",
+    "#change-request": "./src/change-request.ts",
     "#auth": "./src/auth.ts",
     "#environment": "./src/environment.ts",
     "#errors": "./src/errors.ts",
@@ -24,6 +25,7 @@
     "#pagination": "./src/pagination.ts",
     "#project": "./src/project.ts",
     "#project-member": "./src/project-member.ts",
+    "#query": "./src/query.ts",
     "#segment": "./src/segment.ts",
     "#session": "./src/session.ts",
     "#slug": "./src/slug.ts",
