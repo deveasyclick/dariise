@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 
 import { Client } from "pg";
 
@@ -96,25 +94,26 @@ export async function resetTestDatabase(): Promise<void> {
   await client.query(
     "drop schema if exists public cascade; create schema public;",
   );
-
-  const directory = fileURLToPath(new URL("../../drizzle", import.meta.url));
-  const files = (await readdir(directory))
-    .filter((file) => file.endsWith(".sql"))
-    .sort();
-
-  for (const file of files) {
-    const sql = await readFile(`${directory}/${file}`, "utf8");
-
-    for (const statement of sql.split("--> statement-breakpoint")) {
-      const trimmed = statement.trim();
-
-      if (trimmed.length > 0) {
-        await client.query(trimmed);
-      }
-    }
-  }
-
   await client.end();
+
+  /**
+   * The schema is pushed from `src/db/schema/`, not replayed from `.sql` files.
+   *
+   * This project is used with `drizzle-kit push`, so there is no migration
+   * directory to replay and the schema modules are the only description of the
+   * database that exists. Deriving the test schema from the same place as the
+   * development one means the two cannot disagree.
+   */
+  const { pushSchema } = await import("drizzle-kit/api");
+  const schema = await import("../db/schema/index.js");
+  const { db } = await import("../db/client.js");
+
+  const { apply } = await pushSchema(
+    schema as unknown as Record<string, unknown>,
+    db as never,
+  );
+
+  await apply();
 }
 
 /** Empties every table so one test cannot observe another's rows. */
