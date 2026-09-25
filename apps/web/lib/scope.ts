@@ -80,10 +80,13 @@ async function readCookie(name: string): Promise<string | null> {
  * Every environment in a project, following the cursor to the last page.
  *
  * A project that outgrows one page must still render its whole environment set,
- * because the chrome and the coverage matrix are meaningless with a subset.
+ * because the chrome is meaningless with a subset. Archived environments are
+ * excluded unless a caller asks for them, so the switcher only ever offers
+ * environments that are in service.
  */
 export async function listEnvironments(
   projectKey: string,
+  { includeArchived = false }: { includeArchived?: boolean } = {},
 ): Promise<EnvironmentSummary[]> {
   const collected: EnvironmentSummary[] = [];
   let cursor: string | undefined;
@@ -92,6 +95,7 @@ export async function listEnvironments(
     const page = await api.environments.list(projectKey, {
       limit: MAX_PAGE_SIZE,
       cursor,
+      includeArchived: includeArchived || undefined,
     });
 
     collected.push(...page.data);

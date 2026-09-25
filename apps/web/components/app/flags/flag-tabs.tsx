@@ -18,9 +18,15 @@ const tabs = [
  * addressable route that can be opened directly or bookmarked. Configuration is
  * the bare route, matching the design's default tab.
  */
-export function FlagTabs({ flagKey }: { flagKey: string }) {
+export function FlagTabs({
+  environmentKey,
+  flagKey,
+}: {
+  environmentKey: string;
+  flagKey: string;
+}) {
   const pathname = usePathname();
-  const base = `/flags/${flagKey}`;
+  const base = `/environments/${environmentKey}/flags/${flagKey}`;
 
   return (
     <nav aria-label="Flag sections" className="mb-4 flex gap-1 border-b">

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { MAX_PAGE_SIZE } from "@dariise/contracts";
 import { ProjectFlagsCard } from "@/components/app/projects/project-cards";
 import * as api from "@/lib/api";
 import { loadProject } from "../load-project";
@@ -19,28 +20,25 @@ export default async function ProjectFlagsPage(
 
   if (!project) notFound();
 
-  const [environmentPage, flagPage] = await Promise.all([
-    api.environments.list(project.key),
-    api.flags.list(project.key, { limit: 100 }),
-  ]);
+  const environmentPage = await api.environments.list(project.key);
+  const flagPages = await Promise.all(
+    environmentPage.data.map((environment) =>
+      api.flags.list(project.key, {
+        environmentKey: environment.key,
+        limit: MAX_PAGE_SIZE,
+      }),
+    ),
+  );
 
-  const environments = environmentPage.data;
-  const defaultEnvironmentKey =
-    environments.find(
-      (environment) => environment.id === project.defaultEnvironmentId,
-    )?.key ??
-    environments.find((environment) => environment.isDefault)?.key ??
-    environments[0]?.key ??
-    null;
+  const flags = flagPages.flatMap((page) => page.data);
+  const truncated = flagPages.some((page) => page.nextCursor !== null);
 
   return (
     <div className="mx-auto max-w-3xl">
       <ProjectFlagsCard
         projectKey={project.key}
-        flags={flagPage.data}
-        environments={environments}
-        defaultEnvironmentKey={defaultEnvironmentKey}
-        truncated={flagPage.nextCursor !== null}
+        flags={flags}
+        truncated={truncated}
       />
     </div>
   );

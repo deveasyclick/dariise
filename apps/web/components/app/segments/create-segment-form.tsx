@@ -197,6 +197,18 @@ export function CreateSegmentForm({ projectKey }: { projectKey: string }) {
     event.preventDefault();
     if (pending) return;
 
+    /**
+     * Creation only ever happens from the last step.
+     *
+     * The Continue and Create buttons sit in the same place in the tree, so
+     * without distinct keys React reuses one DOM node and rewrites its `type`
+     * from `button` to `submit` mid-click — and the browser submits the form
+     * the moment the attribute changes. The keys below stop that; this guard
+     * means even an implicit submission cannot create a segment from a step the
+     * user has not confirmed.
+     */
+    if (step !== steps.length - 1) return;
+
     const nextErrors = validateForm();
     if (
       nextErrors.name ||
@@ -505,6 +517,10 @@ export function CreateSegmentForm({ projectKey }: { projectKey: string }) {
 
               {step < steps.length - 1 ? (
                 <Button
+                  // Distinct keys keep the two buttons as separate elements:
+                  // sharing one DOM node lets the click that advances the step
+                  // also flip the node to `type="submit"` and submit the form.
+                  key="continue"
                   type="button"
                   size="sm"
                   className="gap-1.5"
@@ -514,6 +530,7 @@ export function CreateSegmentForm({ projectKey }: { projectKey: string }) {
                 </Button>
               ) : (
                 <Button
+                  key="create"
                   type="submit"
                   size="sm"
                   className="gap-1.5"

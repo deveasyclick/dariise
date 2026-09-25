@@ -29,7 +29,7 @@ export function ChangeDetailsPanel({ event }: { event: AuditEventView | null }) 
       mono: true,
     },
     { label: "Environment", value: event.environmentName, mono: false },
-    { label: "Changed by", value: event.actor, mono: false },
+    { label: "Changed by", value: event.actorName, mono: false },
     { label: "Time", value: event.absoluteLabel, mono: true },
   ];
 

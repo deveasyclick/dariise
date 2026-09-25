@@ -1,5 +1,5 @@
 import { AlertTriangleIcon } from "lucide-react";
-import type { FlagDetail, FlagVariation } from "@dariise/contracts";
+import type { FlagDetail } from "@dariise/contracts";
 import { SdkPreview, sdkSnippet } from "@/components/app/flags/sdk-preview";
 import { Button } from "@/components/ui/button";
 import { formatRelativeTime } from "@/lib/format";
@@ -35,42 +35,6 @@ export function FlagMetadata({ flag, now }: { flag: FlagDetail; now: Date }) {
           </div>
         ))}
       </dl>
-    </section>
-  );
-}
-
-export function FlagVariations({
-  variations,
-}: {
-  variations: FlagVariation[];
-}) {
-  return (
-    <section className="bg-card rounded-lg border p-4">
-      <h2 className="text-[13px] font-medium">Variations</h2>
-      <p className="text-muted-foreground mt-1 text-[11px]">
-        The values this flag can serve.
-      </p>
-
-      <ul className="mt-3 divide-y">
-        {variations.map((variation) => (
-          <li
-            key={variation.key}
-            className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"
-          >
-            <div className="min-w-0">
-              <p className="text-[12px] font-medium">{variation.name}</p>
-              <p className="text-muted-foreground font-mono text-[11px]">
-                {String(variation.value)}
-              </p>
-            </div>
-            {variation.description ? (
-              <p className="text-muted-foreground max-w-[18rem] text-right text-[11px]">
-                {variation.description}
-              </p>
-            ) : null}
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

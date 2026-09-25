@@ -15,17 +15,13 @@ export default async function CreateEnvironmentPage() {
 
   if (!project) return null;
 
-  const [environmentPage, coveragePage] = await Promise.all([
-    api.environments.list(project.key),
-    api.environments.coverage(project.key),
-  ]);
+  const environmentPage = await api.environments.list(project.key);
 
   return (
     <div className="mx-auto max-w-5xl">
       <CreateEnvironmentForm
         projectKey={project.key}
         environments={environmentPage.data}
-        coverageFlags={coveragePage.data}
       />
     </div>
   );

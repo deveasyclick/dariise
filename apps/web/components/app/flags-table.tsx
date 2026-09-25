@@ -9,7 +9,7 @@ import {
   SearchIcon,
 } from "lucide-react";
 import { cn } from "cn";
-import type { WorkspaceFlagSummary } from "@dariise/contracts";
+import type { FlagSummary } from "@dariise/contracts";
 import { ProgressBar } from "@/components/app/progress-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,23 +59,15 @@ const headerClass =
   "text-muted-foreground h-8 px-3 text-[10px] font-medium tracking-[0.1em] uppercase";
 const cellClass = "px-3 py-2.5 text-[12px]";
 
-function statusFor(
-  flag: WorkspaceFlagSummary,
-  environmentKey: string | null,
-): StatusView {
+function statusFor(flag: FlagSummary): StatusView {
   if (flag.status === "archived") return "archived";
+  if (!flag.enabled) return "disabled";
 
-  const environment = flag.environments.find(
-    (entry) => entry.environmentKey === environmentKey,
-  );
-
-  if (!environment || !environment.enabled) return "disabled";
-
-  return environment.rolloutPercentage >= 100 ? "active" : "rollout";
+  return flag.rolloutPercentage >= 100 ? "active" : "rollout";
 }
 
-function searchableText(flag: WorkspaceFlagSummary): string {
-  return [flag.key, flag.name, flag.owner, flag.description, flag.projectKey]
+function searchableText(flag: FlagSummary): string {
+  return [flag.key, flag.name, flag.owner, flag.description]
     .filter((value): value is string => typeof value === "string")
     .join(" ")
     .toLowerCase();
@@ -83,16 +75,11 @@ function searchableText(flag: WorkspaceFlagSummary): string {
 
 export function FlagsTable({
   flags,
-  projectKey,
-  environmentKey,
   environmentName,
   now,
 }: {
-  flags: WorkspaceFlagSummary[];
-  /** The sidebar-selected project; only its flags have a detail route. */
-  projectKey: string | null;
-  /** The sidebar-selected environment whose rollout each row shows. */
-  environmentKey: string | null;
+  flags: FlagSummary[];
+  /** The environment the list is scoped to; each row already carries its own. */
   environmentName: string | null;
   /** Passed in so relative labels stay stable across hydration. */
   now: string;
@@ -106,14 +93,14 @@ export function FlagsTable({
     const needle = query.trim().toLowerCase();
 
     return flags.filter((flag) => {
-      if (status !== "all" && statusFor(flag, environmentKey) !== status) {
+      if (status !== "all" && statusFor(flag) !== status) {
         return false;
       }
       if (!needle) return true;
 
       return searchableText(flag).includes(needle);
     });
-  }, [flags, query, status, environmentKey]);
+  }, [flags, query, status]);
 
   return (
     <section className="bg-card rounded-lg border">
@@ -127,7 +114,7 @@ export function FlagsTable({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label="Search flags by name, key, owner or project"
+            aria-label="Search flags by name, key or owner"
             placeholder="Search flags by name, key or owner…"
             className="h-8 pl-8 text-[13px]"
           />
@@ -174,7 +161,6 @@ export function FlagsTable({
           <TableRow className="hover:bg-transparent">
             <TableHead className={headerClass}>Flag</TableHead>
             <TableHead className={headerClass}>Status</TableHead>
-            <TableHead className={headerClass}>Project</TableHead>
             <TableHead className={headerClass}>Rollout</TableHead>
             <TableHead className={headerClass}>Updated</TableHead>
             <TableHead className={cn(headerClass, "w-10 text-right")}> </TableHead>
@@ -184,44 +170,32 @@ export function FlagsTable({
           {visible.length === 0 ? (
             <TableRow className="hover:bg-transparent">
               <TableCell
-                colSpan={6}
+                colSpan={5}
                 className="text-muted-foreground py-10 text-center text-[12px]"
               >
                 {flags.length === 0
-                  ? "No flags in this workspace yet."
+                  ? "No flags in this environment yet."
                   : "No flags match your search."}
               </TableCell>
             </TableRow>
           ) : (
             visible.map((flag) => {
-              const presentation = statusPresentation[
-                statusFor(flag, environmentKey)
-              ];
-              const environment = flag.environments.find(
-                (entry) => entry.environmentKey === environmentKey,
-              );
+              const presentation = statusPresentation[statusFor(flag)];
               const subtitle = [flag.name, flag.owner, flag.description]
                 .filter((value): value is string => Boolean(value))
                 .join(" · ");
 
               return (
-                <TableRow key={`${flag.projectKey}/${flag.key}`}>
+                <TableRow
+                  key={`${flag.environmentKey}/${flag.key}`}
+                >
                   <TableCell className={cellClass}>
-                    {flag.projectKey === projectKey ? (
-                      <Link
-                        href={`/flags/${flag.key}`}
-                        className="hover:text-primary block font-mono text-[12px] font-medium transition-colors"
-                      >
-                        {flag.key}
-                      </Link>
-                    ) : (
-                      <span
-                        title={`Switch to ${flag.projectKey} to open this flag`}
-                        className="block font-mono text-[12px] font-medium"
-                      >
-                        {flag.key}
-                      </span>
-                    )}
+                    <Link
+                      href={`/environments/${flag.environmentKey}/flags/${flag.key}`}
+                      className="hover:text-primary block font-mono text-[12px] font-medium transition-colors"
+                    >
+                      {flag.key}
+                    </Link>
                     <span className="text-muted-foreground block text-[11px]">
                       {subtitle}
                     </span>
@@ -233,26 +207,16 @@ export function FlagsTable({
                     </Badge>
                   </TableCell>
 
-                  <TableCell className={cn(cellClass, "font-mono text-[11px]")}>
-                    {flag.projectKey}
-                  </TableCell>
-
                   <TableCell className={cellClass}>
-                    {environment ? (
-                      <div className="flex w-28 items-center gap-2">
-                        <ProgressBar
-                          value={environment.rolloutPercentage}
-                          label={`${flag.key} rollout`}
-                        />
-                        <span className="text-muted-foreground w-8 shrink-0 text-right text-[11px]">
-                          {environment.rolloutPercentage}%
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground text-[11px]">
-                        No environment
+                    <div className="flex w-28 items-center gap-2">
+                      <ProgressBar
+                        value={flag.rolloutPercentage}
+                        label={`${flag.key} rollout`}
+                      />
+                      <span className="text-muted-foreground w-8 shrink-0 text-right text-[11px]">
+                        {flag.rolloutPercentage}%
                       </span>
-                    )}
+                    </div>
                   </TableCell>
 
                   <TableCell className={cn(cellClass, "text-muted-foreground")}>

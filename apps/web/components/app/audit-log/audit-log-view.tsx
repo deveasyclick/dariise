@@ -73,7 +73,7 @@ export function AuditLogView({
       if (event.ageHours > rangeHours[range]) return false;
       if (!needle) return true;
 
-      return [event.actor, event.verb, event.target ?? "", event.context]
+      return [event.actorName, event.verb, event.target ?? "", event.context]
         .join(" ")
         .toLowerCase()
         .includes(needle);
@@ -147,9 +147,9 @@ export function AuditLogView({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>All actors</SelectItem>
-              {actors.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
+              {actors.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.name}
                 </SelectItem>
               ))}
             </SelectContent>

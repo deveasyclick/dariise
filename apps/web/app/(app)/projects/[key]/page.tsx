@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { MAX_PAGE_SIZE } from "@dariise/contracts";
 import {
   ArchiveProjectCard,
   DefaultEnvironmentCard,
@@ -7,7 +8,11 @@ import {
   ProjectFlagsCard,
   ProjectSummaryCard,
 } from "@/components/app/projects/project-cards";
-import { cappedCount } from "@/components/app/environments/capped-count";
+import {
+  cappedCount,
+  environmentFlagCounts,
+  type CappedCount,
+} from "@/components/app/environments/capped-count";
 import * as api from "@/lib/api";
 import { loadProject } from "./load-project";
 
@@ -34,17 +39,37 @@ export default async function ProjectEnvironmentsPage(
 
   if (!project) notFound();
 
-  const [environmentPage, flagPage, apiKeyPage, segmentPage] =
-    await Promise.all([
-      api.environments.list(project.key),
-      api.flags.list(project.key, { limit: 100 }),
-      api.apiKeys.list(project.key),
-      api.segments.list(project.key),
-    ]);
+  const [environmentPage, apiKeyPage, segmentPage] = await Promise.all([
+    api.environments.list(project.key),
+    api.apiKeys.list(project.key),
+    api.segments.list(project.key),
+  ]);
 
   const environments = environmentPage.data;
-  const flags = flagPage.data;
-  const flagsTruncated = flagPage.nextCursor !== null;
+
+  const flagPages = await Promise.all(
+    environments.map((environment) =>
+      api.flags.list(project.key, {
+        environmentKey: environment.key,
+        limit: MAX_PAGE_SIZE,
+      }),
+    ),
+  );
+
+  const flags = flagPages.flatMap((page) => page.data);
+  const flagsTruncated = flagPages.some((page) => page.nextCursor !== null);
+  const enabledByEnvironment: Record<string, CappedCount> = {};
+
+  environments.forEach((environment, index) => {
+    const page = flagPages[index];
+
+    enabledByEnvironment[environment.key] = environmentFlagCounts(
+      page.data,
+      environment.key,
+      page.nextCursor !== null,
+    ).enabled;
+  });
+
   const defaultEnvironmentKey =
     environments.find(
       (environment) => environment.id === project.defaultEnvironmentId,
@@ -58,14 +83,11 @@ export default async function ProjectEnvironmentsPage(
       <div className="space-y-3">
         <ProjectEnvironmentsCard
           environments={environments}
-          flags={flags}
-          flagsTruncated={flagsTruncated}
+          enabledByEnvironment={enabledByEnvironment}
         />
         <ProjectFlagsCard
           projectKey={project.key}
           flags={flags}
-          environments={environments}
-          defaultEnvironmentKey={defaultEnvironmentKey}
           limit={4}
           truncated={flagsTruncated}
         />
@@ -74,14 +96,13 @@ export default async function ProjectEnvironmentsPage(
       <div className="space-y-3">
         <ProjectSummaryCard
           project={project}
-          flagCount={cappedCount(flagPage)}
+          flagCount={{ count: flags.length, truncated: flagsTruncated }}
           segmentCount={cappedCount(segmentPage)}
           apiKeyCount={cappedCount(apiKeyPage)}
         />
         <DefaultEnvironmentCard
           environments={environments}
-          flags={flags}
-          flagsTruncated={flagsTruncated}
+          enabledByEnvironment={enabledByEnvironment}
           defaultEnvironmentKey={defaultEnvironmentKey}
         />
         <ArchiveProjectCard />

@@ -411,16 +411,6 @@ export interface CreateProjectFormInput {
 }
 
 /**
- * How a new project's flags should start out.
- *
- * Retained as a type only. The dashboard's create-project screen offers this
- * choice, but the API does not model per-environment flag state yet, so the
- * selection is not sent. Kept here rather than deleted so the screen keeps
- * type-checking while the feature is pending — see the note in that component.
- */
-export type InitialFlagState = "all-off" | "copy-source" | "all-on";
-
-/**
  * Create the first project.
  *
  * `POST /v1/projects` takes the workspace from the session rather than the body,

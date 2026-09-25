@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CheckIcon,
   LoaderCircleIcon,
@@ -11,13 +12,16 @@ import {
 } from "lucide-react";
 import {
   createFlagSchema,
+  defaultVariations,
   toFieldErrors,
   type CreateFlagInput,
   type FieldErrors,
   type FlagType,
+  type FlagValuesInput,
 } from "@dariise/contracts";
 import { cn } from "cn";
 import { CreateFlagHeader } from "@/components/app/flags/flag-headers";
+import { VariationValueInput } from "@/components/app/flags/variation-value-input";
 import { SdkPreview, sdkSnippet } from "@/components/app/flags/sdk-preview";
 import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
@@ -28,7 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApiError, flags as flagsApi } from "@/lib/api";
 import { toWorkspaceSlug } from "@/lib/validation";
 
-const steps = ["Details", "Targeting", "Review"] as const;
+const steps = ["Details", "Preview"] as const;
 
 const flagTypes: Array<{
   value: FlagType;
@@ -50,26 +54,81 @@ const bestPractices = [
 
 const suggestedTags = ["checkout", "frontend", "payments", "internal"];
 
-type CreateFlagField = "key" | "name" | "description" | "type" | "tags";
+type CreateFlagField =
+  | "key"
+  | "name"
+  | "description"
+  | "type"
+  | "tags"
+  | "values";
 
 type CreateFlagErrors = FieldErrors<CreateFlagField>;
 
-export function CreateFlagForm({ projectKey }: { projectKey: string }) {
+/**
+ * One labelled line of the create preview.
+ *
+ * The preview states each value rather than styling it into place: the name,
+ * key and type read the same way as the tags and description beside them, so
+ * nothing about what is about to be created has to be inferred from weight or
+ * position.
+ */
+function PreviewRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="max-w-[60%] text-right break-words">{children}</dd>
+    </div>
+  );
+}
+
+export function CreateFlagForm({
+  projectKey,
+  environmentKey,
+  environmentName,
+}: {
+  projectKey: string;
+  /** The one environment the flag is created into. */
+  environmentKey: string;
+  environmentName: string;
+}) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<FlagType>("boolean");
+  /**
+   * What the flag serves in each environment it is created into.
+   *
+   * A non-boolean flag still has to answer when it is off, so both values are
+   * decided here rather than left as the placeholders the API would otherwise
+   * seed. Boolean flags never show these: their two values are the two booleans.
+   */
+  const [values, setValues] = useState<FlagValuesInput>(
+    () => defaultVariations("boolean"),
+  );
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
   const [editedKey, setEditedKey] = useState(false);
   const [errors, setErrors] = useState<CreateFlagErrors>({});
   const [pending, setPending] = useState(false);
-  const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const router = useRouter();
   const controllerRef = useRef<AbortController | null>(null);
 
   function clearError(field: keyof CreateFlagErrors) {
     setErrors((previous) => ({ ...previous, form: undefined, [field]: undefined }));
+  }
+
+  function handleTypeChange(next: FlagType) {
+    setType(next);
+    // A pair typed for the previous type is meaningless in the next one.
+    setValues(defaultVariations(next));
+    clearError("values");
   }
 
   function handleNameChange(value: string) {
@@ -88,11 +147,13 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
 
   function input(): CreateFlagInput {
     return {
+      environmentKey,
       key: key.trim(),
       name: name.trim(),
       description: description.trim() || null,
       type,
       tags,
+      ...(type === "boolean" ? {} : { values }),
     };
   }
 
@@ -106,7 +167,7 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
     const nextErrors = validate();
     setErrors(nextErrors ?? {});
 
-    // Only the first step gates progress; Review is the confirmation.
+    // Only the first step gates progress; Preview is the confirmation.
     if (next > 0 && (nextErrors?.name || nextErrors?.key)) return;
     setStep(next);
   }
@@ -114,6 +175,18 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
+
+    /**
+     * Creation only ever happens from the last step.
+     *
+     * The Continue and Create Flag buttons sit in the same place in the tree,
+     * so without distinct keys React reuses one DOM node and rewrites its
+     * `type` from `button` to `submit` mid-click — and the browser submits the
+     * form the moment the attribute changes. The keys below stop that; this
+     * guard means even an implicit submission (Enter in a field) cannot create
+     * a flag from a step the user has not confirmed.
+     */
+    if (step !== steps.length - 1) return;
 
     const nextErrors = validate();
     if (nextErrors) {
@@ -132,8 +205,22 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
       const created = await flagsApi.create(projectKey, input(), {
         signal: controller.signal,
       });
-      setCreatedKey(created.key);
+
+      /**
+       * Straight to the flag, with no summary screen in between.
+       *
+       * A new flag is created switched off, so the only thing left to do is
+       * configure it — and that happens on its own page. `replace` rather than
+       * `push`, so going back cannot land on a filled-in create form and a
+       * second submission.
+       */
+      router.replace(`/environments/${environmentKey}/flags/${created.key}`);
     } catch (error) {
+      // Cleared here rather than in a `finally`: on success the route is about
+      // to change, and re-enabling the button first would flash a form the user
+      // has already submitted.
+      setPending(false);
+
       if ((error as Error)?.name === "AbortError") return;
 
       if (error instanceof ApiError) {
@@ -148,51 +235,7 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
       }
 
       setErrors({ form: "Something went wrong. Please try again." });
-    } finally {
-      setPending(false);
     }
-  }
-
-  function reset() {
-    setCreatedKey(null);
-    setStep(0);
-    setName("");
-    setKey("");
-    setDescription("");
-    setTags([]);
-    setType("boolean");
-    setEditedKey(false);
-  }
-
-  if (createdKey) {
-    return (
-      <>
-        <CreateFlagHeader steps={[...steps]} currentStep={2} />
-        <div className="bg-card rounded-lg border p-6">
-          <span className="bg-ok-ink/10 text-ok-ink flex size-9 items-center justify-center rounded-lg">
-            <CheckIcon aria-hidden="true" className="size-4.5" />
-          </span>
-          <h2 className="mt-3 text-base font-semibold tracking-tight">
-            {createdKey} created
-          </h2>
-          <p className="text-muted-foreground mt-1 max-w-md text-[13px]">
-            The flag was created switched off in every environment. Configure
-            targeting per environment, then turn it on when you are ready.
-          </p>
-          <div className="mt-5 flex items-center gap-2">
-            <Button asChild size="sm">
-              <Link href={`/flags/${createdKey}`}>Open flag</Link>
-            </Button>
-            <Button variant="outline" size="sm" onClick={reset}>
-              Create another
-            </Button>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/flags">Back to flags</Link>
-            </Button>
-          </div>
-        </div>
-      </>
-    );
   }
 
   const previewFlagKey = key.trim() || "flag-key";
@@ -267,7 +310,7 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
                 <h2 className="text-[13px] font-medium">Flag type</h2>
                 <RadioGroup
                   value={type}
-                  onValueChange={(value) => setType(value as FlagType)}
+                  onValueChange={(value) => handleTypeChange(value as FlagType)}
                   className="mt-3 grid gap-2 sm:grid-cols-2"
                 >
                   {flagTypes.map((option) => (
@@ -298,6 +341,49 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
                   ))}
                 </RadioGroup>
               </section>
+
+              {type === "boolean" ? null : (
+                <section className="bg-card rounded-lg border p-4">
+                  <h2 className="text-[13px] font-medium">Values</h2>
+                  <p className="text-muted-foreground mt-1 text-[11px]">
+                    A {type} flag still has to serve something while it is off,
+                    so both values are set now. The flag starts with them, and
+                    each can be changed on its configuration tab.
+                  </p>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="flag-value-on">When on</Label>
+                      <VariationValueInput
+                        id="flag-value-on"
+                        type={type}
+                        value={values.on}
+                        onChange={(value) => {
+                          setValues((previous) => ({ ...previous, on: value }));
+                          clearError("values");
+                        }}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="flag-value-off">When off</Label>
+                      <VariationValueInput
+                        id="flag-value-off"
+                        type={type}
+                        value={values.off}
+                        onChange={(value) => {
+                          setValues((previous) => ({ ...previous, off: value }));
+                          clearError("values");
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {errors.values ? (
+                    <FieldError>{errors.values}</FieldError>
+                  ) : null}
+                </section>
+              )}
 
               <section className="bg-card rounded-lg border p-4">
                 <h2 className="text-[13px] font-medium">Tags</h2>
@@ -366,57 +452,57 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
 
           {step === 1 ? (
             <section className="bg-card rounded-lg border p-4">
-              <h2 className="text-[13px] font-medium">Targeting</h2>
-              <p className="text-muted-foreground mt-1 text-[12px]">
-                The flag is created switched off. Targeting rules are configured
-                per environment once it exists.
-              </p>
-              <div className="bg-muted/50 mt-4 rounded-lg border border-dashed p-4">
-                <p className="text-[12px] font-medium">
-                  No targeting rules yet
-                </p>
-                <p className="text-muted-foreground mt-1 text-[11px]">
-                  After creating the flag, open its Targeting tab to serve
-                  variations by attribute, segment or percentage rollout.
-                </p>
-              </div>
-            </section>
-          ) : null}
-
-          {step === 2 ? (
-            <section className="bg-card rounded-lg border p-4">
-              <h2 className="text-[13px] font-medium">Review</h2>
-              <p className="text-muted-foreground mt-1 text-[12px]">
-                Check the configuration before creating the flag.
+              <h2 className="text-[13px] font-medium">Preview</h2>
+              <p className="text-muted-foreground mt-1 text-[11px]">
+                The flag as it will exist once it is created.
               </p>
 
-              <dl className="mt-4 divide-y text-[12px]">
-                {[
-                  ["Name", name || "—"],
-                  ["Key", key || "—"],
-                  ["Type", flagTypes.find((item) => item.value === type)?.label ?? type],
-                  ["Tags", tags.length > 0 ? tags.join(", ") : "None"],
-                  ["Description", description || "—"],
-                ].map(([label, value]) => (
-                  <div
-                    key={label}
-                    className="flex items-start justify-between gap-4 py-2"
-                  >
-                    <dt className="text-muted-foreground">{label}</dt>
-                    <dd className="max-w-[60%] text-right break-words">{value}</dd>
-                  </div>
-                ))}
+              <dl className="mt-3 divide-y text-[12px]">
+                <PreviewRow label="Name">{name.trim() || "—"}</PreviewRow>
+                <PreviewRow label="Key">
+                  <span className="font-mono text-[11px]">
+                    {key.trim() || "—"}
+                  </span>
+                </PreviewRow>
+                <PreviewRow label="Type">
+                  {flagTypes.find((item) => item.value === type)?.label ?? type}
+                </PreviewRow>
+                <PreviewRow label="Tags">
+                  {tags.length > 0 ? tags.join(", ") : "None"}
+                </PreviewRow>
+                <PreviewRow label="Description">
+                  {description.trim() || "—"}
+                </PreviewRow>
               </dl>
 
-              <div className="mt-4">
-                <p className="text-muted-foreground mb-2 text-[11px]">
-                  The flag will be created switched off in every environment.
-                </p>
-                <SdkPreview
-                  title="Config to be created"
-                  lines={JSON.stringify(input(), null, 2).split("\n")}
-                />
-              </div>
+              <h3 className="mt-5 text-[12px] font-medium">Variations</h3>
+              <ul className="mt-2 divide-y text-[12px]">
+                {(["on", "off"] as const).map((position) => (
+                  <li
+                    key={position}
+                    className="flex items-center justify-between gap-4 py-2"
+                  >
+                    <span className="text-muted-foreground">
+                      {position === "on" ? "On" : "Off"}
+                    </span>
+                    <span className="font-mono text-[11px]">
+                      {JSON.stringify(values[position])}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              <h3 className="mt-5 text-[12px] font-medium">Environment</h3>
+              <p className="text-muted-foreground mt-1 text-[11px]">
+                The flag is created switched off in this environment only. Other
+                environments get it later, by promotion.
+              </p>
+              <ul className="mt-2 divide-y text-[12px]">
+                <li className="flex items-center justify-between gap-4 py-2">
+                  <span>{environmentName}</span>
+                  <span className="text-muted-foreground text-[11px]">Off</span>
+                </li>
+              </ul>
             </section>
           ) : null}
 
@@ -424,7 +510,7 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
 
           <div className="flex items-center justify-between gap-2">
             <Button asChild variant="ghost" size="sm">
-              <Link href="/flags">Cancel</Link>
+              <Link href={`/environments/${environmentKey}/flags`}>Cancel</Link>
             </Button>
 
             <div className="flex items-center gap-2">
@@ -441,6 +527,10 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
 
               {step < steps.length - 1 ? (
                 <Button
+                  // Distinct keys keep the two buttons as separate elements:
+                  // sharing one DOM node lets the click that advances the step
+                  // also flip the node to `type="submit"` and submit the form.
+                  key="continue"
                   type="button"
                   size="sm"
                   className="gap-1.5"
@@ -450,6 +540,7 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
                 </Button>
               ) : (
                 <Button
+                  key="create"
                   type="submit"
                   size="sm"
                   className="gap-1.5"
@@ -471,7 +562,9 @@ export function CreateFlagForm({ projectKey }: { projectKey: string }) {
           <SdkPreview
             lines={sdkSnippet({
               flagKey: previewFlagKey,
-              fallback: "false",
+              // The value the SDK serves when it cannot reach Dariise: the off
+              // variation, which for a typed flag is not `false`.
+              fallback: JSON.stringify(values.off),
             })}
           />
 

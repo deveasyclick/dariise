@@ -1,44 +1,75 @@
 "use client";
 
-import { MoreHorizontalIcon } from "lucide-react";
+import Link from "next/link";
+import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
+  CopyIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { EnvironmentSummary } from "@dariise/contracts";
 
 /**
  * The "more actions" menu for an environment.
  *
  * A Client Component because Radix needs to own the trigger's ref, which a
- * Server Component cannot hand over. Every item is disabled with a title rather
- * than pretending to work — nothing here is wired to the API yet.
+ * Server Component cannot hand over. Every item navigates: archiving revokes
+ * credentials, so it is confirmed on the settings screen rather than fired
+ * from a menu.
  */
-export function EnvironmentMenu({ name }: { name: string }) {
+export function EnvironmentMenu({
+  environment,
+}: {
+  environment: Pick<EnvironmentSummary, "key" | "name" | "archivedAt">;
+}) {
+  const settings = `/environments/${environment.key}/settings`;
+  const archived = environment.archivedAt !== null;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={`More actions for ${name}`}
+          aria-label={`More actions for ${environment.name}`}
         >
           <MoreHorizontalIcon aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel>{name}</DropdownMenuLabel>
-        <DropdownMenuItem disabled title="Duplicate — coming soon">
-          Duplicate environment
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuLabel>{environment.name}</DropdownMenuLabel>
+        <DropdownMenuItem asChild>
+          <Link href={settings}>
+            <PencilIcon aria-hidden="true" />
+            Edit details
+          </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem disabled title="Rotate keys — coming soon">
-          Rotate keys
+        <DropdownMenuItem asChild>
+          <Link href="/environments/new">
+            <CopyIcon aria-hidden="true" />
+            Duplicate environment
+          </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem disabled title="Delete — coming soon">
-          Delete environment
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href={settings} title="Confirmed on the settings screen">
+            {archived ? (
+              <ArchiveRestoreIcon aria-hidden="true" />
+            ) : (
+              <ArchiveIcon aria-hidden="true" />
+            )}
+            {archived ? "Restore environment" : "Archive environment"}
+          </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

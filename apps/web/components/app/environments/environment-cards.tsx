@@ -6,7 +6,6 @@ import {
   LockIcon,
   RadioIcon,
   ShieldCheckIcon,
-  Trash2Icon,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "cn";
@@ -26,7 +25,6 @@ import {
 import { MaskedKeyChip } from "@/components/app/environments/environment-keys";
 import { EnvironmentMenu } from "@/components/app/environments/environment-menu";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { resolveEnvironmentColor } from "@/lib/environment-color";
 import { formatDate } from "@/lib/format";
 
@@ -38,18 +36,25 @@ import { formatDate } from "@/lib/format";
  * client components.
  */
 
-/** Default and protected markers, both sourced from the environment itself. */
+/** Default, protected and archived markers, all sourced from the environment. */
 export function EnvironmentBadges({
   isDefault,
   isProtected,
+  isArchived,
 }: {
   isDefault: boolean;
   isProtected: boolean;
+  isArchived: boolean;
 }) {
-  if (!isDefault && !isProtected) return null;
+  if (!isDefault && !isProtected && !isArchived) return null;
 
   return (
     <span className="flex shrink-0 items-center gap-1.5">
+      {isArchived ? (
+        <Badge variant="secondary" className="text-[10px] tracking-wide uppercase">
+          Archived
+        </Badge>
+      ) : null}
       {isDefault ? (
         <Badge
           variant="outline"
@@ -67,7 +72,7 @@ export function EnvironmentBadges({
   );
 }
 
-/** Flag totals as three tiles — the unit both the cards and coverage use. */
+/** Flag totals as three tiles — the unit both the cards and project tables use. */
 function CountTiles({
   counts,
   dense = false,
@@ -139,8 +144,9 @@ export function EnvironmentCard({ data }: { data: EnvironmentCardData }) {
           <EnvironmentBadges
             isDefault={environment.isDefault}
             isProtected={environment.isProtected}
+            isArchived={environment.archivedAt !== null}
           />
-          <EnvironmentMenu name={environment.name} />
+          <EnvironmentMenu environment={environment} />
         </span>
       </div>
 
@@ -197,30 +203,13 @@ export function EnvironmentGrid({
   );
 }
 
-/** Danger zone. The action is disabled until the API can delete environments. */
-export function EnvironmentDangerCard() {
+/** Explains an archived environment on the tabs that cannot restore it. */
+export function ArchivedEnvironmentNotice({ name }: { name: string }) {
   return (
-    <section className="border-danger-ink/30 bg-danger-ink/5 rounded-lg border p-4">
-      <h2 className="text-danger-ink text-[13px] font-medium">
-        Delete environment
-      </h2>
-      <p className="text-muted-foreground mt-1 text-[11px]">
-        Removes all flags and keys
-      </p>
-
-      <div className="mt-3 flex justify-center">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled
-          title="Delete environment — coming soon"
-          className="border-danger-ink/40 text-danger-ink gap-1.5 text-[11px]"
-        >
-          <Trash2Icon aria-hidden="true" className="size-3.5" />
-          Delete
-        </Button>
-      </div>
-    </section>
+    <aside className="bg-muted text-muted-foreground mb-4 rounded-lg border p-3 text-[12px]">
+      {name} is archived. Its SDK keys are revoked and it no longer appears in
+      the switcher. Restore it from the Settings tab to make changes.
+    </aside>
   );
 }
 
@@ -236,6 +225,14 @@ export function EnvironmentMetadataCard({
 
   const rows: Array<[string, React.ReactNode]> = [
     ["Key", <span key="key" className="font-mono">{environment.key}</span>],
+    [
+      "Description",
+      environment.description ?? (
+        <span key="description" className="text-muted-foreground">
+          None
+        </span>
+      ),
+    ],
     [
       "Evaluation endpoint",
       <span key="endpoint" className="font-mono">
@@ -253,6 +250,8 @@ export function EnvironmentMetadataCard({
       </span>,
     ],
     ["Created", formatDate(environment.createdAt)],
+    ["Updated", formatDate(environment.updatedAt)],
+    ["Status", environment.archivedAt ? "Archived" : "Active"],
     ["Default", environment.isDefault ? "Yes" : "No"],
     ["Protected", environment.isProtected ? "Yes" : "No"],
   ];
@@ -355,8 +354,9 @@ export function ProtectedEnvironmentsNote() {
         </h2>
       </div>
       <p className="text-muted-foreground mt-2 text-[11px] leading-5">
-        Mark an environment as protected to require approval before any flag
-        change is published.
+        A protected environment refuses direct flag changes. An engineer
+        proposes the change, and a project admin other than the author approves
+        it before it reaches the environment.
       </p>
     </aside>
   );

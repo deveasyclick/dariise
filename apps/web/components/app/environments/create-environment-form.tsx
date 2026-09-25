@@ -1,14 +1,18 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckIcon, LoaderCircleIcon, RocketIcon } from "lucide-react";
+import { CheckIcon, FlagIcon, LoaderCircleIcon, RocketIcon } from "lucide-react";
 import { cn } from "cn";
-import type {
-  EnvironmentSummary,
-  FlagCoverageRow,
-  FlagCoverageState,
-  InitialFlagState,
+import {
+  createEnvironmentSchema,
+  MAX_PAGE_SIZE,
+  toFieldErrors,
+  type CreateEnvironmentInput,
+  type EnvironmentSummary,
+  type FieldErrors,
+  type FlagSummary,
+  type InitialFlagState,
 } from "@dariise/contracts";
 import {
   ProtectedEnvironmentsNote,
@@ -19,7 +23,7 @@ import {
   environmentColors,
 } from "@/components/app/environments/environment-colors";
 import { CreateEnvironmentHeader } from "@/components/app/environments/environment-headers";
-import { CoverageStatePill } from "@/components/app/environments/coverage-pill";
+import { FlagStatePill, flagState } from "@/components/app/flags/flag-state-pill";
 import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -31,40 +35,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { EnvironmentColor } from "@/lib/environment-color";
 import * as api from "@/lib/api";
-import { isRequired, isValidSlug, toWorkspaceSlug } from "@/lib/validation";
+import { toWorkspaceSlug } from "@/lib/validation";
 
 const steps = ["Details", "Flags", "Review"] as const;
+
+const headerClass =
+  "text-muted-foreground h-8 px-3 text-[10px] font-medium tracking-[0.1em] uppercase";
+const cellClass = "px-3 py-2.5 text-[12px]";
 
 const initialStatusOptions: Array<{
   value: InitialFlagState;
   label: string;
   hint: string;
 }> = [
-  { value: "all-off", label: "All off", hint: "Every flag starts disabled" },
+  {
+    value: "all-off",
+    label: "Start empty",
+    hint: "The project's flags do not exist here yet",
+  },
   {
     value: "copy-source",
-    label: "Copy source",
-    hint: "Match the source environment",
+    label: "Copy flags from an environment",
+    hint: "Every flag is copied once, at creation",
   },
-  { value: "all-on", label: "All on", hint: "Every flag starts enabled" },
 ];
 
-interface CreateEnvironmentErrors {
-  form?: string;
-  name?: string;
-  key?: string;
-}
+type CreateEnvironmentField = "name" | "key" | "copyFrom";
+
+type CreateEnvironmentErrors = FieldErrors<CreateEnvironmentField>;
 
 export function CreateEnvironmentForm({
   projectKey,
   environments,
-  coverageFlags,
 }: {
   projectKey: string;
   environments: EnvironmentSummary[];
-  coverageFlags: FlagCoverageRow[];
 }) {
   const defaultSource =
     environments.find((environment) => environment.isDefault)?.key ??
@@ -77,15 +92,63 @@ export function CreateEnvironmentForm({
   const [color, setColor] = useState<EnvironmentColor>("primary");
   const [copyFrom, setCopyFrom] = useState(defaultSource);
   const [initialStatus, setInitialStatus] =
-    useState<InitialFlagState>("copy-source");
+    useState<InitialFlagState>("all-off");
   const [editedKey, setEditedKey] = useState(false);
   const [errors, setErrors] = useState<CreateEnvironmentErrors>({});
   const [pending, setPending] = useState(false);
   const [created, setCreated] = useState(false);
+  const [source, setSource] = useState<{
+    environmentKey: string;
+    flags: FlagSummary[];
+  } | null>(null);
+  const [sourceError, setSourceError] = useState<{
+    environmentKey: string;
+    message: string;
+  } | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
   const sourceName =
     environments.find((environment) => environment.key === copyFrom)?.name ?? "";
+
+  // The API copies every flag of the source when the environment is created, so
+  // the preview has to read the source's flags rather than guess at them.
+  const copiesFromSource = initialStatus === "copy-source";
+
+  useEffect(() => {
+    if (!copiesFromSource || step !== 1 || !copyFrom) return;
+
+    const controller = new AbortController();
+
+    api.flags
+      .list(
+        projectKey,
+        { environmentKey: copyFrom, limit: MAX_PAGE_SIZE },
+        { signal: controller.signal },
+      )
+      .then((page) => {
+        if (controller.signal.aborted) return;
+        setSource({ environmentKey: copyFrom, flags: page.data });
+        setSourceError(null);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        if ((error as Error)?.name === "AbortError") return;
+
+        setSourceError({
+          environmentKey: copyFrom,
+          message:
+            error instanceof api.ApiError
+              ? error.message
+              : "The source environment's flags could not be loaded.",
+        });
+      });
+
+    return () => controller.abort();
+  }, [copiesFromSource, copyFrom, projectKey, step]);
+
+  const sourceFlags = source?.environmentKey === copyFrom ? source.flags : null;
+  const sourceLoadError =
+    sourceError?.environmentKey === copyFrom ? sourceError.message : null;
 
   function clearError(field: keyof CreateEnvironmentErrors) {
     setErrors((previous) => ({
@@ -102,21 +165,32 @@ export function CreateEnvironmentForm({
     clearError("name");
   }
 
-  function validate(): CreateEnvironmentErrors {
-    const next: CreateEnvironmentErrors = {
-      name: isRequired(name, "Environment name") ?? undefined,
-      key: isValidSlug(key, "Environment key", 2) ?? undefined,
+  function input(): CreateEnvironmentInput {
+    return {
+      name: name.trim(),
+      key: key.trim(),
+      color,
+      initialFlagStatus: initialStatus,
+      ...(copiesFromSource && copyFrom ? { copyFrom } : {}),
     };
+  }
 
-    if (!next.key && environments.some((item) => item.key === key.trim())) {
-      next.key = "An environment with this key already exists.";
+  function validate(): CreateEnvironmentErrors | null {
+    const result = createEnvironmentSchema.safeParse(input());
+
+    if (!result.success) {
+      return toFieldErrors<CreateEnvironmentField>(result.error);
     }
 
-    return next;
+    if (environments.some((environment) => environment.key === key.trim())) {
+      return { key: "An environment with this key already exists." };
+    }
+
+    return null;
   }
 
   function goToStep(next: number) {
-    const nextErrors = validate();
+    const nextErrors = validate() ?? {};
     setErrors(nextErrors);
 
     // Only the first step gates progress; Review is the confirmation.
@@ -128,8 +202,20 @@ export function CreateEnvironmentForm({
     event.preventDefault();
     if (pending) return;
 
+    /**
+     * Creation only ever happens from the last step.
+     *
+     * The Continue and Create Environment buttons sit in the same place in the
+     * tree, so without distinct keys React reuses one DOM node and rewrites its
+     * `type` from `button` to `submit` mid-click — and the browser submits the
+     * form the moment the attribute changes. The keys below stop that; this
+     * guard means even an implicit submission cannot create an environment from
+     * a step the user has not confirmed.
+     */
+    if (step !== steps.length - 1) return;
+
     const nextErrors = validate();
-    if (nextErrors.name || nextErrors.key) {
+    if (nextErrors) {
       setErrors(nextErrors);
       setStep(0);
       return;
@@ -142,17 +228,9 @@ export function CreateEnvironmentForm({
     controllerRef.current = controller;
 
     try {
-      await api.environments.create(
-        projectKey,
-        {
-          name: name.trim(),
-          key: key.trim(),
-          color,
-          copyFrom: copyFrom || undefined,
-          initialFlagStatus: initialStatus,
-        },
-        { signal: controller.signal },
-      );
+      await api.environments.create(projectKey, input(), {
+        signal: controller.signal,
+      });
       setCreated(true);
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
@@ -181,9 +259,8 @@ export function CreateEnvironmentForm({
             {name.trim() || key.trim()} created
           </h2>
           <p className="text-muted-foreground mt-1 max-w-md text-[13px]">
-            The environment and its flag configuration are saved. Issue an SDK
-            key for it from the SDK keys tab when you are ready to connect a
-            client.
+            The environment is ready. Issue an SDK key for it from the SDK keys
+            tab when you are ready to connect a client.
           </p>
           <div className="mt-5 flex items-center gap-2">
             <Button asChild size="sm">
@@ -199,7 +276,7 @@ export function CreateEnvironmentForm({
                 setKey("");
                 setColor("primary");
                 setCopyFrom(defaultSource);
-                setInitialStatus("copy-source");
+                setInitialStatus("all-off");
                 setEditedKey(false);
               }}
             >
@@ -211,12 +288,7 @@ export function CreateEnvironmentForm({
     );
   }
 
-  function previewState(flag: FlagCoverageRow): FlagCoverageState {
-    if (initialStatus === "all-on") return { kind: "on" };
-    if (initialStatus === "all-off") return { kind: "off" };
-
-    return flag.states[copyFrom] ?? { kind: "off" };
-  }
+  const previewName = name.trim() || key.trim() || "the new environment";
 
   const stepLabel = initialStatusOptions.find(
     (option) => option.value === initialStatus,
@@ -297,50 +369,27 @@ export function CreateEnvironmentForm({
                 </div>
               </div>
 
-              <h3 className="mt-6 text-[13px] font-medium">Configuration</h3>
+              <h3 className="mt-6 text-[13px] font-medium">Flags</h3>
+              <p className="text-muted-foreground mt-1 text-[11px]">
+                A flag belongs to one environment. A new environment starts
+                without the project&apos;s flags, or copies one environment&apos;s
+                flags once.
+              </p>
 
               <div className="mt-3 space-y-2">
-                <Label htmlFor="environment-copy-from">Copy settings from</Label>
-                <Select
-                  value={copyFrom}
-                  onValueChange={setCopyFrom}
-                  disabled={environments.length === 0}
-                >
-                  <SelectTrigger
-                    id="environment-copy-from"
-                    className="h-8 w-full text-[12px]"
-                  >
-                    <SelectValue placeholder="No other environment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {environments.map((environment) => (
-                      <SelectItem
-                        key={environment.key}
-                        value={environment.key}
-                      >
-                        {environment.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-muted-foreground text-[11px]">
-                  Copies targeting rules and flag states from this environment.
-                </p>
-              </div>
-
-              <div className="mt-4 space-y-2">
                 <Label asChild>
                   <p id="environment-initial-status-label">
-                    Initial flag status
+                    Starting flags
                   </p>
                 </Label>
                 <RadioGroup
                   value={initialStatus}
-                  onValueChange={(value) =>
-                    setInitialStatus(value as InitialFlagState)
-                  }
+                  onValueChange={(value) => {
+                    setInitialStatus(value as InitialFlagState);
+                    clearError("copyFrom");
+                  }}
                   aria-labelledby="environment-initial-status-label"
-                  className="grid gap-2 sm:grid-cols-3"
+                  className="grid gap-2 sm:grid-cols-2"
                 >
                   {initialStatusOptions.map((option) => {
                     const disabled =
@@ -382,41 +431,120 @@ export function CreateEnvironmentForm({
                   })}
                 </RadioGroup>
               </div>
+
+              {copiesFromSource ? (
+                <div className="mt-4 space-y-2">
+                  <Label htmlFor="environment-copy-from">
+                    Copy flags from
+                  </Label>
+                  <Select
+                    value={copyFrom}
+                    onValueChange={(value) => {
+                      setCopyFrom(value);
+                      clearError("copyFrom");
+                    }}
+                    disabled={environments.length === 0}
+                  >
+                    <SelectTrigger
+                      id="environment-copy-from"
+                      className="h-8 w-full text-[12px]"
+                    >
+                      <SelectValue placeholder="No other environment" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {environments.map((environment) => (
+                        <SelectItem
+                          key={environment.key}
+                          value={environment.key}
+                        >
+                          {environment.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-muted-foreground text-[11px]">
+                    Every flag of that environment — its configuration,
+                    variations, targeting rules and individual targets — is
+                    copied once, at creation. The two sets are independent
+                    afterwards.
+                  </p>
+                  {errors.copyFrom ? (
+                    <FieldError>{errors.copyFrom}</FieldError>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-muted-foreground mt-4 text-[11px]">
+                  Nothing is copied. The flags this project already has do not
+                  exist in {previewName} and arrive later, by promotion.
+                </p>
+              )}
             </section>
           ) : null}
 
           {step === 1 ? (
-            <section className="bg-card rounded-lg border p-4">
-              <h2 className="text-[13px] font-medium">Initial flag states</h2>
-              <p className="text-muted-foreground mt-1 text-[12px]">
-                {initialStatus === "copy-source"
-                  ? `Targeting rules and flag states are copied from ${sourceName || "the source environment"}.`
-                  : `Every flag starts ${initialStatus === "all-on" ? "enabled" : "disabled"}, with no targeting rules.`}
-              </p>
-
-              <ul className="mt-4 divide-y">
-                {coverageFlags.map((flag) => (
-                  <li
-                    key={flag.key}
-                    className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-                  >
-                    <span className="truncate font-mono text-[12px]">
-                      {flag.key}
-                    </span>
-                    <CoverageStatePill state={previewState(flag)} />
-                  </li>
-                ))}
-              </ul>
-
-              {coverageFlags.length === 0 ? (
-                <p className="text-muted-foreground mt-4 text-[11px]">
-                  This project has no flags yet, so there is nothing to
-                  configure.
+            <section className="bg-card rounded-lg border">
+              <header className="border-b p-4">
+                <h2 className="text-[13px] font-medium">
+                  {copiesFromSource ? "Flags to copy" : "Starting empty"}
+                </h2>
+                <p className="text-muted-foreground mt-1 text-[12px]">
+                  {copiesFromSource
+                    ? `Every flag of ${sourceName || "the source environment"} is copied once, at creation. Targeting rules and individual targets come with it, and the two sets are independent afterwards.`
+                    : `The flags this project already has do not exist in ${previewName} and arrive later, by promotion.`}
                 </p>
+              </header>
+
+              {copiesFromSource ? (
+                sourceLoadError ? (
+                  <p className="text-danger-ink p-4 text-[11px]">
+                    {sourceLoadError}
+                  </p>
+                ) : sourceFlags === null ? (
+                  <p className="text-muted-foreground p-4 text-[11px]">
+                    Loading {sourceName || "the source environment"}&apos;s
+                    flags…
+                  </p>
+                ) : sourceFlags.length === 0 ? (
+                  <p className="text-muted-foreground p-4 text-[11px]">
+                    {sourceName || "The source environment"} has no flags yet, so
+                    nothing will be copied.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className={headerClass}>Flag</TableHead>
+                        <TableHead className={headerClass}>
+                          {`Copied state from ${sourceName}`}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sourceFlags.map((flag) => (
+                        <TableRow key={flag.key}>
+                          <TableCell className={cellClass}>
+                            <span className="flex items-center gap-2">
+                              <FlagIcon
+                                aria-hidden="true"
+                                className="text-muted-foreground size-3.5"
+                              />
+                              <span className="font-mono text-[12px]">
+                                {flag.key}
+                              </span>
+                            </span>
+                          </TableCell>
+                          <TableCell className={cellClass}>
+                            <FlagStatePill state={flagState(flag)} />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )
               ) : (
-                <p className="text-muted-foreground mt-4 text-[11px]">
-                  The preview shows each flag&apos;s starting state in this
-                  environment.
+                <p className="text-muted-foreground p-4 text-[11px]">
+                  There is nothing to list: no flag is copied, and no targeting
+                  rule or individual target exists here until one is promoted.
                 </p>
               )}
             </section>
@@ -438,8 +566,15 @@ export function CreateEnvironmentForm({
                     environmentColors.find((item) => item.value === color)
                       ?.label ?? color,
                   ],
-                  ["Copy settings from", sourceName || "—"],
-                  ["Initial flag status", stepLabel ?? "—"],
+                  ...(copiesFromSource
+                    ? [
+                        [
+                          "Copy flags from",
+                          sourceName || "the project's default environment",
+                        ],
+                      ]
+                    : []),
+                  ["Starting flags", stepLabel ?? "—"],
                 ].map(([label, value]) => (
                   <div
                     key={label}
@@ -455,8 +590,7 @@ export function CreateEnvironmentForm({
 
               <div className="mt-4">
                 <p className="text-muted-foreground mb-2 text-[11px]">
-                  The environment is created with its own flag configuration.
-                  SDK keys are issued separately.
+                  SDK keys are issued separately, from the new environment.
                 </p>
                 <pre className="bg-muted overflow-x-auto rounded-lg border p-3 text-[11px] leading-5">
                   <code className="font-mono">
@@ -465,7 +599,8 @@ export function CreateEnvironmentForm({
                         name: name.trim(),
                         key: key.trim() || "environment-key",
                         color,
-                        copyFrom: copyFrom || null,
+                        copyFrom:
+                          copiesFromSource && copyFrom ? copyFrom : null,
                         initialFlagStatus: initialStatus,
                       },
                       null,
@@ -498,6 +633,10 @@ export function CreateEnvironmentForm({
 
               {step < steps.length - 1 ? (
                 <Button
+                  // Distinct keys keep the two buttons as separate elements:
+                  // sharing one DOM node lets the click that advances the step
+                  // also flip the node to `type="submit"` and submit the form.
+                  key="continue"
                   type="button"
                   size="sm"
                   className="gap-1.5"
@@ -507,6 +646,7 @@ export function CreateEnvironmentForm({
                 </Button>
               ) : (
                 <Button
+                  key="create"
                   type="submit"
                   size="sm"
                   className="gap-1.5"

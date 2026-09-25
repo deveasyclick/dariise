@@ -47,16 +47,14 @@ export function environmentFlagCounts(
   let off = 0;
 
   for (const flag of flags) {
-    const state = flag.environments.find(
-      (environment) => environment.environmentKey === environmentKey,
-    );
+    if (flag.environmentKey !== environmentKey) continue;
 
-    if (!state?.enabled) {
+    if (!flag.enabled) {
       off += 1;
       continue;
     }
 
-    if (state.rolloutPercentage >= 100) on += 1;
+    if (flag.rolloutPercentage >= 100) on += 1;
     else partial += 1;
   }
 

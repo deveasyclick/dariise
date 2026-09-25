@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle2Icon,
   InfoIcon,
@@ -11,7 +12,7 @@ import {
   XIcon,
 } from "lucide-react";
 import type {
-  FlagEnvironmentConfig,
+  FlagDetail,
   FlagIndividualTarget,
   TargetingCondition,
   TargetingOperator,
@@ -28,7 +29,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ApiError, flags as flagsApi } from "@/lib/api";
+import {
+  ApiError,
+  changeRequests as changeRequestsApi,
+  flags as flagsApi,
+} from "@/lib/api";
 
 const operatorLabels: Record<TargetingOperator, string> = {
   equals: "equals",
@@ -58,32 +63,39 @@ function nextId(prefix: string): string {
  *
  * Rule and individual-target edits are published through the API: rules with
  * `replaceRules`, targets with `replaceTargets`, and the default variation with
- * the environment config.
+ * the flag flag.
  */
 export function FlagTargeting({
   projectKey,
   flagKey,
-  config,
+  flag,
   rules: initialRules,
   targets: initialTargets,
   updatedLabel,
+  approval,
+  protectedEnvironment,
 }: {
   projectKey: string;
   flagKey: string;
-  config: FlagEnvironmentConfig;
+  flag: FlagDetail;
   rules: TargetingRule[];
   targets: FlagIndividualTarget[];
   updatedLabel: string;
+  /** Approval state for this flag in this environment. */
+  approval: React.ReactNode;
+  protectedEnvironment: boolean;
 }) {
   const [rules, setRules] = useState(initialRules);
   const [targets, setTargets] = useState(initialTargets);
-  const [serveDefault, setServeDefault] = useState(config.defaultVariation);
+  const [serveDefault, setServeDefault] = useState(flag.defaultVariation);
   const [pending, setPending] = useState(false);
   const [published, setPublished] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
+  const router = useRouter();
+  const [submitted, setSubmitted] = useState(false);
 
-  const environmentLabel = config.environmentName;
+  const environmentLabel = flag.environmentName;
 
   function updateCondition(
     ruleId: string,
@@ -127,7 +139,7 @@ export function FlagTargeting({
             values: [],
           },
         ],
-        variation: config.defaultVariation,
+        variation: flag.defaultVariation,
         segmentKeys: [],
         rollout: null,
       },
@@ -156,35 +168,71 @@ export function FlagTargeting({
       rollout: rule.rollout,
     }));
 
+    const changesServing = serveDefault !== flag.defaultVariation;
+
     try {
+      // A protected environment refuses all three writes, so the whole publish
+      // becomes one proposal: one approval decides one coherent change.
+      if (protectedEnvironment) {
+        await changeRequestsApi.create(
+          projectKey,
+          flagKey,
+          {
+            environmentKey: flag.environmentKey,
+            payload: {
+              rules: { rules: ruleInputs },
+              targets: { targets },
+              ...(changesServing
+                ? {
+                    config: {
+                      enabled: flag.enabled,
+                      offVariation: flag.offVariation,
+                      defaultVariation: serveDefault,
+                      rolloutPercentage: flag.rolloutPercentage,
+                      bucketBy: flag.bucketBy,
+                      variations: flag.variations,
+                    },
+                  }
+                : {}),
+            },
+          },
+          { signal: controller.signal },
+        );
+
+        setPublished(false);
+        setSubmitted(true);
+        router.refresh();
+        return;
+      }
+
       await Promise.all([
         flagsApi.replaceRules(
           projectKey,
           flagKey,
-          config.environmentKey,
+          flag.environmentKey,
           { rules: ruleInputs },
           { signal: controller.signal },
         ),
         flagsApi.replaceTargets(
           projectKey,
           flagKey,
-          config.environmentKey,
+          flag.environmentKey,
           { targets },
           { signal: controller.signal },
         ),
-        ...(serveDefault !== config.defaultVariation
+        ...(changesServing
           ? [
               flagsApi.updateEnvironmentConfig(
                 projectKey,
                 flagKey,
-                config.environmentKey,
+                flag.environmentKey,
                 {
-                  enabled: config.enabled,
-                  offVariation: config.offVariation,
+                  enabled: flag.enabled,
+                  offVariation: flag.offVariation,
                   defaultVariation: serveDefault,
-                  rolloutPercentage: config.rolloutPercentage,
-                  bucketBy: config.bucketBy,
-                  variations: config.variations,
+                  rolloutPercentage: flag.rolloutPercentage,
+                  bucketBy: flag.bucketBy,
+                  variations: flag.variations,
                 },
                 { signal: controller.signal },
               ),
@@ -208,6 +256,8 @@ export function FlagTargeting({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)]">
       <div className="space-y-4">
+        {approval}
+
         <section className="bg-card rounded-lg border p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -266,7 +316,7 @@ export function FlagTargeting({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {config.variations.map((variation) => (
+                          {flag.variations.map((variation) => (
                             <SelectItem
                               key={variation.key}
                               value={variation.key}
@@ -398,7 +448,7 @@ export function FlagTargeting({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {config.variations.map((variation) => (
+                        {flag.variations.map((variation) => (
                           <SelectItem key={variation.key} value={variation.key}>
                             {variation.name}
                           </SelectItem>
@@ -454,7 +504,7 @@ export function FlagTargeting({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {config.variations.map((variation) => (
+                {flag.variations.map((variation) => (
                   <SelectItem key={variation.key} value={variation.key}>
                     {variation.name}
                   </SelectItem>
@@ -467,7 +517,7 @@ export function FlagTargeting({
             Serving{" "}
             <span className="text-foreground font-mono">
               {
-                config.variations.find(
+                flag.variations.find(
                   (variation) => variation.key === serveDefault,
                 )?.name ?? serveDefault
               }
@@ -494,7 +544,13 @@ export function FlagTargeting({
             ) : (
               <SaveIcon aria-hidden="true" className="size-3.5" />
             )}
-            {pending ? "Publishing…" : "Save & Publish"}
+            {pending
+              ? protectedEnvironment
+                ? "Submitting…"
+                : "Publishing…"
+              : protectedEnvironment
+                ? "Submit for approval"
+                : "Save & Publish"}
           </Button>
 
           {error ? (
@@ -507,6 +563,13 @@ export function FlagTargeting({
             <p className="text-ok-ink mt-2 inline-flex items-center gap-1.5 text-[11px]">
               <CheckCircle2Icon aria-hidden="true" className="size-3.5" />
               Published just now
+            </p>
+          ) : null}
+
+          {submitted ? (
+            <p className="text-info-ink mt-2 inline-flex items-center gap-1.5 text-[11px]">
+              <InfoIcon aria-hidden="true" className="size-3.5" />
+              Submitted for approval
             </p>
           ) : null}
 

@@ -11,14 +11,17 @@ import type {
   CreateSegmentInput,
   CreatedApiKey,
   EnvironmentDetail,
+  EnvironmentListQuery,
   EnvironmentSummary,
   EnvironmentSettings,
   EvaluateRequest,
   EvaluationResult,
-  FlagCoveragePage,
+  CreateFlagChangeRequestInput,
+  DecideFlagChangeRequestInput,
+  FlagChangeRequest,
+  FlagChangeRequestListQuery,
   FlagDependencyGraph,
   FlagDetail,
-  FlagEnvironmentConfig,
   FlagIndividualTarget,
   FlagListQuery,
   FlagSummary,
@@ -26,6 +29,7 @@ import type {
   PaginationQuery,
   Project,
   ProjectMember,
+  PromoteFlagInput,
   ReplaceIndividualTargetsInput,
   ReplaceTargetingRulesInput,
   SegmentDetail,
@@ -34,6 +38,7 @@ import type {
   SegmentSummary,
   SessionUser,
   TargetingRule,
+  UpdateEnvironmentInput,
   UpdateEnvironmentSettingsInput,
   UpdateFlagConfigInput,
   UpdateFlagInput,
@@ -63,14 +68,40 @@ import env from "shared/env";
 
 export class ApiError extends Error {
   readonly status: number;
+  /** The envelope's `error.code`, e.g. `approval_required`. */
+  readonly code: string | null;
   readonly details: unknown;
 
-  constructor(message: string, status: number, details?: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    code: string | null = null,
+    details?: unknown,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
     this.details = details;
   }
+}
+
+/** The envelope's `error.code`, when the response carried one. */
+function errorCode(payload: unknown): string | null {
+  if (payload && typeof payload === "object" && "error" in payload) {
+    const error = (payload as { error: unknown }).error;
+
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      typeof (error as { code: unknown }).code === "string"
+    ) {
+      return (error as { code: string }).code;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -212,7 +243,12 @@ export async function request<T>(
         : { next: { revalidate } }),
     });
   } catch (cause) {
-    throw new ApiError(`Could not reach the Dariise API at ${apiBaseUrl()}.`, 0, cause);
+    throw new ApiError(
+      `Could not reach the Dariise API at ${apiBaseUrl()}.`,
+      0,
+      null,
+      cause,
+    );
   }
 
   const payload = await parseBody(response);
@@ -221,6 +257,7 @@ export async function request<T>(
     throw new ApiError(
       errorMessage(payload, response.status),
       response.status,
+      errorCode(payload),
       payload,
     );
   }
@@ -255,7 +292,7 @@ export const projects = {
 export const environments = {
   list: (
     projectKey: string,
-    query: Partial<PaginationQuery> = {},
+    query: Partial<EnvironmentListQuery> = {},
     options?: RequestOptions,
   ) =>
     request<ApiPage<EnvironmentSummary>>(
@@ -282,6 +319,40 @@ export const environments = {
       { ...options, body: input },
     ),
 
+  update: (
+    projectKey: string,
+    environmentKey: string,
+    input: UpdateEnvironmentInput,
+    options?: RequestOptions,
+  ) =>
+    request<EnvironmentDetail>(
+      "PATCH",
+      `/v1/projects/${projectKey}/environments/${environmentKey}`,
+      { ...options, body: input },
+    ),
+
+  archive: (
+    projectKey: string,
+    environmentKey: string,
+    options?: RequestOptions,
+  ) =>
+    request<EnvironmentDetail>(
+      "POST",
+      `/v1/projects/${projectKey}/environments/${environmentKey}/archive`,
+      options,
+    ),
+
+  unarchive: (
+    projectKey: string,
+    environmentKey: string,
+    options?: RequestOptions,
+  ) =>
+    request<EnvironmentDetail>(
+      "POST",
+      `/v1/projects/${projectKey}/environments/${environmentKey}/unarchive`,
+      options,
+    ),
+
   updateSettings: (
     projectKey: string,
     environmentKey: string,
@@ -293,18 +364,67 @@ export const environments = {
       `/v1/projects/${projectKey}/environments/${environmentKey}/settings`,
       { ...options, body: input },
     ),
+};
 
-  coverage: (
+export const changeRequests = {
+  list: (
     projectKey: string,
-    query: Partial<PaginationQuery> = {},
+    flagKey: string,
+    query: Partial<FlagChangeRequestListQuery> = {},
     options?: RequestOptions,
   ) =>
-    request<FlagCoveragePage>(
+    request<ApiPage<FlagChangeRequest>>(
       "GET",
-      `/v1/projects/${projectKey}/coverage`,
+      `/v1/projects/${projectKey}/flags/${flagKey}/change-requests`,
       { ...options, query },
     ),
+
+  create: (
+    projectKey: string,
+    flagKey: string,
+    input: CreateFlagChangeRequestInput,
+    options?: RequestOptions,
+  ) =>
+    request<FlagChangeRequest>(
+      "POST",
+      `/v1/projects/${projectKey}/flags/${flagKey}/change-requests`,
+      { ...options, body: input },
+    ),
+
+  approve: (
+    projectKey: string,
+    flagKey: string,
+    requestId: string,
+    input: DecideFlagChangeRequestInput = {},
+    options?: RequestOptions,
+  ) =>
+    request<FlagChangeRequest>(
+      "POST",
+      `/v1/projects/${projectKey}/flags/${flagKey}/change-requests/${requestId}/approve`,
+      { ...options, body: input },
+    ),
+
+  reject: (
+    projectKey: string,
+    flagKey: string,
+    requestId: string,
+    input: DecideFlagChangeRequestInput = {},
+    options?: RequestOptions,
+  ) =>
+    request<FlagChangeRequest>(
+      "POST",
+      `/v1/projects/${projectKey}/flags/${flagKey}/change-requests/${requestId}/reject`,
+      { ...options, body: input },
+    ),
 };
+
+function flagPath(
+  projectKey: string,
+  environmentKey: string,
+  flagKey: string,
+): string {
+  return `/v1/projects/${projectKey}/environments/${environmentKey}/flags/${flagKey}`;
+}
 
 export const flags = {
   list: (
@@ -327,29 +447,39 @@ export const flags = {
       body: input,
     }),
 
-  get: (projectKey: string, flagKey: string, options?: RequestOptions) =>
+  get: (
+    projectKey: string,
+    environmentKey: string,
+    flagKey: string,
+    options?: RequestOptions,
+  ) =>
     request<FlagDetail>(
       "GET",
-      `/v1/projects/${projectKey}/flags/${flagKey}`,
+      flagPath(projectKey, environmentKey, flagKey),
       options,
     ),
 
   update: (
     projectKey: string,
+    environmentKey: string,
     flagKey: string,
     input: UpdateFlagInput,
     options?: RequestOptions,
   ) =>
-    request<FlagDetail>(
-      "PATCH",
-      `/v1/projects/${projectKey}/flags/${flagKey}`,
-      { ...options, body: input },
-    ),
+    request<FlagDetail>("PATCH", flagPath(projectKey, environmentKey, flagKey), {
+      ...options,
+      body: input,
+    }),
 
-  archive: (projectKey: string, flagKey: string, options?: RequestOptions) =>
+  archive: (
+    projectKey: string,
+    environmentKey: string,
+    flagKey: string,
+    options?: RequestOptions,
+  ) =>
     request<{ key: string; status: string }>(
       "DELETE",
-      `/v1/projects/${projectKey}/flags/${flagKey}`,
+      flagPath(projectKey, environmentKey, flagKey),
       options,
     ),
 
@@ -363,23 +493,16 @@ export const flags = {
       query,
     }),
 
-  resolve: (flagKey: string, projectKey: string, options?: RequestOptions) =>
-    request<FlagDetail>("GET", `/v1/flags/${flagKey}`, {
-      ...options,
-      query: { projectKey },
-    }),
-
-  environmentConfig: (
-    projectKey: string,
+  resolve: (
     flagKey: string,
+    projectKey: string,
     environmentKey: string,
     options?: RequestOptions,
   ) =>
-    request<FlagEnvironmentConfig>(
-      "GET",
-      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}`,
-      options,
-    ),
+    request<FlagDetail>("GET", `/v1/flags/${flagKey}`, {
+      ...options,
+      query: { projectKey, environmentKey },
+    }),
 
   updateEnvironmentConfig: (
     projectKey: string,
@@ -388,9 +511,22 @@ export const flags = {
     input: UpdateFlagConfigInput,
     options?: RequestOptions,
   ) =>
-    request<FlagEnvironmentConfig>(
+    request<FlagDetail>(
       "PATCH",
-      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}`,
+      `${flagPath(projectKey, environmentKey, flagKey)}/config`,
+      { ...options, body: input },
+    ),
+
+  promote: (
+    projectKey: string,
+    environmentKey: string,
+    flagKey: string,
+    input: PromoteFlagInput,
+    options?: RequestOptions,
+  ) =>
+    request<FlagDetail>(
+      "POST",
+      `${flagPath(projectKey, environmentKey, flagKey)}/promote`,
       { ...options, body: input },
     ),
 
@@ -402,7 +538,7 @@ export const flags = {
   ) =>
     request<TargetingRule[]>(
       "GET",
-      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}/rules`,
+      `${flagPath(projectKey, environmentKey, flagKey)}/rules`,
       options,
     ),
 
@@ -415,7 +551,7 @@ export const flags = {
   ) =>
     request<TargetingRule[]>(
       "PUT",
-      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}/rules`,
+      `${flagPath(projectKey, environmentKey, flagKey)}/rules`,
       { ...options, body: input },
     ),
 
@@ -427,7 +563,7 @@ export const flags = {
   ) =>
     request<FlagIndividualTarget[]>(
       "GET",
-      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}/targets`,
+      `${flagPath(projectKey, environmentKey, flagKey)}/targets`,
       options,
     ),
 
@@ -440,26 +576,32 @@ export const flags = {
   ) =>
     request<FlagIndividualTarget[]>(
       "PUT",
-      `/v1/projects/${projectKey}/flags/${flagKey}/environments/${environmentKey}/targets`,
+      `${flagPath(projectKey, environmentKey, flagKey)}/targets`,
       { ...options, body: input },
     ),
 
-  dependencies: (projectKey: string, flagKey: string, options?: RequestOptions) =>
+  dependencies: (
+    projectKey: string,
+    flagKey: string,
+    environmentKey: string,
+    options?: RequestOptions,
+  ) =>
     request<FlagDependencyGraph>(
       "GET",
-      `/v1/projects/${projectKey}/flags/${flagKey}/dependencies`,
+      `${flagPath(projectKey, environmentKey, flagKey)}/dependencies`,
       options,
     ),
 
   versions: (
     projectKey: string,
     flagKey: string,
+    environmentKey: string,
     query: Partial<PaginationQuery> = {},
     options?: RequestOptions,
   ) =>
     request<ApiPage<FlagVersion>>(
       "GET",
-      `/v1/projects/${projectKey}/flags/${flagKey}/versions`,
+      `${flagPath(projectKey, environmentKey, flagKey)}/versions`,
       { ...options, query },
     ),
 };

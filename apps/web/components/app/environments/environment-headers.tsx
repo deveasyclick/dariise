@@ -116,26 +116,28 @@ export function EnvironmentDetailHeader({
             <EnvironmentBadges
               isDefault={environment.isDefault}
               isProtected={environment.isProtected}
+              isArchived={environment.archivedAt !== null}
             />
           </div>
           <p className="text-muted-foreground mt-0.5 font-mono text-[12px]">
             {environment.key}
           </p>
+          {environment.description ? (
+            <p className="text-muted-foreground mt-1 max-w-2xl text-[12px]">
+              {environment.description}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled
-            title="Edit environment — coming soon"
-            className="gap-1.5 text-[11px]"
-          >
-            <PencilIcon aria-hidden="true" className="size-3.5" />
-            Edit environment
+          <Button asChild variant="outline" size="sm" className="gap-1.5 text-[11px]">
+            <Link href={`/environments/${environment.key}/settings`}>
+              <PencilIcon aria-hidden="true" className="size-3.5" />
+              Edit environment
+            </Link>
           </Button>
 
-          <EnvironmentMenu name={environment.name} />
+          <EnvironmentMenu environment={environment} />
         </div>
       </div>
     </div>

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import {
-  EnvironmentDangerCard,
   EnvironmentMetadataCard,
   ProtectedEnvironmentsNote,
 } from "@/components/app/environments/environment-cards";
+import { EnvironmentArchive } from "@/components/app/environments/environment-archive";
+import { EnvironmentDetailsForm } from "@/components/app/environments/environment-details-form";
 import { EnvironmentDetailHeader } from "@/components/app/environments/environment-headers";
 import { EnvironmentSettingsCard } from "@/components/app/environments/environment-settings";
 import { EnvironmentTabs } from "@/components/app/environments/environment-tabs";
@@ -14,14 +15,14 @@ import { findEnvironment } from "../load-environment";
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(
-  props: PageProps<"/environments/[key]/settings">,
+  props: PageProps<"/environments/[env]/settings">,
 ): Promise<Metadata> {
-  const { key } = await props.params;
+  const { env } = await props.params;
   const { project } = await getScope();
 
   if (!project) return { title: "Environment" };
 
-  const environment = await findEnvironment(project.key, key);
+  const environment = await findEnvironment(project.key, env);
 
   return environment
     ? {
@@ -32,15 +33,17 @@ export async function generateMetadata(
 }
 
 export default async function EnvironmentSettingsPage(
-  props: PageProps<"/environments/[key]/settings">,
+  props: PageProps<"/environments/[env]/settings">,
 ) {
-  const { key } = await props.params;
+  const { env } = await props.params;
   const { project } = await getScope();
 
   if (!project) notFound();
 
-  const environment = await findEnvironment(project.key, key);
+  const environment = await findEnvironment(project.key, env);
   if (!environment) notFound();
+
+  const archived = environment.archivedAt !== null;
 
   return (
     <>
@@ -49,11 +52,25 @@ export default async function EnvironmentSettingsPage(
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.5fr)]">
         <div className="space-y-4">
+          {archived ? null : (
+            <EnvironmentDetailsForm
+              projectKey={project.key}
+              environmentKey={environment.key}
+              name={environment.name}
+              description={environment.description}
+            />
+          )}
           <EnvironmentSettingsCard
             projectKey={project.key}
             environment={environment}
+            disabled={archived}
           />
-          <EnvironmentDangerCard />
+          <EnvironmentArchive
+            projectKey={project.key}
+            environmentKey={environment.key}
+            environmentName={environment.name}
+            archived={archived}
+          />
         </div>
 
         <div className="space-y-4">

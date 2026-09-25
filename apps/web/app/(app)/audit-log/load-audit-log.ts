@@ -4,6 +4,7 @@ import {
 } from "@dariise/contracts";
 import { auditActionMeta } from "@/components/app/audit-log/audit-action-meta";
 import type {
+  AuditActorOption,
   AuditChangeField,
   AuditEnvironmentOption,
   AuditEventView,
@@ -117,6 +118,7 @@ export async function loadAuditLog(now: Date): Promise<AuditLogViewProps> {
       id: entry.id,
       dayLabel: formatDayLabel(entry.createdAt, now),
       actor: entry.actor,
+      actorName: entry.actorName ?? entry.actor,
       action: entry.action,
       verb: meta.verb,
       target: entry.target,
@@ -131,10 +133,19 @@ export async function loadAuditLog(now: Date): Promise<AuditLogViewProps> {
     };
   });
 
+  const actors: AuditActorOption[] = [];
+  const seenActors = new Set<string>();
+
+  for (const event of events) {
+    if (seenActors.has(event.actor)) continue;
+    seenActors.add(event.actor);
+    actors.push({ id: event.actor, name: event.actorName });
+  }
+
   return {
     events,
     environments,
-    actors: [...new Set(events.map((event) => event.actor))],
+    actors,
     totalEvents: events.length,
     hasMore: page.nextCursor !== null,
   };

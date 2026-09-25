@@ -27,26 +27,20 @@ const rows: SettingRow[] = [
   {
     key: "protectedEnvironment",
     label: "Protected environment",
-    description: "Require approval before publishing changes",
-  },
-  {
-    key: "requireApprovals",
-    label: "Require approvals",
-    description: "Two-person review for flag changes",
-  },
-  {
-    key: "singleUseSdkKeys",
-    label: "Single-use SDK keys",
-    description: "Rotate keys after each evaluation session",
+    description:
+      "Publish flag changes through a change request a second person approves",
   },
 ];
 
 export function EnvironmentSettingsCard({
   projectKey,
   environment,
+  disabled = false,
 }: {
   projectKey: string;
   environment: Pick<EnvironmentDetail, "key" | "name" | "settings">;
+  /** An archived environment is read-only until it is restored. */
+  disabled?: boolean;
 }) {
   const [settings, setSettings] = useState<EnvironmentSettings>(
     environment.settings,
@@ -68,7 +62,7 @@ export function EnvironmentSettingsCard({
   }
 
   async function handleSave() {
-    if (pending || !dirty) return;
+    if (pending || !dirty || disabled) return;
     setPending(true);
     setSaved(false);
     setError(null);
@@ -120,6 +114,7 @@ export function EnvironmentSettingsCard({
 
             <Switch
               checked={settings[row.key]}
+              disabled={disabled}
               onCheckedChange={(value) => toggle(row.key, value)}
               aria-label={`${row.label} in ${environment.name}`}
               className="mt-0.5"
@@ -142,7 +137,11 @@ export function EnvironmentSettingsCard({
           </span>
         ) : (
           <span className="text-muted-foreground text-[11px]">
-            {dirty ? "Unsaved changes" : "No changes"}
+            {disabled
+              ? "Archived environments are read-only"
+              : dirty
+                ? "Unsaved changes"
+                : "No changes"}
           </span>
         )}
 
@@ -150,7 +149,7 @@ export function EnvironmentSettingsCard({
           type="button"
           size="sm"
           className="gap-1.5 text-[11px]"
-          disabled={pending || !dirty}
+          disabled={pending || !dirty || disabled}
           onClick={handleSave}
         >
           {pending ? (

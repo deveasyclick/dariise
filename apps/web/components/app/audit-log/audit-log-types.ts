@@ -12,6 +12,8 @@ export interface AuditEventView {
   /** Day heading, e.g. `Today`, `Yesterday`, or `12 Sep`. */
   dayLabel: string;
   actor: string;
+  /** Snapshotted name, falling back to the id for rows written before it existed. */
+  actorName: string;
   action: AuditAction;
   /** What the actor did, e.g. `changed rollout on`. */
   verb: string;
@@ -41,11 +43,16 @@ export interface AuditEnvironmentOption {
   name: string;
 }
 
+export interface AuditActorOption {
+  id: string;
+  name: string;
+}
+
 export interface AuditLogViewProps {
   events: AuditEventView[];
   environments: AuditEnvironmentOption[];
   /** Distinct actors, in the order they first appear. */
-  actors: string[];
+  actors: AuditActorOption[];
   /** Events on the loaded page; the API has more when `hasMore`. */
   totalEvents: number;
   hasMore: boolean;

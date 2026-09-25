@@ -126,7 +126,7 @@ export function SegmentUsedByFlags({ flags }: { flags: SegmentFlag[] }) {
             >
               <SegmentGlyph segmentKey={flag.key} className="size-6" />
               <Link
-                href={`/flags/${flag.key}`}
+                href={`/environments/${flag.environmentKey}/flags/${flag.key}`}
                 className="hover:text-primary flex-1 font-mono text-[12px] transition-colors"
               >
                 {flag.key}
@@ -247,7 +247,7 @@ export function SegmentFlags({ flags }: { flags: SegmentFlag[] }) {
               <TableRow key={`${flag.key}-${flag.environmentKey}`}>
                 <TableCell className={cellClass}>
                   <Link
-                    href={`/flags/${flag.key}`}
+                    href={`/environments/${flag.environmentKey}/flags/${flag.key}`}
                     className="hover:text-primary inline-flex items-center gap-2 font-mono text-[12px] transition-colors"
                   >
                     <LayersIcon

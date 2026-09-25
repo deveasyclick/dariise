@@ -9,6 +9,7 @@ import {
 } from "@/components/app/overview-cards";
 import { StatCard } from "@/components/app/stat-card";
 import { Button } from "@/components/ui/button";
+import { getScope } from "@/lib/scope";
 import { loadOverview } from "./load-overview";
 
 export const metadata: Metadata = {
@@ -21,7 +22,10 @@ export const dynamic = "force-dynamic";
 
 export default async function OverviewPage() {
   // One `now` for the whole render keeps server output and hydration in step.
-  const data = await loadOverview(new Date());
+  const [{ environment }, data] = await Promise.all([
+    getScope(),
+    loadOverview(new Date()),
+  ]);
 
   if (!data) return null;
 
@@ -36,7 +40,13 @@ export default async function OverviewPage() {
           Last 7 days
         </span>
         <Button asChild size="sm">
-          <Link href="/flags/new">
+          <Link
+            href={
+              environment
+                ? `/environments/${environment.key}/flags/new`
+                : "/environments"
+            }
+          >
             <PlusIcon aria-hidden="true" />
             New Flag
           </Link>

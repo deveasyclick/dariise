@@ -46,7 +46,7 @@ function AuditRow({
 
       <span className="min-w-0 flex-1">
         <span className="block text-[12px]">
-          <span className="font-medium">{event.actor}</span>{" "}
+          <span className="font-medium">{event.actorName}</span>{" "}
           <span className="text-muted-foreground">{event.verb}</span>
           {event.target ? (
             <>

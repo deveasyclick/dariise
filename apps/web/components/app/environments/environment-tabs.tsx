@@ -6,7 +6,6 @@ import { cn } from "cn";
 
 const tabs = [
   { label: "SDK keys", segment: "" },
-  { label: "Coverage", segment: "coverage" },
   { label: "Settings", segment: "settings" },
 ] as const;
 

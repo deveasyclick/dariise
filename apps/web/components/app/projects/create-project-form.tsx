@@ -27,8 +27,6 @@ import * as api from "@/lib/api";
 import { selectProject } from "@/lib/scope-actions";
 import { isRequired } from "@/lib/validation";
 
-type InitialFlagState = "all-off" | "copy-source" | "all-on";
-
 /**
  * Environments a new project is offered with.
  *
@@ -50,24 +48,6 @@ const environmentPresets: EnvironmentPreset[] = [
   },
 ];
 
-const initialFlagStateOptions: Array<{
-  value: InitialFlagState;
-  label: string;
-  hint: string;
-}> = [
-  {
-    value: "all-off",
-    label: "All off",
-    hint: "Every flag starts disabled",
-  },
-  {
-    value: "copy-source",
-    label: "Copy from project",
-    hint: "Copies flag states from an existing project",
-  },
-  { value: "all-on", label: "All on", hint: "Every flag starts enabled" },
-];
-
 interface CreateProjectErrors {
   form?: string;
   name?: string;
@@ -78,8 +58,6 @@ export function CreateProjectForm() {
   const [name, setName] = useState("");
   const [color, setColor] = useState<EnvironmentColor>("primary");
   const [preset, setPreset] = useState<string>(defaultPreset.value);
-  const [initialFlagState, setInitialFlagState] =
-    useState<InitialFlagState>("copy-source");
   const [defaultEnvironment, setDefaultEnvironment] = useState(
     defaultPreset.environments[defaultPreset.environments.length - 1],
   );
@@ -234,53 +212,6 @@ export function CreateProjectForm() {
           </div>
 
           <h3 className="mt-6 text-[13px] font-medium">
-            Initial flag states{" "}
-            <span className="text-muted-foreground font-normal">
-              (not applied yet)
-            </span>
-          </h3>
-
-          <RadioGroup
-            value={initialFlagState}
-            onValueChange={(value) =>
-              setInitialFlagState(value as InitialFlagState)
-            }
-            aria-label="Initial flag states"
-            className="mt-3 grid gap-2 sm:grid-cols-3"
-          >
-            {initialFlagStateOptions.map((option) => {
-              const active = initialFlagState === option.value;
-
-              return (
-                <Label
-                  key={option.value}
-                  htmlFor={`create-project-flags-${option.value}`}
-                  className={cn(
-                    "flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 font-normal transition-colors",
-                    active
-                      ? "border-primary bg-primary/5"
-                      : "hover:bg-muted/50",
-                  )}
-                >
-                  <RadioGroupItem
-                    id={`create-project-flags-${option.value}`}
-                    value={option.value}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="block text-[12px] font-medium">
-                      {option.label}
-                    </span>
-                    <span className="text-muted-foreground block text-[10px] leading-4">
-                      {option.hint}
-                    </span>
-                  </span>
-                </Label>
-              );
-            })}
-          </RadioGroup>
-
-          <h3 className="mt-6 text-[13px] font-medium">
             Default environment{" "}
             <span className="text-muted-foreground font-normal">
               (not applied yet)
@@ -311,8 +242,8 @@ export function CreateProjectForm() {
 
           <p className="text-muted-foreground mt-6 text-[11px] leading-5">
             Only the project name and its first environment are saved today.
-            Presets, colour, initial flag states and the default environment are
-            sent to the API once those choices are modelled.
+            Presets, colour and the default environment are sent to the API once
+            those choices are modelled.
           </p>
 
           {errors.form ? <FieldError>{errors.form}</FieldError> : null}

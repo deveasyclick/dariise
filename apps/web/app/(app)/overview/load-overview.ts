@@ -1,4 +1,8 @@
-import { MAX_PAGE_SIZE, type FlagSummary } from "@dariise/contracts";
+import {
+  MAX_PAGE_SIZE,
+  type EnvironmentSummary,
+  type FlagSummary,
+} from "@dariise/contracts";
 import { auditActionMeta } from "@/components/app/audit-log/audit-action-meta";
 import type {
   ActiveRollout,
@@ -21,12 +25,16 @@ export interface OverviewData {
   recentActivity: RecentActivity[];
 }
 
-async function listProjectFlags(projectKey: string): Promise<FlagSummary[]> {
+async function listFlagsIn(
+  projectKey: string,
+  environmentKey: string,
+): Promise<FlagSummary[]> {
   const flags: FlagSummary[] = [];
   let cursor: string | undefined;
 
   do {
     const page = await api.flags.list(projectKey, {
+      environmentKey,
       limit: MAX_PAGE_SIZE,
       ...(cursor === undefined ? {} : { cursor }),
     });
@@ -38,9 +46,20 @@ async function listProjectFlags(projectKey: string): Promise<FlagSummary[]> {
   return flags;
 }
 
-function stateIn(flag: FlagSummary, environmentKey: string) {
-  return flag.environments.find(
-    (entry) => entry.environmentKey === environmentKey,
+interface EnvironmentFlags {
+  environment: EnvironmentSummary;
+  flags: FlagSummary[];
+}
+
+async function listProjectFlags(
+  projectKey: string,
+  environments: EnvironmentSummary[],
+): Promise<EnvironmentFlags[]> {
+  return Promise.all(
+    environments.map(async (environment) => ({
+      environment,
+      flags: await listFlagsIn(projectKey, environment.key),
+    })),
   );
 }
 
@@ -60,8 +79,8 @@ export async function loadOverview(now: Date): Promise<OverviewData | null> {
 
   if (!project) return null;
 
-  const [flags, activityPage] = await Promise.all([
-    listProjectFlags(project.key),
+  const [flagsByEnvironment, activityPage] = await Promise.all([
+    listProjectFlags(project.key, environments),
     api.audit.listForProject(project.key, {
       limit: ACTIVITY_LIMIT,
       from: new Date(
@@ -70,22 +89,23 @@ export async function loadOverview(now: Date): Promise<OverviewData | null> {
     }),
   ]);
 
+  const flags = flagsByEnvironment.flatMap((entry) => entry.flags);
   const selectedKey = environment?.key ?? null;
   const scopeNote = environment?.name ?? "No environment";
+  const selectedFlags =
+    selectedKey === null
+      ? []
+      : flags.filter((flag) => flag.environmentKey === selectedKey);
 
   const enabledCount =
     selectedKey === null
       ? null
-      : flags.filter((flag) => stateIn(flag, selectedKey)?.enabled === true)
-          .length;
+      : selectedFlags.filter((flag) => flag.enabled).length;
 
   const rolloutCount =
     selectedKey === null
       ? null
-      : flags.filter((flag) => {
-          const state = stateIn(flag, selectedKey);
-          return state !== undefined && isRollingOut(state);
-        }).length;
+      : selectedFlags.filter((flag) => isRollingOut(flag)).length;
 
   const archivedCount = flags.filter(
     (flag) => flag.status === "archived",
@@ -118,36 +138,26 @@ export async function loadOverview(now: Date): Promise<OverviewData | null> {
     },
   ];
 
-  const activeRollouts: ActiveRollout[] = [];
-
-  for (const flag of flags) {
-    for (const state of flag.environments) {
-      if (!isRollingOut(state)) continue;
-
-      activeRollouts.push({
-        flagKey: flag.key,
-        environment: state.environmentName,
-        percentage: state.rolloutPercentage,
-      });
-    }
-  }
+  const activeRollouts: ActiveRollout[] = flags
+    .filter((flag) => isRollingOut(flag))
+    .map((flag) => ({
+      flagKey: flag.key,
+      environment: flag.environmentName,
+      percentage: flag.rolloutPercentage,
+    }));
 
   activeRollouts.sort(
     (a, b) =>
       b.percentage - a.percentage || a.flagKey.localeCompare(b.flagKey),
   );
 
-  const flagHealth: FlagHealth[] = environments.map((entry) => {
-    let enabled = 0;
-    let disabled = 0;
-
-    for (const flag of flags) {
-      if (stateIn(flag, entry.key)?.enabled === true) enabled += 1;
-      else disabled += 1;
-    }
-
-    return { environment: entry.name, enabled, disabled };
-  });
+  const flagHealth: FlagHealth[] = flagsByEnvironment.map(
+    ({ environment: entry, flags: environmentFlags }) => ({
+      environment: entry.name,
+      enabled: environmentFlags.filter((flag) => flag.enabled).length,
+      disabled: environmentFlags.filter((flag) => !flag.enabled).length,
+    }),
+  );
 
   const flagKeyById = new Map(flags.map((flag) => [flag.id, flag.key]));
   const environmentNameById = new Map(

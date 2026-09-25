@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { EnvironmentDangerCard } from "@/components/app/environments/environment-cards";
+import { ArchivedEnvironmentNotice } from "@/components/app/environments/environment-cards";
 import { EnvironmentDetailHeader } from "@/components/app/environments/environment-headers";
 import {
   EndpointsCard,
@@ -15,14 +15,14 @@ import { findEnvironment } from "./load-environment";
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(
-  props: PageProps<"/environments/[key]">,
+  props: PageProps<"/environments/[env]">,
 ): Promise<Metadata> {
-  const { key } = await props.params;
+  const { env } = await props.params;
   const { project } = await getScope();
 
   if (!project) return { title: "Environment" };
 
-  const environment = await findEnvironment(project.key, key);
+  const environment = await findEnvironment(project.key, env);
 
   return environment
     ? {
@@ -34,14 +34,14 @@ export async function generateMetadata(
 
 /** SDK keys tab — the default view for an environment. */
 export default async function EnvironmentKeysPage(
-  props: PageProps<"/environments/[key]">,
+  props: PageProps<"/environments/[env]">,
 ) {
-  const { key } = await props.params;
+  const { env } = await props.params;
   const { project } = await getScope();
 
   if (!project) notFound();
 
-  const environment = await findEnvironment(project.key, key);
+  const environment = await findEnvironment(project.key, env);
   if (!environment) notFound();
 
   const keyPage = await api.apiKeys.list(project.key);
@@ -55,6 +55,10 @@ export default async function EnvironmentKeysPage(
     <>
       <EnvironmentDetailHeader environment={environment} />
       <EnvironmentTabs environmentKey={environment.key} />
+
+      {environment.archivedAt ? (
+        <ArchivedEnvironmentNotice name={environment.name} />
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.5fr)]">
         <div className="space-y-4">
@@ -70,8 +74,8 @@ export default async function EnvironmentKeysPage(
           <EnvironmentSettingsCard
             projectKey={project.key}
             environment={environment}
+            disabled={environment.archivedAt !== null}
           />
-          <EnvironmentDangerCard />
         </div>
       </div>
     </>

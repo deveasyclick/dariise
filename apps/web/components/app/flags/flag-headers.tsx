@@ -8,7 +8,7 @@ const eyebrowClass =
   "text-[10px] font-medium tracking-[0.16em] uppercase text-muted-foreground";
 
 interface CreateFlagHeaderProps {
-  /** Steps shown as a progress path, e.g. ["Details", "Targeting", "Review"]. */
+  /** Steps shown as a progress path, e.g. ["Details", "Preview"]. */
   steps: string[];
   /** Zero-based index of the step currently in view. */
   currentStep: number;
@@ -30,7 +30,7 @@ export function CreateFlagHeader({
             Create Feature Flag
           </h1>
           <p className="text-muted-foreground mt-0.5 text-[13px]">
-            Define a new flag, then configure targeting per environment.
+            Define a new flag and preview it before it is created.
           </p>
         </div>
 
@@ -65,8 +65,11 @@ interface FlagDetailHeaderProps {
   flagKey: string;
   name: string;
   description: string;
+  environmentKey: string;
   environmentLabel: string;
   enabled: boolean;
+  /** The promotion entry point, rendered beside the status chips. */
+  promotion: React.ReactNode;
 }
 
 /** Identity and status strip shown above the tabs on every flag detail screen. */
@@ -74,13 +77,15 @@ export function FlagDetailHeader({
   flagKey,
   name,
   description,
+  environmentKey,
   environmentLabel,
   enabled,
+  promotion,
 }: FlagDetailHeaderProps) {
   return (
     <div className="bg-card mb-4 rounded-lg border p-4">
       <Link
-        href="/flags"
+        href={`/environments/${environmentKey}/flags`}
         className="text-muted-foreground hover:text-foreground mb-3 inline-flex items-center gap-1 text-[12px] transition-colors"
       >
         <ChevronLeftIcon aria-hidden="true" className="size-3.5" />
@@ -125,6 +130,7 @@ export function FlagDetailHeader({
             />
             {enabled ? "Enabled" : "Disabled"}
           </span>
+          {promotion}
           <Button
             size="sm"
             disabled

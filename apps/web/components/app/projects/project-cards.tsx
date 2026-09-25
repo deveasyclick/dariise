@@ -4,8 +4,6 @@ import { ArchiveIcon, ArrowRightIcon, FlagIcon, GlobeIcon } from "lucide-react";
 import { cn } from "cn";
 import type {
   EnvironmentSummary,
-  FlagCoverageState,
-  FlagEnvironmentSummary,
   FlagSummary,
   Project,
   ProjectMember,
@@ -14,10 +12,9 @@ import {
   environmentColorSwatch,
   environmentColorTone,
 } from "@/components/app/environments/environment-colors";
-import { CoverageStatePill } from "@/components/app/environments/coverage-pill";
+import { FlagStatePill, flagState, type FlagState } from "@/components/app/flags/flag-state-pill";
 import {
   countLabel,
-  environmentFlagCounts,
   type CappedCount,
 } from "@/components/app/environments/capped-count";
 import { sectionActionClass, SectionCard } from "@/components/app/page-header";
@@ -300,12 +297,11 @@ export function ProjectsOverviewCard({
 /** Environments of one project, with how many flags each enables. */
 export function ProjectEnvironmentsCard({
   environments,
-  flags,
-  flagsTruncated,
+  enabledByEnvironment,
 }: {
   environments: EnvironmentSummary[];
-  flags: FlagSummary[];
-  flagsTruncated: boolean;
+  /** Enabled flag count per environment key. */
+  enabledByEnvironment: Record<string, CappedCount>;
 }) {
   return (
     <SectionCard
@@ -352,13 +348,7 @@ export function ProjectEnvironmentsCard({
                   {environment.key}
                 </TableCell>
                 <TableCell className="text-[12px]">
-                  {countLabel(
-                    environmentFlagCounts(
-                      flags,
-                      environment.key,
-                      flagsTruncated,
-                    ).enabled,
-                  )}
+                  {countLabel(enabledCount(enabledByEnvironment, environment.key))}
                 </TableCell>
               </TableRow>
             ))
@@ -369,44 +359,34 @@ export function ProjectEnvironmentsCard({
   );
 }
 
-function flagState(
-  summary: FlagEnvironmentSummary | undefined,
-): FlagCoverageState {
-  if (!summary?.enabled || summary.rolloutPercentage <= 0) {
-    return { kind: "off" };
-  }
-
-  if (summary.rolloutPercentage >= 100) return { kind: "on" };
-
-  return { kind: "percentage", percentage: summary.rolloutPercentage };
-}
-
 /** Tile tint for a flag row, following the state it renders. */
-function flagTone(state: FlagCoverageState): string {
+function flagTone(state: FlagState): string {
   if (state.kind === "on") return "bg-ok-ink/10 text-ok-ink";
   if (state.kind === "percentage") return "bg-primary-ink/10 text-primary-ink";
 
   return "bg-muted text-muted-foreground";
 }
 
+function enabledCount(
+  counts: Record<string, CappedCount>,
+  environmentKey: string,
+): CappedCount {
+  return counts[environmentKey] ?? { count: 0, truncated: false };
+}
+
 interface ProjectFlagsCardProps {
   projectKey: string;
   flags: FlagSummary[];
-  environments: EnvironmentSummary[];
-  /** Environment whose state each row quotes; the project's default. */
-  defaultEnvironmentKey: string | null;
   /** Cap the list and add a "View all" link, as the design does on Overview. */
   limit?: number;
   /** True when the flag list is one page of a longer collection. */
   truncated?: boolean;
 }
 
-/** Flags this project owns, each with the environment and state it serves. */
+/** Flags this project owns, each with the environment it belongs to. */
 export function ProjectFlagsCard({
   projectKey,
   flags,
-  environments,
-  defaultEnvironmentKey,
   limit,
   truncated = false,
 }: ProjectFlagsCardProps) {
@@ -433,19 +413,11 @@ export function ProjectFlagsCard({
       ) : (
         <ul className="divide-y">
           {visible.map((flag) => {
-            const summary =
-              flag.environments.find(
-                (environment) =>
-                  environment.environmentKey === defaultEnvironmentKey,
-              ) ?? flag.environments[0];
-            const environment = environments.find(
-              (item) => item.key === summary?.environmentKey,
-            );
-            const state = flagState(summary);
+            const state = flagState(flag);
 
             return (
               <li
-                key={flag.key}
+                key={`${flag.environmentKey}/${flag.key}`}
                 className="flex items-center gap-2.5 py-2.5 first:pt-0 last:pb-0"
               >
                 <span
@@ -457,15 +429,15 @@ export function ProjectFlagsCard({
                   <FlagIcon aria-hidden="true" className="size-3.5" />
                 </span>
                 <Link
-                  href={`/flags/${flag.key}`}
+                  href={`/environments/${flag.environmentKey}/flags/${flag.key}`}
                   className="min-w-0 flex-1 truncate font-mono text-[12px] hover:underline"
                 >
                   {flag.key}
                 </Link>
                 <span className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-[10px]">
-                  {environment?.name ?? summary?.environmentName ?? "No environment"}
+                  {flag.environmentName}
                 </span>
-                <CoverageStatePill state={state} label="long" />
+                <FlagStatePill state={state} label="long" />
               </li>
             );
           })}
@@ -526,13 +498,12 @@ export function ProjectSummaryCard({
 /** The environment flags resolve in, and the rest of the project's set. */
 export function DefaultEnvironmentCard({
   environments,
-  flags,
-  flagsTruncated,
+  enabledByEnvironment,
   defaultEnvironmentKey,
 }: {
   environments: EnvironmentSummary[];
-  flags: FlagSummary[];
-  flagsTruncated: boolean;
+  /** Enabled flag count per environment key. */
+  enabledByEnvironment: Record<string, CappedCount>;
   defaultEnvironmentKey: string | null;
 }) {
   const ordered = [...environments].sort(
@@ -569,11 +540,7 @@ export function DefaultEnvironmentCard({
                 </span>
                 <span className="text-muted-foreground block text-[11px]">
                   {countLabel(
-                    environmentFlagCounts(
-                      flags,
-                      environment.key,
-                      flagsTruncated,
-                    ).enabled,
+                    enabledCount(enabledByEnvironment, environment.key),
                   )}{" "}
                   flags on
                 </span>
