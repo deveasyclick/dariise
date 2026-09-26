@@ -124,6 +124,29 @@ export const flagVariationSchema = z.object({
 
 export type FlagVariation = z.infer<typeof flagVariationSchema>;
 
+/** A value the flag can serve. Its key is permanent once anything references it. */
+export const createFlagVariationSchema = z.object({
+  key: z.string().min(1, "Variation key is required."),
+  name: z.string().min(1, "Variation name is required."),
+  value: flagVariationValueSchema,
+  description: z.string().nullable().optional(),
+});
+
+export type CreateFlagVariationInput = z.infer<
+  typeof createFlagVariationSchema
+>;
+
+/** A variation's label or value. The key is an identifier, so it is not here. */
+export const updateFlagVariationSchema = z.object({
+  name: z.string().min(1, "Variation name is required.").optional(),
+  value: flagVariationValueSchema.optional(),
+  description: z.string().nullable().optional(),
+});
+
+export type UpdateFlagVariationInput = z.infer<
+  typeof updateFlagVariationSchema
+>;
+
 export const targetingConditionSchema = z.object({
   id: z.string(),
   attribute: z.string().min(1, "Attribute is required."),
@@ -241,7 +264,7 @@ export type FlagEnvironmentSummary = z.infer<
   typeof flagEnvironmentSummarySchema
 >;
 
-/** One flag's whole state in its environment. */
+/** What one flag does in one environment. */
 export const flagEnvironmentConfigSchema = z.object({
   environmentKey: z.string(),
   environmentName: z.string(),
@@ -250,7 +273,6 @@ export const flagEnvironmentConfigSchema = z.object({
   defaultVariation: z.string(),
   rolloutPercentage: z.number().int().min(0).max(100),
   bucketBy: z.string(),
-  variations: z.array(flagVariationSchema),
   rules: z.array(targetingRuleSchema),
   individualTargets: z.array(flagIndividualTargetSchema),
 });
@@ -260,24 +282,26 @@ export type FlagEnvironmentConfig = z.infer<
 >;
 
 /**
- * A flag lives in exactly one environment, so its configuration is not a
- * separate thing that can be absent: identity plus one configuration, always.
- * The list carries the summary half, the detail screen the whole of it.
+ * A flag is project-scoped, so a list row carries its identity plus how it stands
+ * in every environment of the project. The full configuration for one environment
+ * is `flagEnvironmentConfigSchema`, which the environment-scoped read returns.
  */
-export const flagSummarySchema = flagIdentitySchema.extend(
-  flagEnvironmentSummarySchema.shape,
-);
+export const flagSummarySchema = flagIdentitySchema.extend({
+  environments: z.array(flagEnvironmentSummarySchema),
+});
 
 export type FlagSummary = z.infer<typeof flagSummarySchema>;
 
-export const flagDetailSchema = flagIdentitySchema.extend(
-  flagEnvironmentConfigSchema.shape,
-);
+/** One flag read on its own: the same summary plus the values it can serve. */
+export const flagDetailSchema = flagSummarySchema.extend({
+  variations: z.array(flagVariationSchema),
+});
 
 export type FlagDetail = z.infer<typeof flagDetailSchema>;
 
 export const flagVersionSchema = z.object({
   version: z.number().int().positive(),
+  environmentKey: z.string(),
   description: z.string().nullable(),
   author: z.string(),
   serve: z.string().nullable(),
@@ -302,8 +326,6 @@ export type FlagValuesInput = z.infer<typeof flagValuesInputSchema>;
 
 export const createFlagSchema = z
   .object({
-    /** The one environment this flag belongs to; flags do not span environments. */
-    environmentKey: environmentKeySchema,
     key: resourceKeySchema,
     name: z
       .string()
@@ -316,18 +338,47 @@ export const createFlagSchema = z
     owner: z.string().trim().min(1).nullable().optional(),
     /** Omitted for a boolean flag, and for a caller content with placeholders. */
     values: flagValuesInputSchema.optional(),
+    /**
+     * The keys the flag's two starting variations carry. A string flag may name
+     * them, because an `on`/`off` key says nothing about the values behind it;
+     * every other type keeps the conventional pair.
+     */
+    variationKeys: z
+      .object({
+        on: z.string().trim().min(1, "A variation key is required."),
+        off: z.string().trim().min(1, "A variation key is required."),
+      })
+      .optional(),
   })
   .superRefine((input, ctx) => {
-    if (!input.values) return;
-
-    for (const field of ["on", "off"] as const) {
-      if (!variationValueMatchesType(input.type, input.values[field])) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["values", field],
-          message: `The "${field}" value of a ${input.type} flag has to be a ${input.type}.`,
-        });
+    if (input.values) {
+      for (const field of ["on", "off"] as const) {
+        if (!variationValueMatchesType(input.type, input.values[field])) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["values", field],
+            message: `The "${field}" value of a ${input.type} flag has to be a ${input.type}.`,
+          });
+        }
       }
+    }
+
+    if (!input.variationKeys) return;
+
+    if (input.type !== "string") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["variationKeys"],
+        message: "Only a string flag can name its two starting variations.",
+      });
+    }
+
+    if (input.variationKeys.on === input.variationKeys.off) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["variationKeys"],
+        message: "The two starting variations need different keys.",
+      });
     }
   });
 
@@ -342,13 +393,13 @@ export const updateFlagSchema = z.object({
 
 export type UpdateFlagInput = z.infer<typeof updateFlagSchema>;
 
+/** What one environment's configuration publishes. Variations belong to the flag. */
 export const updateFlagConfigSchema = z.object({
   enabled: z.boolean(),
   offVariation: z.string().min(1),
   defaultVariation: z.string().min(1),
   rolloutPercentage: z.number().int().min(0).max(100),
   bucketBy: z.string().min(1),
-  variations: z.array(flagVariationSchema).min(1),
 });
 
 export type UpdateFlagConfigInput = z.infer<typeof updateFlagConfigSchema>;
@@ -373,22 +424,11 @@ export const flagListQuerySchema = paginationQuerySchema.extend({
   /** Case-insensitive match on key or name. */
   search: z.string().trim().optional(),
   status: flagStatusSchema.optional(),
-  environmentKey: environmentKeySchema,
+  /** Narrows each row to that environment's state; all of them are returned otherwise. */
+  environmentKey: environmentKeySchema.optional(),
 });
 
 export type FlagListQuery = z.infer<typeof flagListQuerySchema>;
-
-/**
- * Promoting a flag copies it — identity, configuration, variations, rules and
- * individual targets — into another environment of the same project. The copy
- * then diverges: they are two flags from that moment on.
- */
-export const promoteFlagSchema = z.object({
-  /** The environment key to copy the flag into. */
-  to: environmentKeySchema,
-});
-
-export type PromoteFlagInput = z.infer<typeof promoteFlagSchema>;
 
 /**
  * The workspace-wide list renders outside any project, and flag keys are unique
@@ -402,7 +442,6 @@ export type WorkspaceFlagSummary = z.infer<typeof workspaceFlagSummarySchema>;
 
 export const workspaceFlagListQuerySchema = flagListQuerySchema.extend({
   projectKey: z.string().optional(),
-  environmentKey: environmentKeySchema.optional(),
 });
 
 export type WorkspaceFlagListQuery = z.infer<

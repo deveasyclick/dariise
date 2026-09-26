@@ -62,12 +62,12 @@ export const initialFlagStateSchema = z.enum(INITIAL_FLAG_STATES);
 export type InitialFlagState = z.infer<typeof initialFlagStateSchema>;
 
 /**
- * A new environment starts empty unless it is told to copy an existing one.
+ * How a new environment's flag configurations start.
  *
- * `all-off` is the honest default: the flags a project already has live in
- * other environments and do not exist here, so nothing is silently duplicated.
- * `copy-source` copies every flag of one environment into this one at creation
- * time; afterwards the two sets are independent.
+ * Every flag of the project gets a configuration here either way, because a flag
+ * is project-scoped. `all-off` writes them disabled, so the environment is
+ * complete and serving nothing; `copy-source` copies one environment's
+ * configurations, including their rules and individual targets.
  */
 export const createEnvironmentSchema = z
   .object({
@@ -83,7 +83,7 @@ export const createEnvironmentSchema = z
       .min(1, "Colour is required when provided.")
       .max(40, "Colour must be at most 40 characters.")
       .optional(),
-    /** Environment to copy every flag from. Required by `copy-source`. */
+    /** Environment to copy every flag's configuration from. Required by `copy-source`. */
     copyFrom: environmentKeySchema.optional(),
     initialFlagStatus: initialFlagStateSchema.default("all-off"),
   })
@@ -92,7 +92,7 @@ export const createEnvironmentSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["copyFrom"],
-        message: "Choose the environment to copy flags from.",
+        message: "Choose the environment to copy configurations from.",
       });
     }
 
@@ -100,7 +100,8 @@ export const createEnvironmentSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["copyFrom"],
-        message: "Flags are only copied when the environment starts from one.",
+        message:
+          "Configurations are only copied when the environment starts from one.",
       });
     }
   });
