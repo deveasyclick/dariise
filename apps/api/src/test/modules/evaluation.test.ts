@@ -33,11 +33,6 @@ function headers(session: TestSession): Record<string, string> {
   return { "content-type": "application/json", cookie: session.cookie };
 }
 
-const VARIATIONS = [
-  { key: "on", name: "On", value: true, description: null },
-  { key: "off", name: "Off", value: false, description: null },
-];
-
 async function createProject(
   session: TestSession,
   name: string,
@@ -61,12 +56,7 @@ async function createFlag(
   const response = await app.request(`/v1/projects/${projectKey}/flags`, {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({
-      environmentKey: "development",
-      key,
-      name: key,
-      type: "boolean",
-    }),
+    body: JSON.stringify({ key, name: key, type: "boolean" }),
   });
 
   expect(response.status).toBe(201);
@@ -79,7 +69,7 @@ async function publishConfig(
   enabled: boolean,
 ): Promise<void> {
   const response = await app.request(
-    `/v1/projects/${projectKey}/environments/development/flags/${flagKey}/config`,
+    `/v1/projects/${projectKey}/flags/${flagKey}/environments/development`,
     {
       method: "PATCH",
       headers: headers(session),
@@ -89,7 +79,6 @@ async function publishConfig(
         defaultVariation: "on",
         rolloutPercentage: 0,
         bucketBy: "userId",
-        variations: VARIATIONS,
       }),
     },
   );

@@ -17,6 +17,7 @@ import { db } from "../../db/client.js";
 import {
   environment,
   flag,
+  flagEnvironmentConfig,
   segment,
   segmentCondition,
   targetingRule,
@@ -177,7 +178,7 @@ export class SegmentsRepository {
     );
   }
 
-  /** Flags whose targeting rules reference this segment key. */
+  /** Flags whose targeting rules reference this segment key, one row per environment that does. */
   async listFlagsReferencing(
     projectId: string,
     segmentKey: string,
@@ -187,12 +188,19 @@ export class SegmentsRepository {
         key: flag.key,
         environmentKey: environment.key,
         status: flag.status,
-        rolloutPercentage: flag.rolloutPercentage,
+        rolloutPercentage: flagEnvironmentConfig.rolloutPercentage,
         ruleRolloutPercentage: targetingRule.rolloutPercentage,
       })
       .from(targetingRule)
       .innerJoin(flag, eq(flag.id, targetingRule.flagId))
-      .innerJoin(environment, eq(environment.id, flag.environmentId))
+      .innerJoin(environment, eq(environment.id, targetingRule.environmentId))
+      .innerJoin(
+        flagEnvironmentConfig,
+        and(
+          eq(flagEnvironmentConfig.flagId, flag.id),
+          eq(flagEnvironmentConfig.environmentId, targetingRule.environmentId),
+        ),
+      )
       .where(
         and(
           eq(flag.projectId, projectId),

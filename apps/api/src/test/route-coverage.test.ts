@@ -5,6 +5,7 @@ import type {
   EnvironmentDetail,
   EnvironmentSummary,
   FlagDetail,
+  FlagEnvironmentConfig,
   SegmentDetail,
   SegmentSummary,
   WorkspaceProfile,
@@ -81,12 +82,7 @@ async function createFlag(
     {
       method: "POST",
       headers: headers(underTest.session),
-      body: JSON.stringify({
-        environmentKey: "development",
-        key,
-        name: key,
-        type: "boolean",
-      }),
+      body: JSON.stringify({ key, name: key, type: "boolean" }),
     },
   );
   expect(response.status).toBe(201);
@@ -117,7 +113,7 @@ describe("route coverage: flag identity", () => {
     await createFlag(underTest, "checkout-v2");
 
     const response = await app.request(
-      `/v1/projects/${underTest.projectKey}/environments/development/flags/checkout-v2`,
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2`,
       {
         method: "PATCH",
         headers: headers(underTest.session),
@@ -137,9 +133,13 @@ describe("route coverage: flag identity", () => {
       description: "Now with a description",
       tags: ["release", "payments"],
       owner: "platform",
-      // An identity update leaves the flag where it lives, and its state with it.
-      environmentKey: "development",
-      enabled: false,
+      // An identity update leaves every environment's configuration alone.
+      environments: [
+        expect.objectContaining({
+          environmentKey: "development",
+          enabled: false,
+        }),
+      ],
     });
 
     const { db } = await import("../db/client.js");
@@ -154,7 +154,7 @@ describe("route coverage: flag identity", () => {
     await createFlag(underTest, "checkout-v2");
 
     const response = await app.request(
-      `/v1/projects/${underTest.projectKey}/environments/nope/flags/checkout-v2`,
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/nope`,
       { headers: { cookie: underTest.session.cookie } },
     );
 
@@ -190,11 +190,121 @@ describe("route coverage: flag identity", () => {
     });
 
     const response = await app.request(
-      `/v1/projects/${underTest.projectKey}/environments/development/flags/checkout-v2`,
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2`,
       { method: "DELETE", headers: { cookie: viewer.cookie } },
     );
 
     expect(response.status).toBe(403);
+  });
+});
+
+describe("route coverage: the flag route surface", () => {
+  it("exercises every flag route, including the variation routes", async () => {
+    const underTest = await fixture();
+    await createFlag(underTest, "checkout-v2");
+    await createSegment(underTest, "beta-users");
+
+    const flag = `/v1/projects/${underTest.projectKey}/flags/checkout-v2`;
+    const config = `${flag}/environments/development`;
+
+    const routes: Array<{
+      method: string;
+      path: string;
+      body?: unknown;
+      status: number;
+    }> = [
+      { method: "GET", path: "/v1/flags", status: 200 },
+      {
+        method: "GET",
+        path: `/v1/flags/checkout-v2?projectKey=${underTest.projectKey}`,
+        status: 200,
+      },
+      {
+        method: "GET",
+        path: `/v1/projects/${underTest.projectKey}/flags`,
+        status: 200,
+      },
+      {
+        method: "POST",
+        path: `/v1/projects/${underTest.projectKey}/flags`,
+        body: { key: "second-flag", name: "Second flag", type: "boolean" },
+        status: 201,
+      },
+      { method: "GET", path: flag, status: 200 },
+      {
+        method: "PATCH",
+        path: flag,
+        body: { name: "Checkout v2" },
+        status: 200,
+      },
+      { method: "GET", path: `${flag}/variations`, status: 200 },
+      {
+        method: "POST",
+        path: `${flag}/variations`,
+        body: { key: "maybe", name: "Maybe", value: true },
+        status: 201,
+      },
+      {
+        method: "PATCH",
+        path: `${flag}/variations/maybe`,
+        body: { name: "Maybe later" },
+        status: 200,
+      },
+      { method: "GET", path: config, status: 200 },
+      {
+        method: "PATCH",
+        path: config,
+        body: {
+          enabled: true,
+          offVariation: "off",
+          defaultVariation: "on",
+          rolloutPercentage: 25,
+          bucketBy: "userId",
+        },
+        status: 200,
+      },
+      { method: "GET", path: `${config}/rules`, status: 200 },
+      {
+        method: "PUT",
+        path: `${config}/rules`,
+        body: {
+          rules: [
+            {
+              description: "Beta cohort",
+              conditions: [],
+              variation: "on",
+              segmentKeys: ["beta-users"],
+            },
+          ],
+        },
+        status: 200,
+      },
+      { method: "GET", path: `${config}/targets`, status: 200 },
+      {
+        method: "PUT",
+        path: `${config}/targets`,
+        body: { targets: [{ userId: "user-1", variationKey: "on" }] },
+        status: 200,
+      },
+      { method: "GET", path: `${config}/versions`, status: 200 },
+      { method: "GET", path: `${flag}/dependencies`, status: 200 },
+      { method: "DELETE", path: `${flag}/variations/maybe`, status: 200 },
+      { method: "DELETE", path: flag, status: 200 },
+    ];
+
+    for (const route of routes) {
+      const response = await app.request(route.path, {
+        method: route.method,
+        headers: headers(underTest.session),
+        ...(route.body === undefined
+          ? {}
+          : { body: JSON.stringify(route.body) }),
+      });
+
+      expect(response.status, `${route.method} ${route.path}`).toBe(
+        route.status,
+      );
+    }
   });
 });
 
@@ -366,14 +476,14 @@ describe("route coverage: compound project create", () => {
 });
 
 describe("route coverage: environment seeding modes", () => {
-  it("starts a new environment empty by default, and copies one when asked", async () => {
+  it("writes every flag disabled by default, and copies one when asked", async () => {
     const underTest = await fixture();
     await createFlag(underTest, "checkout-v2");
 
     // Turn the flag on in development, so a copy is distinguishable from the
-    // off-by-default state a fresh flag gets.
+    // disabled configuration every flag gets in a fresh environment.
     const published = await app.request(
-      `/v1/projects/${underTest.projectKey}/environments/development/flags/checkout-v2/config`,
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/development`,
       {
         method: "PATCH",
         headers: headers(underTest.session),
@@ -383,10 +493,6 @@ describe("route coverage: environment seeding modes", () => {
           defaultVariation: "on",
           rolloutPercentage: 40,
           bucketBy: "userId",
-          variations: [
-            { key: "on", name: "On", value: true, description: null },
-            { key: "off", name: "Off", value: false, description: null },
-          ],
         }),
       },
     );
@@ -404,12 +510,17 @@ describe("route coverage: environment seeding modes", () => {
     const emptyDetail = (await empty.json()) as EnvironmentDetail;
     expect(emptyDetail.settings.protectedEnvironment).toBe(false);
 
-    // Nothing was duplicated into it: the flag simply is not there.
-    const missing = await app.request(
-      `/v1/projects/${underTest.projectKey}/environments/qa/flags/checkout-v2`,
+    // Every flag is configured here too, disabled rather than copied.
+    const qa = await app.request(
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/qa`,
       { headers: { cookie: underTest.session.cookie } },
     );
-    expect(missing.status).toBe(404);
+    expect(qa.status).toBe(200);
+    await expect(qa.json()).resolves.toMatchObject({
+      environmentKey: "qa",
+      enabled: false,
+      rolloutPercentage: 0,
+    });
 
     const copied = await app.request(
       `/v1/projects/${underTest.projectKey}/environments`,
@@ -427,18 +538,25 @@ describe("route coverage: environment seeding modes", () => {
     expect(copied.status).toBe(201);
 
     const copy = await app.request(
-      `/v1/projects/${underTest.projectKey}/environments/staging/flags/checkout-v2`,
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/staging`,
       { headers: { cookie: underTest.session.cookie } },
     );
     expect(copy.status).toBe(200);
 
-    const body = (await copy.json()) as FlagDetail;
+    const body = (await copy.json()) as FlagEnvironmentConfig;
     expect(body).toMatchObject({
       environmentKey: "staging",
       enabled: true,
       rolloutPercentage: 40,
     });
-    expect(body.variations.map((variation) => variation.key)).toEqual([
+
+    // Variations are the flag's, not the copy's.
+    const detail = await app.request(
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2`,
+      { headers: { cookie: underTest.session.cookie } },
+    );
+    const flag = (await detail.json()) as FlagDetail;
+    expect(flag.variations.map((variation) => variation.key)).toEqual([
       "on",
       "off",
     ]);

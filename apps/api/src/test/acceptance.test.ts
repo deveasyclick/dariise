@@ -155,7 +155,6 @@ describe("acceptance: the role matrix", () => {
         method: "POST",
         headers: headers(viewer),
         body: JSON.stringify({
-          environmentKey: "development",
           key: "beta",
           name: "Beta",
           type: "boolean",
@@ -196,7 +195,6 @@ describe("acceptance: the role matrix", () => {
       method: "POST",
       headers: headers(engineer),
       body: JSON.stringify({
-        environmentKey: "development",
         key: "beta",
         name: "Beta",
         type: "boolean",
@@ -304,7 +302,6 @@ describe("acceptance: secrets and pagination", () => {
           method: "POST",
           headers: headers(workspace.session),
           body: JSON.stringify({
-            environmentKey: "development",
             key,
             name: key,
             type: "boolean",
@@ -353,7 +350,6 @@ describe("acceptance: audit", () => {
       method: "POST",
       headers: headers(workspace.session),
       body: JSON.stringify({
-        environmentKey: "development",
         key: "beta",
         name: "Beta",
         type: "boolean",
@@ -366,7 +362,6 @@ describe("acceptance: audit", () => {
         method: "POST",
         headers: headers(workspace.session),
         body: JSON.stringify({
-          environmentKey: "development",
           key: "beta",
           name: "Beta again",
           type: "boolean",
@@ -389,7 +384,6 @@ describe("acceptance: configuration reaches evaluation", () => {
       method: "POST",
       headers: headers(workspace.session),
       body: JSON.stringify({
-        environmentKey: "development",
         key: "checkout-v2",
         name: "Checkout",
         type: "boolean",
@@ -397,7 +391,7 @@ describe("acceptance: configuration reaches evaluation", () => {
     });
 
     await app.request(
-      `/v1/projects/${workspace.projectKey}/environments/development/flags/checkout-v2/config`,
+      `/v1/projects/${workspace.projectKey}/flags/checkout-v2/environments/development`,
       {
         method: "PATCH",
         headers: headers(workspace.session),
@@ -407,10 +401,6 @@ describe("acceptance: configuration reaches evaluation", () => {
           defaultVariation: "on",
           rolloutPercentage: 0,
           bucketBy: "userId",
-          variations: [
-            { key: "on", name: "On", value: true, description: null },
-            { key: "off", name: "Off", value: false, description: null },
-          ],
         }),
       },
     );
@@ -433,7 +423,7 @@ describe("acceptance: configuration reaches evaluation", () => {
     });
 
     await app.request(
-      `/v1/projects/${workspace.projectKey}/environments/development/flags/checkout-v2/rules`,
+      `/v1/projects/${workspace.projectKey}/flags/checkout-v2/environments/development/rules`,
       {
         method: "PUT",
         headers: headers(workspace.session),

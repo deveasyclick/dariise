@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { FlagDetail } from "@dariise/contracts";
+import type { FlagEnvironmentConfig } from "@dariise/contracts";
 
 import {
   closeTestDatabase,
@@ -72,25 +72,28 @@ async function fixture(role = "owner"): Promise<Fixture> {
   };
 }
 
-/** A flag is addressed inside the environment it belongs to. */
+/** A flag is project-scoped; its configuration in `staging` hangs off the flag. */
 function flagPath(
   fixtureUnderTest: Fixture,
   flagKey: string,
   suffix = "",
 ): string {
-  return `/v1/projects/${fixtureUnderTest.projectKey}/environments/staging/flags/${flagKey}${suffix}`;
+  return `/v1/projects/${fixtureUnderTest.projectKey}/flags/${flagKey}${suffix}`;
+}
+
+function configPath(
+  fixtureUnderTest: Fixture,
+  flagKey: string,
+  suffix = "",
+): string {
+  return `${flagPath(fixtureUnderTest, flagKey)}/environments/staging${suffix}`;
 }
 
 async function createFlag(fixtureUnderTest: Fixture, key: string) {
   return app.request(`/v1/projects/${fixtureUnderTest.projectKey}/flags`, {
     method: "POST",
     headers: headers(fixtureUnderTest.session),
-    body: JSON.stringify({
-      environmentKey: "staging",
-      key,
-      name: key,
-      type: "boolean",
-    }),
+    body: JSON.stringify({ key, name: key, type: "boolean" }),
   });
 }
 
@@ -106,6 +109,19 @@ async function createSegment(fixtureUnderTest: Fixture, key: string) {
   );
 
   expect(response.status).toBe(201);
+}
+
+async function readConfig(
+  fixtureUnderTest: Fixture,
+  flagKey: string,
+): Promise<FlagEnvironmentConfig> {
+  const response = await app.request(configPath(fixtureUnderTest, flagKey), {
+    headers: { cookie: fixtureUnderTest.session.cookie },
+  });
+
+  expect(response.status).toBe(200);
+
+  return (await response.json()) as FlagEnvironmentConfig;
 }
 
 const RULES = {
@@ -139,7 +155,7 @@ describe("flags targeting", () => {
     await createFlag(underTest, "checkout-v2");
     await createSegment(underTest, "beta-users");
 
-    const path = flagPath(underTest, "checkout-v2", "/rules");
+    const path = configPath(underTest, "checkout-v2", "/rules");
 
     const replaced = await app.request(path, {
       method: "PUT",
@@ -175,21 +191,17 @@ describe("flags targeting", () => {
     const rules = (await read.json()) as Array<{ id: string }>;
     expect(rules).toHaveLength(2);
 
-    // The detail screen embeds the same rules: the flag is that environment's.
-    const detail = await app.request(flagPath(underTest, "checkout-v2"), {
-      headers: { cookie: underTest.session.cookie },
-    });
-    const body = (await detail.json()) as FlagDetail;
-
-    expect(body.rules).toHaveLength(2);
+    // The environment's configuration embeds the same rules.
+    const config = await readConfig(underTest, "checkout-v2");
+    expect(config.rules).toHaveLength(2);
   });
 
-  it("refuses a rule that serves a variation the environment does not define", async () => {
+  it("refuses a rule that serves a variation the flag does not define", async () => {
     const underTest = await fixture();
     await createFlag(underTest, "checkout-v2");
 
     const response = await app.request(
-      flagPath(underTest, "checkout-v2", "/rules"),
+      configPath(underTest, "checkout-v2", "/rules"),
       {
         method: "PUT",
         headers: headers(underTest.session),
@@ -202,11 +214,11 @@ describe("flags targeting", () => {
     expect(response.status).toBe(400);
   });
 
-  it("stores individual targets and returns them on the detail", async () => {
+  it("stores individual targets and returns them on the configuration", async () => {
     const underTest = await fixture();
     await createFlag(underTest, "checkout-v2");
 
-    const path = flagPath(underTest, "checkout-v2", "/targets");
+    const path = configPath(underTest, "checkout-v2", "/targets");
 
     const replaced = await app.request(path, {
       method: "PUT",
@@ -221,12 +233,9 @@ describe("flags targeting", () => {
       { userId: "user-42", variationKey: "on" },
     ]);
 
-    const detail = await app.request(flagPath(underTest, "checkout-v2"), {
-      headers: { cookie: underTest.session.cookie },
-    });
-    const body = (await detail.json()) as FlagDetail;
+    const config = await readConfig(underTest, "checkout-v2");
 
-    expect(body.individualTargets).toEqual([
+    expect(config.individualTargets).toEqual([
       { userId: "user-42", variationKey: "on" },
     ]);
   });
@@ -236,7 +245,7 @@ describe("flags targeting", () => {
     await createFlag(underTest, "checkout-v2");
     await createSegment(underTest, "beta-users");
 
-    await app.request(flagPath(underTest, "checkout-v2", "/config"), {
+    await app.request(configPath(underTest, "checkout-v2"), {
       method: "PATCH",
       headers: headers(underTest.session),
       body: JSON.stringify({
@@ -245,21 +254,17 @@ describe("flags targeting", () => {
         defaultVariation: "on",
         rolloutPercentage: 10,
         bucketBy: "userId",
-        variations: [
-          { key: "on", name: "On", value: true, description: null },
-          { key: "off", name: "Off", value: false, description: null },
-        ],
       }),
     });
 
-    await app.request(flagPath(underTest, "checkout-v2", "/rules"), {
+    await app.request(configPath(underTest, "checkout-v2", "/rules"), {
       method: "PUT",
       headers: headers(underTest.session),
       body: JSON.stringify(RULES),
     });
 
     const response = await app.request(
-      flagPath(underTest, "checkout-v2", "/versions"),
+      configPath(underTest, "checkout-v2", "/versions"),
       { headers: { cookie: underTest.session.cookie } },
     );
 
@@ -287,7 +292,6 @@ describe("flags targeting", () => {
       await db.insert(flag).values({
         id: randomUUID(),
         projectId: underTest.projectId,
-        environmentId: underTest.environmentId,
         key,
         name: key,
         type: "boolean",
@@ -343,7 +347,6 @@ describe("workspace-wide flag list", () => {
         method: "POST",
         headers: headers(session),
         body: JSON.stringify({
-          environmentKey: "staging",
           key: "shared-key",
           name: "Shared",
           type: "boolean",
@@ -380,7 +383,9 @@ describe("workspace-wide flag list", () => {
     await expect(resolved.json()).resolves.toMatchObject({
       key: "shared-key",
       projectId: second.projectId,
-      environmentKey: "staging",
+      environments: [
+        expect.objectContaining({ environmentKey: "staging" }),
+      ],
     });
   });
 

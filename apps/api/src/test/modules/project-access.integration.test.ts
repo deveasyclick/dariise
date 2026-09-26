@@ -124,7 +124,6 @@ function createFlag(session: TestSession, projectKey: string, key: string) {
     method: "POST",
     headers: headers(session),
     body: JSON.stringify({
-      environmentKey: "development",
       key,
       name: key,
       type: "boolean",

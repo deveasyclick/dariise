@@ -144,7 +144,6 @@ describe("segments module", () => {
       method: "POST",
       headers: headers(underTest.session),
       body: JSON.stringify({
-        environmentKey: "staging",
         key: "checkout-v2",
         name: "Checkout",
         type: "boolean",
@@ -152,7 +151,7 @@ describe("segments module", () => {
     });
 
     const rules = await app.request(
-      `/v1/projects/${underTest.projectKey}/environments/staging/flags/checkout-v2/rules`,
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/staging/rules`,
       {
         method: "PUT",
         headers: headers(underTest.session),
@@ -230,7 +229,6 @@ describe("segments module", () => {
       method: "POST",
       headers: headers(underTest.session),
       body: JSON.stringify({
-        environmentKey: "staging",
         key: "checkout-v2",
         name: "Checkout",
         type: "boolean",
@@ -238,7 +236,7 @@ describe("segments module", () => {
     });
 
     await app.request(
-      `/v1/projects/${underTest.projectKey}/environments/staging/flags/checkout-v2/rules`,
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/staging/rules`,
       {
         method: "PUT",
         headers: headers(underTest.session),

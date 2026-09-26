@@ -113,7 +113,7 @@ const environmentsService = new EnvironmentsService(
   projectAccessService,
   // Injected so the environments module never imports the flags module: the
   // flags module is what knows what a flag is made of.
-  (tx, input) => flagsService.copyEnvironmentFlags(tx, input),
+  (tx, input) => flagsService.initializeEnvironmentConfigs(tx, input),
 );
 const apiKeysService = new ApiKeysService(
   apiKeysRepository,

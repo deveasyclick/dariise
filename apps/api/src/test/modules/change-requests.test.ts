@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { FlagChangeRequest, FlagDetail } from "@dariise/contracts";
+import type {
+  FlagChangeRequest,
+  FlagEnvironmentConfig,
+} from "@dariise/contracts";
 
 import {
   closeTestDatabase,
@@ -43,11 +46,6 @@ interface Fixture {
   projectKey: string;
 }
 
-const VARIATIONS = [
-  { key: "on", name: "On", value: true, description: null },
-  { key: "off", name: "Off", value: false, description: null },
-];
-
 /**
  * A project whose only environment is protected, with an engineer who can
  * propose and an owner who can approve. Nothing here can approve its own work.
@@ -79,7 +77,6 @@ async function fixture(): Promise<Fixture> {
     method: "POST",
     headers: headers(owner),
     body: JSON.stringify({
-      environmentKey: "production",
       key: "checkout-v2",
       name: "Checkout v2",
       type: "boolean",
@@ -120,7 +117,6 @@ function configPayload(enabled: boolean, rolloutPercentage = 0) {
       defaultVariation: "on",
       rolloutPercentage,
       bucketBy: "userId",
-      variations: VARIATIONS,
     },
   };
 }
@@ -162,9 +158,9 @@ async function environmentConfig(
   underTest: Fixture,
   session: TestSession,
   environmentKey = "production",
-): Promise<FlagDetail> {
+): Promise<FlagEnvironmentConfig> {
   const response = await app.request(
-    `/v1/projects/${underTest.projectKey}/environments/${environmentKey}/flags/checkout-v2`,
+    `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/${environmentKey}`,
     { headers: { cookie: session.cookie } },
   );
 
@@ -172,7 +168,7 @@ async function environmentConfig(
     throw new Error(`No configuration for ${environmentKey}.`);
   }
 
-  return (await response.json()) as FlagDetail;
+  return (await response.json()) as FlagEnvironmentConfig;
 }
 
 describe("change requests", () => {
@@ -180,7 +176,7 @@ describe("change requests", () => {
     const underTest = await fixture();
 
     const response = await app.request(
-      `/v1/projects/${underTest.projectKey}/environments/production/flags/checkout-v2/config`,
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/production`,
       {
         method: "PATCH",
         headers: headers(underTest.engineer),
@@ -196,6 +192,40 @@ describe("change requests", () => {
     // The refusal is not a partial write.
     const config = await environmentConfig(underTest, underTest.engineer);
     expect(config).toMatchObject({ enabled: false, rolloutPercentage: 0 });
+  });
+
+  it("does not gate an identity edit behind a protected environment", async () => {
+    const underTest = await fixture();
+
+    const renamed = await app.request(
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2`,
+      {
+        method: "PATCH",
+        headers: headers(underTest.engineer),
+        body: JSON.stringify({ name: "Checkout v2 (renamed)" }),
+      },
+    );
+
+    expect(renamed.status).toBe(200);
+    await expect(renamed.json()).resolves.toMatchObject({
+      key: "checkout-v2",
+      name: "Checkout v2 (renamed)",
+    });
+
+    // The same person publishing a configuration into that environment is refused.
+    const direct = await app.request(
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/production`,
+      {
+        method: "PATCH",
+        headers: headers(underTest.engineer),
+        body: JSON.stringify(configPayload(true, 100).config),
+      },
+    );
+
+    expect(direct.status).toBe(409);
+    await expect(direct.json()).resolves.toMatchObject({
+      error: { code: "approval_required" },
+    });
   });
 
   it("applies a proposed change only once somebody else approves it", async () => {
@@ -404,7 +434,6 @@ describe("change requests", () => {
         defaultVariation: "missing-variation",
         rolloutPercentage: 0,
         bucketBy: "userId",
-        variations: VARIATIONS,
       },
     });
 

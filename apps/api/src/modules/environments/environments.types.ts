@@ -35,11 +35,12 @@ export interface EnvironmentDetails {
   description: string | null;
 }
 
-/** What copying one environment's flags into a new one needs to know. */
-export interface FlagCopyRequest {
+/** What giving every flag of a project a configuration in one environment needs to know. */
+export interface EnvironmentConfigRequest {
   projectId: string;
-  source: EnvironmentRef;
   target: EnvironmentRef;
+  /** The environment to copy each configuration from; disabled defaults otherwise. */
+  source: EnvironmentRef | null;
   author: string;
 }
 
@@ -47,9 +48,9 @@ export interface FlagCopyRequest {
  * Injected by `app.ts`: the flags module owns what a flag is made of, and the
  * environments module never reaches into it to find out.
  */
-export type CopyEnvironmentFlags = (
+export type InitializeEnvironmentConfigs = (
   tx: Transaction,
-  input: FlagCopyRequest,
+  input: EnvironmentConfigRequest,
 ) => Promise<number>;
 
 export interface EnvironmentActorContext {

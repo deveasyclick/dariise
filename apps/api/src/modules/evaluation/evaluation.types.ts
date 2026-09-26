@@ -61,15 +61,6 @@ export interface EvaluationOutcome {
   matchedRuleId: string | null;
 }
 
-/** The config a flag has in an environment that has no configuration row. */
-export const DISABLED_CONFIG: EvaluationConfig = {
-  enabled: false,
-  offVariation: "off",
-  defaultVariation: "on",
-  rolloutPercentage: 0,
-  bucketBy: "userId",
-};
-
 export const OFF_VARIATION = "off";
 
 export const EVALUATION_HASH_VERSION = "v1";

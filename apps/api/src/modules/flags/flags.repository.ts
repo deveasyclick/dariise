@@ -13,8 +13,10 @@ import {
 } from "drizzle-orm";
 
 import type {
+  CreateFlagVariationInput,
   FlagIndividualTarget,
   TargetingRuleInput,
+  UpdateFlagVariationInput,
 } from "@dariise/contracts";
 
 import { db } from "../../db/client.js";
@@ -22,6 +24,7 @@ import {
   environment,
   flag,
   flagDependency,
+  flagEnvironmentConfig,
   flagIndividualTarget,
   flagVariation,
   flagVersion,
@@ -32,10 +35,11 @@ import {
 import type { Transaction } from "../../shared/types/db.js";
 import type {
   DependencyRow,
+  EnvironmentConfigCopyInput,
   EnvironmentRef,
-  FlagCopyInput,
+  FlagEnvironmentConfigRow,
+  FlagEnvironmentSummaryRow,
   FlagListFilter,
-  FlagListRow,
   FlagRow,
   FlagStatusRef,
   FlagVersionRecord,
@@ -45,21 +49,16 @@ import type {
   RuleWithConditions,
   UpdateConfigRecord,
   UpdateFlagRecord,
+  VariationReference,
   VariationRow,
+  WorkspaceFlagFilter,
 } from "./flags.types.js";
 import { WORKSPACE_FLAG_CURSOR_SEPARATOR } from "./flags.types.js";
 
 export class FlagsRepository {
   /** Fetches limit + 1 rows so the caller can tell whether another page exists. */
-  async list(
-    projectId: string,
-    environmentId: string,
-    filter: FlagListFilter,
-  ): Promise<FlagListRow[]> {
-    const conditions = [
-      eq(flag.projectId, projectId),
-      eq(flag.environmentId, environmentId),
-    ];
+  async list(projectId: string, filter: FlagListFilter): Promise<FlagRow[]> {
+    const conditions = [eq(flag.projectId, projectId)];
 
     if (filter.status) {
       conditions.push(eq(flag.status, filter.status));
@@ -77,43 +76,85 @@ export class FlagsRepository {
     }
 
     return db
-      .select({ ...getTableColumns(flag), ...this.environmentColumns() })
+      .select()
       .from(flag)
-      .innerJoin(environment, eq(environment.id, flag.environmentId))
       .where(and(...conditions))
       .orderBy(asc(flag.key))
       .limit(filter.limit + 1);
   }
 
-  async findByKey(
-    projectId: string,
-    environmentId: string,
-    key: string,
-  ): Promise<FlagRow | null> {
+  /**
+   * How a page of flags stands in each environment, in one query rather than one
+   * per row. Either filter narrows the answer to a single environment.
+   */
+  async listEnvironmentSummaries(
+    flagIds: string[],
+    filter: { environmentId?: string; environmentKey?: string } = {},
+  ): Promise<Array<{ flagId: string } & FlagEnvironmentSummaryRow>> {
+    if (flagIds.length === 0) return [];
+
+    const conditions = [inArray(flagEnvironmentConfig.flagId, flagIds)];
+
+    if (filter.environmentId) {
+      conditions.push(eq(flagEnvironmentConfig.environmentId, filter.environmentId));
+    }
+
+    if (filter.environmentKey) {
+      conditions.push(eq(environment.key, filter.environmentKey));
+    }
+
+    return db
+      .select({
+        flagId: flagEnvironmentConfig.flagId,
+        environmentKey: environment.key,
+        environmentName: environment.name,
+        enabled: flagEnvironmentConfig.enabled,
+        rolloutPercentage: flagEnvironmentConfig.rolloutPercentage,
+      })
+      .from(flagEnvironmentConfig)
+      .innerJoin(
+        environment,
+        eq(environment.id, flagEnvironmentConfig.environmentId),
+      )
+      .where(and(...conditions))
+      .orderBy(asc(environment.createdAt), asc(environment.key));
+  }
+
+  async findByKey(projectId: string, key: string): Promise<FlagRow | null> {
     const rows = await db
       .select()
       .from(flag)
-      .where(
-        and(
-          eq(flag.projectId, projectId),
-          eq(flag.environmentId, environmentId),
-          eq(flag.key, key),
-        ),
-      )
+      .where(and(eq(flag.projectId, projectId), eq(flag.key, key)))
       .limit(1);
 
     return rows[0] ?? null;
   }
 
-  /** Read inside a transaction, so a copy sees the rows it is about to write. */
-  async findById(tx: Transaction, id: string): Promise<FlagRow | null> {
-    const rows = await tx
+  /** Every flag of one project, read inside a transaction that configures them. */
+  async listForProject(
+    tx: Transaction,
+    projectId: string,
+  ): Promise<FlagRow[]> {
+    return tx
       .select()
       .from(flag)
-      .where(eq(flag.id, id))
-      .limit(1);
+      .where(eq(flag.projectId, projectId))
+      .orderBy(asc(flag.key));
+  }
 
-    return rows[0] ?? null;
+  /** Every environment of one project, for the eager configuration of a new flag. */
+  async listEnvironments(projectId: string): Promise<EnvironmentRef[]> {
+    return db
+      .select({
+        id: environment.id,
+        key: environment.key,
+        name: environment.name,
+        isProtected: environment.isProtected,
+        archivedAt: environment.archivedAt,
+      })
+      .from(environment)
+      .where(eq(environment.projectId, projectId))
+      .orderBy(asc(environment.createdAt), asc(environment.key));
   }
 
   async findEnvironmentByKey(
@@ -131,6 +172,44 @@ export class FlagsRepository {
       .from(environment)
       .where(
         and(eq(environment.projectId, projectId), eq(environment.key, key)),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
+  }
+
+  async findConfig(
+    flagId: string,
+    environmentId: string,
+  ): Promise<FlagEnvironmentConfigRow | null> {
+    const rows = await db
+      .select()
+      .from(flagEnvironmentConfig)
+      .where(
+        and(
+          eq(flagEnvironmentConfig.flagId, flagId),
+          eq(flagEnvironmentConfig.environmentId, environmentId),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
+  }
+
+  /** Read inside a transaction, so a copy sees the rows it is about to write. */
+  async findConfigInTx(
+    tx: Transaction,
+    flagId: string,
+    environmentId: string,
+  ): Promise<FlagEnvironmentConfigRow | null> {
+    const rows = await tx
+      .select()
+      .from(flagEnvironmentConfig)
+      .where(
+        and(
+          eq(flagEnvironmentConfig.flagId, flagId),
+          eq(flagEnvironmentConfig.environmentId, environmentId),
+        ),
       )
       .limit(1);
 
@@ -159,17 +238,41 @@ export class FlagsRepository {
       .where(eq(flag.id, id));
   }
 
-  /**
-   * Writes the flag's configuration. The flag row *is* the configuration, so
-   * this has no environment of its own to name: the row already has one.
-   */
+  async insertConfig(
+    tx: Transaction,
+    input: {
+      flagId: string;
+      environmentId: string;
+      enabled?: boolean;
+      offVariationKey?: string;
+      defaultVariationKey?: string;
+      rolloutPercentage?: number;
+      bucketBy?: string;
+    },
+  ): Promise<string> {
+    const id = randomUUID();
+
+    await tx.insert(flagEnvironmentConfig).values({
+      id,
+      flagId: input.flagId,
+      environmentId: input.environmentId,
+      enabled: input.enabled ?? false,
+      offVariationKey: input.offVariationKey ?? "off",
+      defaultVariationKey: input.defaultVariationKey ?? "on",
+      rolloutPercentage: input.rolloutPercentage ?? 0,
+      bucketBy: input.bucketBy ?? "userId",
+    });
+
+    return id;
+  }
+
   async updateConfig(
     tx: Transaction,
-    flagId: string,
+    configId: string,
     record: UpdateConfigRecord,
   ): Promise<void> {
     await tx
-      .update(flag)
+      .update(flagEnvironmentConfig)
       .set({
         enabled: record.enabled,
         offVariationKey: record.offVariation,
@@ -178,37 +281,32 @@ export class FlagsRepository {
         bucketBy: record.bucketBy,
         updatedAt: new Date(),
       })
-      .where(eq(flag.id, flagId));
+      .where(eq(flagEnvironmentConfig.id, configId));
   }
 
   /**
-   * The `on`/`off` pair a flag starts with. The values have to fit the flag's
-   * declared type — a `string` flag serving `true` would break the promise its
-   * type makes to the SDK — so the caller passes either the chosen pair or
-   * `defaultVariations(type)`.
+   * The two variations a flag starts with, in order. The values have to fit the
+   * flag's declared type — a `string` flag serving `true` would break the promise
+   * its type makes to the SDK — and the caller decides the keys, which a string
+   * flag may name for itself.
    */
   async insertVariations(
     tx: Transaction,
-    input: { flagId: string; values: { on: unknown; off: unknown } },
+    input: {
+      flagId: string;
+      variations: Array<{ key: string; name: string; value: unknown }>;
+    },
   ): Promise<void> {
-    await tx.insert(flagVariation).values([
-      {
+    await tx.insert(flagVariation).values(
+      input.variations.map((variation, index) => ({
         id: randomUUID(),
         flagId: input.flagId,
-        key: "on",
-        name: "On",
-        value: input.values.on,
-        priority: 0,
-      },
-      {
-        id: randomUUID(),
-        flagId: input.flagId,
-        key: "off",
-        name: "Off",
-        value: input.values.off,
-        priority: 1,
-      },
-    ]);
+        key: variation.key,
+        name: variation.name,
+        value: variation.value,
+        priority: index,
+      })),
+    );
   }
 
   async listVariations(flagId: string): Promise<VariationRow[]> {
@@ -226,34 +324,167 @@ export class FlagsRepository {
       .orderBy(asc(flagVariation.priority));
   }
 
-  async replaceVariations(
+  async insertVariation(
     tx: Transaction,
-    flagId: string,
-    variations: UpdateConfigRecord["variations"],
+    input: { flagId: string; variation: CreateFlagVariationInput },
   ): Promise<void> {
-    await tx.delete(flagVariation).where(eq(flagVariation.flagId, flagId));
+    const [row] = await tx
+      .select({
+        next: sql<number>`coalesce(max(${flagVariation.priority}), -1) + 1`,
+      })
+      .from(flagVariation)
+      .where(eq(flagVariation.flagId, input.flagId));
 
-    await tx.insert(flagVariation).values(
-      variations.map((variation, index) => ({
-        id: randomUUID(),
-        flagId,
-        key: variation.key,
-        name: variation.name,
-        value: variation.value,
-        description: variation.description,
-        priority: index,
-      })),
-    );
+    await tx.insert(flagVariation).values({
+      id: randomUUID(),
+      flagId: input.flagId,
+      key: input.variation.key,
+      name: input.variation.name,
+      value: input.variation.value,
+      description: input.variation.description ?? null,
+      priority: Number(row?.next ?? 0),
+    });
   }
 
-  /** One past the highest version the flag already has. */
-  async nextVersion(tx: Transaction, flagId: string): Promise<number> {
+  async updateVariation(
+    tx: Transaction,
+    flagId: string,
+    key: string,
+    patch: UpdateFlagVariationInput,
+  ): Promise<void> {
+    await tx
+      .update(flagVariation)
+      .set({
+        ...(patch.name === undefined ? {} : { name: patch.name }),
+        ...(patch.value === undefined ? {} : { value: patch.value }),
+        ...(patch.description === undefined
+          ? {}
+          : { description: patch.description }),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(flagVariation.flagId, flagId), eq(flagVariation.key, key)),
+      );
+  }
+
+  async deleteVariation(
+    tx: Transaction,
+    flagId: string,
+    key: string,
+  ): Promise<void> {
+    await tx
+      .delete(flagVariation)
+      .where(
+        and(eq(flagVariation.flagId, flagId), eq(flagVariation.key, key)),
+      );
+  }
+
+  /** Everything that would break if this variation key disappeared. */
+  async findVariationReferences(
+    flagId: string,
+    variationKey: string,
+  ): Promise<VariationReference[]> {
+    const configs = await db
+      .select({
+        environmentKey: environment.key,
+        offVariationKey: flagEnvironmentConfig.offVariationKey,
+        defaultVariationKey: flagEnvironmentConfig.defaultVariationKey,
+      })
+      .from(flagEnvironmentConfig)
+      .innerJoin(
+        environment,
+        eq(environment.id, flagEnvironmentConfig.environmentId),
+      )
+      .where(eq(flagEnvironmentConfig.flagId, flagId));
+
+    const rules = await db
+      .select({
+        environmentKey: environment.key,
+        id: targetingRule.id,
+        description: targetingRule.description,
+      })
+      .from(targetingRule)
+      .innerJoin(environment, eq(environment.id, targetingRule.environmentId))
+      .where(
+        and(
+          eq(targetingRule.flagId, flagId),
+          eq(targetingRule.variationKey, variationKey),
+        ),
+      );
+
+    const targets = await db
+      .select({
+        environmentKey: environment.key,
+        userId: flagIndividualTarget.userId,
+      })
+      .from(flagIndividualTarget)
+      .innerJoin(
+        environment,
+        eq(environment.id, flagIndividualTarget.environmentId),
+      )
+      .where(
+        and(
+          eq(flagIndividualTarget.flagId, flagId),
+          eq(flagIndividualTarget.variationKey, variationKey),
+        ),
+      );
+
+    const references: VariationReference[] = [];
+
+    for (const config of configs) {
+      if (config.offVariationKey === variationKey) {
+        references.push({
+          environmentKey: config.environmentKey,
+          kind: "off_variation",
+          detail: null,
+        });
+      }
+
+      if (config.defaultVariationKey === variationKey) {
+        references.push({
+          environmentKey: config.environmentKey,
+          kind: "default_variation",
+          detail: null,
+        });
+      }
+    }
+
+    for (const rule of rules) {
+      references.push({
+        environmentKey: rule.environmentKey,
+        kind: "rule",
+        detail: rule.description ?? rule.id,
+      });
+    }
+
+    for (const target of targets) {
+      references.push({
+        environmentKey: target.environmentKey,
+        kind: "target",
+        detail: target.userId,
+      });
+    }
+
+    return references;
+  }
+
+  /** One past the highest version this environment's history already has. */
+  async nextVersion(
+    tx: Transaction,
+    flagId: string,
+    environmentId: string,
+  ): Promise<number> {
     const [row] = await tx
       .select({
         next: sql<number>`coalesce(max(${flagVersion.version}), 0) + 1`,
       })
       .from(flagVersion)
-      .where(eq(flagVersion.flagId, flagId));
+      .where(
+        and(
+          eq(flagVersion.flagId, flagId),
+          eq(flagVersion.environmentId, environmentId),
+        ),
+      );
 
     return Number(row?.next ?? 1);
   }
@@ -270,10 +501,14 @@ export class FlagsRepository {
 
   async listVersions(
     flagId: string,
+    environmentId: string,
     limit: number,
     cursor: string | null,
   ): Promise<FlagVersionSummary[]> {
-    const conditions = [eq(flagVersion.flagId, flagId)];
+    const conditions = [
+      eq(flagVersion.flagId, flagId),
+      eq(flagVersion.environmentId, environmentId),
+    ];
 
     if (cursor) {
       conditions.push(sql`${flagVersion.version} < ${Number(cursor)}`);
@@ -293,11 +528,15 @@ export class FlagsRepository {
       .limit(limit + 1);
   }
 
-  async listRules(flagId: string): Promise<RuleWithConditions[]> {
+  async listRules(
+    flagId: string,
+    environmentId: string,
+  ): Promise<RuleWithConditions[]> {
     const rules = await db
       .select({
         id: targetingRule.id,
         flagId: targetingRule.flagId,
+        environmentId: targetingRule.environmentId,
         priority: targetingRule.priority,
         description: targetingRule.description,
         variationKey: targetingRule.variationKey,
@@ -306,7 +545,12 @@ export class FlagsRepository {
         bucketBy: targetingRule.bucketBy,
       })
       .from(targetingRule)
-      .where(eq(targetingRule.flagId, flagId))
+      .where(
+        and(
+          eq(targetingRule.flagId, flagId),
+          eq(targetingRule.environmentId, environmentId),
+        ),
+      )
       .orderBy(asc(targetingRule.priority));
 
     if (rules.length === 0) return [];
@@ -338,13 +582,21 @@ export class FlagsRepository {
     }));
   }
 
-  /** Replaces the whole ordered rule set: order is the array's order. */
+  /** Replaces one environment's whole ordered rule set: order is the array's order. */
   async replaceRules(
     tx: Transaction,
     flagId: string,
+    environmentId: string,
     rules: TargetingRuleInput[],
   ): Promise<void> {
-    await tx.delete(targetingRule).where(eq(targetingRule.flagId, flagId));
+    await tx
+      .delete(targetingRule)
+      .where(
+        and(
+          eq(targetingRule.flagId, flagId),
+          eq(targetingRule.environmentId, environmentId),
+        ),
+      );
 
     for (const [index, rule] of rules.entries()) {
       const ruleId = randomUUID();
@@ -352,6 +604,7 @@ export class FlagsRepository {
       await tx.insert(targetingRule).values({
         id: ruleId,
         flagId,
+        environmentId,
         priority: index,
         description: rule.description ?? null,
         variationKey: rule.variation,
@@ -376,25 +629,40 @@ export class FlagsRepository {
     }
   }
 
-  async listTargets(flagId: string): Promise<IndividualTargetRow[]> {
+  async listTargets(
+    flagId: string,
+    environmentId: string,
+  ): Promise<IndividualTargetRow[]> {
     return db
       .select({
         flagId: flagIndividualTarget.flagId,
+        environmentId: flagIndividualTarget.environmentId,
         userId: flagIndividualTarget.userId,
         variationKey: flagIndividualTarget.variationKey,
       })
       .from(flagIndividualTarget)
-      .where(eq(flagIndividualTarget.flagId, flagId));
+      .where(
+        and(
+          eq(flagIndividualTarget.flagId, flagId),
+          eq(flagIndividualTarget.environmentId, environmentId),
+        ),
+      );
   }
 
   async replaceTargets(
     tx: Transaction,
     flagId: string,
+    environmentId: string,
     targets: FlagIndividualTarget[],
   ): Promise<void> {
     await tx
       .delete(flagIndividualTarget)
-      .where(eq(flagIndividualTarget.flagId, flagId));
+      .where(
+        and(
+          eq(flagIndividualTarget.flagId, flagId),
+          eq(flagIndividualTarget.environmentId, environmentId),
+        ),
+      );
 
     if (targets.length === 0) return;
 
@@ -402,10 +670,24 @@ export class FlagsRepository {
       targets.map((target) => ({
         id: randomUUID(),
         flagId,
+        environmentId,
         userId: target.userId,
         variationKey: target.variationKey,
       })),
     );
+  }
+
+  /** Every rule and target of one flag in one environment, for the detail read. */
+  async detailParts(
+    flagId: string,
+    environmentId: string,
+  ): Promise<{ rules: RuleWithConditions[]; targets: IndividualTargetRow[] }> {
+    const [rules, targets] = await Promise.all([
+      this.listRules(flagId, environmentId),
+      this.listTargets(flagId, environmentId),
+    ]);
+
+    return { rules, targets };
   }
 
   async listDependencies(
@@ -445,19 +727,12 @@ export class FlagsRepository {
   /** The workspace-wide list: every project in the session's workspace. */
   async listForWorkspace(
     organizationId: string,
-    filter: FlagListFilter & {
-      projectKey?: string;
-      environmentKey?: string;
-    },
-  ): Promise<Array<FlagListRow & { projectKey: string }>> {
+    filter: WorkspaceFlagFilter,
+  ): Promise<Array<FlagRow & { projectKey: string }>> {
     const conditions = [eq(project.organizationId, organizationId)];
 
     if (filter.projectKey) {
       conditions.push(eq(project.key, filter.projectKey));
-    }
-
-    if (filter.environmentKey) {
-      conditions.push(eq(environment.key, filter.environmentKey));
     }
 
     if (filter.status) {
@@ -472,82 +747,57 @@ export class FlagsRepository {
     }
 
     if (filter.cursor) {
-      // Ordered by (project, environment, flag key), so the cursor holds all
-      // three and the comparison is the same tuple comparison the SQL does.
-      const [cursorProject, cursorEnvironment, cursorFlag] =
+      // Ordered by (project key, flag key), so the cursor holds both and the
+      // comparison is the same tuple comparison the SQL does.
+      const [cursorProject, cursorFlag] =
         filter.cursor.split(WORKSPACE_FLAG_CURSOR_SEPARATOR);
 
-      if (cursorProject && cursorEnvironment && cursorFlag) {
+      if (cursorProject && cursorFlag) {
         conditions.push(
-          sql`(${project.key}, ${environment.key}, ${flag.key}) > (${cursorProject}, ${cursorEnvironment}, ${cursorFlag})`,
+          sql`(${project.key}, ${flag.key}) > (${cursorProject}, ${cursorFlag})`,
         );
       }
     }
 
     return db
-      .select({
-        ...getTableColumns(flag),
-        ...this.environmentColumns(),
-        projectKey: project.key,
-      })
+      .select({ ...getTableColumns(flag), projectKey: project.key })
       .from(flag)
       .innerJoin(project, eq(project.id, flag.projectId))
-      .innerJoin(environment, eq(environment.id, flag.environmentId))
       .where(and(...conditions))
-      .orderBy(asc(project.key), asc(environment.key), asc(flag.key))
+      .orderBy(asc(project.key), asc(flag.key))
       .limit(filter.limit + 1);
   }
 
-  /** The flags of one environment, in a stable order, for a whole-environment copy. */
-  async listIdsInEnvironment(
-    tx: Transaction,
-    environmentId: string,
-  ): Promise<string[]> {
-    const rows = await tx
-      .select({ id: flag.id })
-      .from(flag)
-      .where(eq(flag.environmentId, environmentId))
-      .orderBy(asc(flag.key));
-
-    return rows.map((row) => row.id);
-  }
-
   /**
-   * The one copy primitive: identity, configuration, variations, targeting
-   * rules and individual targets all move together, so a promoted flag behaves
-   * exactly like the one it came from until somebody changes it.
-   *
-   * It writes inside the caller's transaction and does not check whether the
-   * key is free — that decision belongs to the service, which knows which
-   * caller is copying and why.
+   * The one configuration copy primitive: enabled, selections, rollout, rules
+   * and individual targets move together, inside the caller's transaction. The
+   * flag's variations are shared, so they are not copied.
    */
-  async copyFlagIntoEnvironment(
+  async copyConfigIntoEnvironment(
     tx: Transaction,
-    input: FlagCopyInput,
+    input: EnvironmentConfigCopyInput,
   ): Promise<string> {
     const [source] = await tx
       .select()
-      .from(flag)
-      .where(eq(flag.id, input.sourceFlagId))
+      .from(flagEnvironmentConfig)
+      .where(
+        and(
+          eq(flagEnvironmentConfig.flagId, input.sourceFlagId),
+          eq(flagEnvironmentConfig.environmentId, input.sourceEnvironmentId),
+        ),
+      )
       .limit(1);
 
     if (!source) {
-      throw new Error("The flag to copy no longer exists.");
+      throw new Error("The configuration to copy no longer exists.");
     }
 
     const targetId = randomUUID();
 
-    await tx.insert(flag).values({
+    await tx.insert(flagEnvironmentConfig).values({
       id: targetId,
-      projectId: source.projectId,
+      flagId: source.flagId,
       environmentId: input.targetEnvironmentId,
-      key: source.key,
-      name: source.name,
-      description: source.description,
-      type: source.type,
-      tags: source.tags,
-      owner: source.owner,
-      status: source.status,
       enabled: source.enabled,
       offVariationKey: source.offVariationKey,
       defaultVariationKey: source.defaultVariationKey,
@@ -555,30 +805,15 @@ export class FlagsRepository {
       bucketBy: source.bucketBy,
     });
 
-    const variations = await tx
-      .select()
-      .from(flagVariation)
-      .where(eq(flagVariation.flagId, source.id))
-      .orderBy(asc(flagVariation.priority));
-
-    if (variations.length > 0) {
-      await tx.insert(flagVariation).values(
-        variations.map((variation) => ({
-          id: randomUUID(),
-          flagId: targetId,
-          key: variation.key,
-          name: variation.name,
-          value: variation.value,
-          description: variation.description,
-          priority: variation.priority,
-        })),
-      );
-    }
-
     const rules = await tx
       .select()
       .from(targetingRule)
-      .where(eq(targetingRule.flagId, source.id))
+      .where(
+        and(
+          eq(targetingRule.flagId, source.flagId),
+          eq(targetingRule.environmentId, input.sourceEnvironmentId),
+        ),
+      )
       .orderBy(asc(targetingRule.priority));
 
     for (const rule of rules) {
@@ -586,7 +821,8 @@ export class FlagsRepository {
 
       await tx.insert(targetingRule).values({
         id: ruleId,
-        flagId: targetId,
+        flagId: source.flagId,
+        environmentId: input.targetEnvironmentId,
         priority: rule.priority,
         description: rule.description,
         variationKey: rule.variationKey,
@@ -619,13 +855,22 @@ export class FlagsRepository {
     const targets = await tx
       .select()
       .from(flagIndividualTarget)
-      .where(eq(flagIndividualTarget.flagId, source.id));
+      .where(
+        and(
+          eq(flagIndividualTarget.flagId, source.flagId),
+          eq(
+            flagIndividualTarget.environmentId,
+            input.sourceEnvironmentId,
+          ),
+        ),
+      );
 
     if (targets.length > 0) {
       await tx.insert(flagIndividualTarget).values(
         targets.map((target) => ({
           id: randomUUID(),
-          flagId: targetId,
+          flagId: source.flagId,
+          environmentId: input.targetEnvironmentId,
           userId: target.userId,
           variationKey: target.variationKey,
         })),
@@ -633,24 +878,5 @@ export class FlagsRepository {
     }
 
     return targetId;
-  }
-
-  /** Every rule and target of one flag, for the detail screen. */
-  async detailParts(
-    flagId: string,
-  ): Promise<{ rules: RuleWithConditions[]; targets: IndividualTargetRow[] }> {
-    const [rules, targets] = await Promise.all([
-      this.listRules(flagId),
-      this.listTargets(flagId),
-    ]);
-
-    return { rules, targets };
-  }
-
-  private environmentColumns() {
-    return {
-      environmentKey: environment.key,
-      environmentName: environment.name,
-    };
   }
 }

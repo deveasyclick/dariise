@@ -7,6 +7,7 @@ import type {
   EnvironmentDetail,
   EnvironmentSummary,
   FlagDetail,
+  FlagEnvironmentConfig,
 } from "@dariise/contracts";
 
 import {
@@ -67,11 +68,6 @@ async function ownerWithProject(): Promise<{
     projectId: project.id,
   };
 }
-
-const VARIATIONS = [
-  { key: "on", name: "On", value: true, description: null },
-  { key: "off", name: "Off", value: false, description: null },
-];
 
 async function listEnvironments(
   projectKey: string,
@@ -151,14 +147,13 @@ describe("environments module", () => {
     });
   });
 
-  it("copies flag configuration from a named source and starts empty otherwise", async () => {
+  it("configures every flag disabled by default and copies one when asked", async () => {
     const { session, projectKey } = await ownerWithProject();
 
     await app.request(`/v1/projects/${projectKey}/flags`, {
       method: "POST",
       headers: headers(session),
       body: JSON.stringify({
-        environmentKey: "development",
         key: "checkout-v2",
         name: "Checkout v2",
         type: "boolean",
@@ -166,7 +161,7 @@ describe("environments module", () => {
     });
 
     await app.request(
-      `/v1/projects/${projectKey}/environments/development/flags/checkout-v2/config`,
+      `/v1/projects/${projectKey}/flags/checkout-v2/environments/development`,
       {
         method: "PATCH",
         headers: headers(session),
@@ -176,7 +171,6 @@ describe("environments module", () => {
           defaultVariation: "on",
           rolloutPercentage: 100,
           bucketBy: "userId",
-          variations: VARIATIONS,
         }),
       },
     );
@@ -208,17 +202,30 @@ describe("environments module", () => {
 
     const read = (key: string) =>
       app.request(
-        `/v1/projects/${projectKey}/environments/${key}/flags/checkout-v2`,
+        `/v1/projects/${projectKey}/flags/checkout-v2/environments/${key}`,
         { headers: { cookie: session.cookie } },
       );
 
-    // Copying carries the whole state, not merely the flag's existence.
-    const production = (await (await read("production")).json()) as FlagDetail;
+    // Copying carries the whole configuration, not merely the flag's existence.
+    const production = (await (
+      await read("production")
+    ).json()) as FlagEnvironmentConfig;
     expect(production).toMatchObject({ enabled: true, rolloutPercentage: 100 });
-    expect(production.variations).toHaveLength(2);
 
-    // Nothing is copied unless a source is named: the new environment is empty.
-    expect((await read("staging")).status).toBe(404);
+    // Nothing is copied unless a source is named: the flag is configured here
+    // too, but disabled — a flag is project-scoped, so it exists everywhere.
+    const staging = (await (
+      await read("staging")
+    ).json()) as FlagEnvironmentConfig;
+    expect(staging).toMatchObject({ enabled: false, rolloutPercentage: 0 });
+
+    // Variations belong to the flag, not to one environment's configuration.
+    const detail = await app.request(
+      `/v1/projects/${projectKey}/flags/checkout-v2`,
+      { headers: { cookie: session.cookie } },
+    );
+    const flag = (await detail.json()) as FlagDetail;
+    expect(flag.variations).toHaveLength(2);
   });
 
   it("refuses copy-source without an environment to copy", async () => {
@@ -411,7 +418,6 @@ describe("environments module", () => {
       method: "POST",
       headers: headers(session),
       body: JSON.stringify({
-        environmentKey: "development",
         key: "checkout-v2",
         name: "Checkout v2",
         type: "boolean",
@@ -419,7 +425,7 @@ describe("environments module", () => {
     });
 
     await app.request(
-      `/v1/projects/${projectKey}/environments/development/flags/checkout-v2/config`,
+      `/v1/projects/${projectKey}/flags/checkout-v2/environments/development`,
       {
         method: "PATCH",
         headers: headers(session),
@@ -429,7 +435,6 @@ describe("environments module", () => {
           defaultVariation: "on",
           rolloutPercentage: 100,
           bucketBy: "userId",
-          variations: VARIATIONS,
         }),
       },
     );
@@ -476,7 +481,7 @@ describe("environments module", () => {
 
     // Configuration survives the archive, which is what makes it reversible.
     const flag = await app.request(
-      `/v1/projects/${projectKey}/environments/development/flags/checkout-v2`,
+      `/v1/projects/${projectKey}/flags/checkout-v2/environments/development`,
       { headers: { cookie: session.cookie } },
     );
 
@@ -531,7 +536,6 @@ describe("environments module", () => {
       method: "POST",
       headers: headers(session),
       body: JSON.stringify({
-        environmentKey: "development",
         key: "checkout-v2",
         name: "Checkout v2",
         type: "boolean",

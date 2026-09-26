@@ -24,7 +24,7 @@ import type { EnvironmentsRepository } from "./environments.repository.js";
 import {
   DEFAULT_ENVIRONMENT_SETTINGS,
   toEnvironmentRef,
-  type CopyEnvironmentFlags,
+  type InitializeEnvironmentConfigs,
   type EnvironmentActorContext,
   type EnvironmentConnectionUrls,
   type EnvironmentDetails,
@@ -40,7 +40,7 @@ export class EnvironmentsService {
     private readonly repository: EnvironmentsRepository,
     private readonly projectAccess: ProjectAccessService,
     /** Injected by `app.ts` so environments never imports the flags module. */
-    private readonly copyFlags: CopyEnvironmentFlags,
+    private readonly initializeConfigs: InitializeEnvironmentConfigs,
   ) {}
 
   async list(
@@ -108,23 +108,20 @@ export class EnvironmentsService {
         settings: DEFAULT_ENVIRONMENT_SETTINGS,
       });
 
-      // A new environment starts empty unless the caller named one to copy.
-      // Nothing is duplicated into it silently: the flags of every other
-      // environment simply do not exist here until they are promoted.
-      const copiedFlags = source
-        ? await this.copyFlags(tx, {
-            projectId: project.id,
-            source: toEnvironmentRef(source),
-            target: {
-              id,
-              key: input.key,
-              name: input.name,
-              isProtected: false,
-              archivedAt: null,
-            },
-            author: context.userId,
-          })
-        : 0;
+      // Every flag of the project gets a configuration here: disabled defaults,
+      // or a copy of each configuration from the environment the caller named.
+      const configuredFlags = await this.initializeConfigs(tx, {
+        projectId: project.id,
+        source: source ? toEnvironmentRef(source) : null,
+        target: {
+          id,
+          key: input.key,
+          name: input.name,
+          isProtected: false,
+          archivedAt: null,
+        },
+        author: context.userId,
+      });
 
       await writeAuditLog(tx, {
         organizationId: context.organizationId,
@@ -138,7 +135,7 @@ export class EnvironmentsService {
           name: input.name,
           initialFlagStatus: input.initialFlagStatus,
           copyFrom: source?.key ?? null,
-          copiedFlags,
+          configuredFlags,
         },
       });
     });
@@ -326,6 +323,16 @@ export class EnvironmentsService {
 
     await db.transaction(async (tx) => {
       await this.repository.setArchived(tx, row.id, null);
+
+      // Every flag is configured when either it or the environment is created,
+      // so this normally writes nothing: it repairs an environment that was
+      // archived before a flag existed.
+      await this.initializeConfigs(tx, {
+        projectId: project.id,
+        source: null,
+        target: toEnvironmentRef({ ...row, archivedAt: null }),
+        author: context.userId,
+      });
 
       await writeAuditLog(tx, {
         organizationId: context.organizationId,

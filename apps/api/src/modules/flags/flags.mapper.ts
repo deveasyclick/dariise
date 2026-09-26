@@ -1,6 +1,7 @@
 import {
   flagVariationValueSchema,
   type FlagDetail,
+  type FlagEnvironmentConfig,
   type FlagIndividualTarget,
   type FlagStatus,
   type FlagSummary,
@@ -17,6 +18,7 @@ import {
 
 import type {
   EnvironmentRef,
+  FlagEnvironmentConfigRow,
   FlagListRow,
   FlagRow,
   FlagVersionSummary,
@@ -50,7 +52,7 @@ export function toVariation(row: VariationRow): FlagVariation {
   };
 }
 
-function toVariations(rows: VariationRow[]): FlagVariation[] {
+export function toVariations(rows: VariationRow[]): FlagVariation[] {
   return rows.map(toVariation);
 }
 
@@ -79,7 +81,9 @@ export function toTargetingRule(entry: RuleWithConditions): TargetingRule {
   };
 }
 
-export function toTargetingRules(entries: RuleWithConditions[]): TargetingRule[] {
+export function toTargetingRules(
+  entries: RuleWithConditions[],
+): TargetingRule[] {
   return entries.map(toTargetingRule);
 }
 
@@ -103,9 +107,13 @@ function serveFromSnapshot(snapshot: unknown): string | null {
   return typeof serve === "string" ? serve : null;
 }
 
-export function toFlagVersion(row: FlagVersionSummary): FlagVersion {
+export function toFlagVersion(
+  row: FlagVersionSummary,
+  environmentKey: string,
+): FlagVersion {
   return {
     version: row.version,
+    environmentKey,
     description: row.description,
     author: row.author,
     serve: serveFromSnapshot(row.snapshot),
@@ -130,46 +138,45 @@ function toIdentity(row: FlagRow) {
 }
 
 /**
- * A list row carries the flag's identity plus where it lives and whether it is
- * on there, so the list screen needs no request per row.
+ * A list row carries how the flag stands in every environment of its project, so
+ * the screen needs no request per environment.
  */
 export function toFlagSummary(row: FlagListRow): FlagSummary {
-  return {
-    ...toIdentity(row),
-    environmentKey: row.environmentKey,
-    environmentName: row.environmentName,
-    enabled: row.enabled,
-    rolloutPercentage: row.rolloutPercentage,
-  };
+  return { ...toIdentity(row), environments: row.environments };
 }
 
 /** The workspace-wide list spans projects, so each row carries its project key. */
 export function toWorkspaceFlagSummary(
-  row: FlagListRow,
-  projectKey: string,
+  row: FlagListRow & { projectKey: string },
 ): WorkspaceFlagSummary {
-  return { ...toFlagSummary(row), projectKey };
+  return { ...toFlagSummary(row), projectKey: row.projectKey };
 }
 
+/** One flag on its own: its identity, its environments and the values it can serve. */
 export function toFlagDetail(
-  row: FlagRow,
+  row: FlagListRow,
+  variations: VariationRow[],
+): FlagDetail {
+  return { ...toFlagSummary(row), variations: toVariations(variations) };
+}
+
+/** What one flag does in one environment. */
+export function toFlagEnvironmentConfig(
   environment: EnvironmentRef,
+  config: FlagEnvironmentConfigRow,
   parts: {
-    variations: VariationRow[];
     rules: RuleWithConditions[];
     targets: IndividualTargetRow[];
   },
-): FlagDetail {
+): FlagEnvironmentConfig {
   return {
-    ...toIdentity(row),
     environmentKey: environment.key,
     environmentName: environment.name,
-    enabled: row.enabled,
-    offVariation: row.offVariationKey,
-    defaultVariation: row.defaultVariationKey,
-    rolloutPercentage: row.rolloutPercentage,
-    bucketBy: row.bucketBy,
-    variations: toVariations(parts.variations),
+    enabled: config.enabled,
+    offVariation: config.offVariationKey,
+    defaultVariation: config.defaultVariationKey,
+    rolloutPercentage: config.rolloutPercentage,
+    bucketBy: config.bucketBy,
     rules: toTargetingRules(parts.rules),
     individualTargets: toIndividualTargets(parts.targets),
   };

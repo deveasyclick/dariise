@@ -1,19 +1,15 @@
-import type { FlagStatus, FlagType, FlagVariation } from "@dariise/contracts";
+import type { FlagStatus, FlagType } from "@dariise/contracts";
 
 import type { EnvironmentRef } from "../../shared/types/environment.js";
 import type { ProjectRef } from "../project-access/index.js";
 
-/** The environment a flag lives in, shared with the environments module. */
+/** The environment a flag is configured in, shared with the environments module. */
 export type { EnvironmentRef };
 
-/**
- * A flag row. It belongs to one environment, so its configuration is part of
- * it rather than a separate record that might be missing.
- */
+/** A flag row: identity only. What it does in an environment is a config row. */
 export interface FlagRow {
   id: string;
   projectId: string;
-  environmentId: string;
   key: string;
   name: string;
   description: string | null;
@@ -21,19 +17,33 @@ export interface FlagRow {
   tags: string[];
   owner: string | null;
   status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** One flag's state in one environment, as the list and detail reads carry it. */
+export interface FlagEnvironmentSummaryRow {
+  environmentKey: string;
+  environmentName: string;
+  enabled: boolean;
+  rolloutPercentage: number;
+}
+
+/** A list row: the flag plus how it stands in every environment of its project. */
+export interface FlagListRow extends FlagRow {
+  environments: FlagEnvironmentSummaryRow[];
+}
+
+/** What one flag does in one environment. */
+export interface FlagEnvironmentConfigRow {
+  id: string;
+  flagId: string;
+  environmentId: string;
   enabled: boolean;
   offVariationKey: string;
   defaultVariationKey: string;
   rolloutPercentage: number;
   bucketBy: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-/** A list row also carries where the flag lives, for the environment badge. */
-export interface FlagListRow extends FlagRow {
-  environmentKey: string;
-  environmentName: string;
 }
 
 export interface VariationRow {
@@ -45,6 +55,13 @@ export interface VariationRow {
   priority: number;
 }
 
+/** What stops a variation key from being removed. */
+export interface VariationReference {
+  environmentKey: string;
+  kind: "off_variation" | "default_variation" | "rule" | "target";
+  detail: string | null;
+}
+
 export interface FlagListFilter {
   search?: string;
   status?: FlagStatus;
@@ -52,10 +69,17 @@ export interface FlagListFilter {
   cursor: string | null;
 }
 
+export interface WorkspaceFlagFilter {
+  search?: string;
+  status?: FlagStatus;
+  projectKey?: string;
+  limit: number;
+  cursor: string | null;
+}
+
 export interface NewFlagRecord {
   id: string;
   projectId: string;
-  environmentId: string;
   key: string;
   name: string;
   description: string | null;
@@ -77,12 +101,12 @@ export interface UpdateConfigRecord {
   defaultVariation: string;
   rolloutPercentage: number;
   bucketBy: string;
-  variations: FlagVariation[];
 }
 
 export interface FlagVersionRecord {
   flagId: string;
   projectId: string;
+  environmentId: string;
   version: number;
   description: string | null;
   author: string;
@@ -100,6 +124,7 @@ export interface FlagVersionSummary {
 export interface TargetingRuleRow {
   id: string;
   flagId: string;
+  environmentId: string;
   priority: number;
   description: string | null;
   variationKey: string;
@@ -125,6 +150,7 @@ export interface RuleWithConditions {
 
 export interface IndividualTargetRow {
   flagId: string;
+  environmentId: string;
   userId: string;
   variationKey: string;
 }
@@ -151,21 +177,17 @@ export interface FlagsActorContext {
 /** The workspace-wide list orders by (project key, flag key), so its cursor holds both. */
 export const WORKSPACE_FLAG_CURSOR_SEPARATOR = "::";
 
-/** One flag's state in one environment, as every environment-scoped method resolves it. */
+/** One flag in one environment, with the configuration it is read and written through. */
 export interface EnvironmentScope {
   project: ProjectRef;
   flag: FlagRow;
   environment: EnvironmentRef;
+  config: FlagEnvironmentConfigRow;
 }
 
-/** The source flag and the environment it is being copied into. */
-export interface FlagCopyInput {
+/** One flag's configuration copied out of the environment it came from. */
+export interface EnvironmentConfigCopyInput {
   sourceFlagId: string;
-  targetEnvironmentId: string;
-}
-
-/** A whole environment's flags, copied into a newly created one. */
-export interface EnvironmentFlagCopyInput {
   sourceEnvironmentId: string;
   targetEnvironmentId: string;
 }

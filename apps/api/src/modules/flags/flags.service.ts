@@ -5,21 +5,24 @@ import {
   variationValueMatchesType,
   type AuditAction,
   type CreateFlagInput,
+  type CreateFlagVariationInput,
   type FlagChangePayload,
   type FlagDependencyGraph,
   type FlagDetail,
+  type FlagEnvironmentConfig,
   type FlagIndividualTarget,
   type FlagListQuery,
   type FlagSummary,
   type FlagType,
+  type FlagVariation,
   type FlagVersion,
-  type PromoteFlagInput,
   type ReplaceIndividualTargetsInput,
   type ReplaceTargetingRulesInput,
   type TargetingRule,
   type TargetingRuleInput,
   type UpdateFlagConfigInput,
   type UpdateFlagInput,
+  type UpdateFlagVariationInput,
   type WorkspaceFlagListQuery,
   type WorkspaceFlagSummary,
 } from "@dariise/contracts";
@@ -34,10 +37,12 @@ import type { ProjectAccessService } from "../project-access/index.js";
 import { buildDependencyGraph } from "./flags.dependencies.js";
 import {
   toFlagDetail,
+  toFlagEnvironmentConfig,
   toFlagSummary,
   toFlagVersion,
   toIndividualTargets,
   toTargetingRules,
+  toVariations,
   toWorkspaceFlagSummary,
 } from "./flags.mapper.js";
 import type { FlagsRepository } from "./flags.repository.js";
@@ -45,13 +50,54 @@ import {
   WORKSPACE_FLAG_CURSOR_SEPARATOR,
   type EnvironmentRef,
   type EnvironmentScope,
+  type FlagEnvironmentSummaryRow,
   type FlagRow,
   type FlagsActorContext,
+  type VariationReference,
 } from "./flags.types.js";
+
+function toEnvironmentSummary(row: {
+  environmentKey: string;
+  environmentName: string;
+  enabled: boolean;
+  rolloutPercentage: number;
+}): FlagEnvironmentSummaryRow {
+  return {
+    environmentKey: row.environmentKey,
+    environmentName: row.environmentName,
+    enabled: row.enabled,
+    rolloutPercentage: row.rolloutPercentage,
+  };
+}
+
+/** The label a starting variation is created with: its key, capitalised. */
+function variationLabel(key: string): string {
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+function describeReferences(references: VariationReference[]): string {
+  const labels = references.map((reference) => {
+    const what =
+      reference.kind === "rule"
+        ? `the "${reference.detail}" rule`
+        : reference.kind === "target"
+          ? `the target "${reference.detail}"`
+          : reference.kind === "off_variation"
+            ? "the off variation"
+            : "the default variation";
+
+    return `${what} in ${reference.environmentKey}`;
+  });
+
+  return [...new Set(labels)].join(", ");
+}
 
 /**
  * Reads are viewer-level; every write needs the project role docs/architecture.md
  * §3 grants, and each mutation writes its audit row inside its own transaction.
+ *
+ * A flag is project-scoped: its identity and its variations are shared, and what
+ * it does in one environment lives in that environment's configuration.
  */
 export class FlagsService {
   constructor(
@@ -63,367 +109,6 @@ export class FlagsService {
       keys: string[],
     ) => Promise<string[]>,
   ) {}
-
-  async list(
-    context: FlagsActorContext,
-    projectKey: string,
-    query: FlagListQuery,
-  ): Promise<Page<FlagSummary>> {
-    const { project } = await this.projectAccess.require({
-      ...context,
-      projectKey,
-      minimumRole: "viewer",
-    });
-
-    const environment = await this.requireEnvironment(
-      project.id,
-      query.environmentKey,
-    );
-
-    const rows = await this.repository.list(project.id, environment.id, {
-      search: query.search,
-      status: query.status,
-      limit: query.limit,
-      // The cursor is opaque base64url; the repository compares real keys.
-      cursor: decodeCursor(query.cursor),
-    });
-
-    const page = toPage(rows, query.limit, (row) => row.key);
-
-    return {
-      data: page.data.map(toFlagSummary),
-      nextCursor: page.nextCursor,
-    };
-  }
-
-  async create(
-    context: FlagsActorContext,
-    projectKey: string,
-    input: CreateFlagInput,
-  ): Promise<FlagDetail> {
-    const { project } = await this.projectAccess.require({
-      ...context,
-      projectKey,
-      minimumRole: "engineer",
-    });
-
-    const environment = await this.requireEnvironment(
-      project.id,
-      input.environmentKey,
-    );
-
-    if (
-      await this.repository.findByKey(project.id, environment.id, input.key)
-    ) {
-      throw ApiError.conflict(
-        `A flag with that key already exists in ${environment.name}.`,
-      );
-    }
-
-    const flagId = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await this.repository.insert(tx, {
-        id: flagId,
-        projectId: project.id,
-        environmentId: environment.id,
-        key: input.key,
-        name: input.name,
-        description: input.description ?? null,
-        type: input.type,
-        tags: input.tags,
-        owner: input.owner ?? null,
-      });
-
-      // The flag exists in this one environment, and it starts off serving the
-      // values its type promises.
-      await this.repository.insertVariations(tx, {
-        flagId,
-        values: input.values ?? defaultVariations(input.type),
-      });
-
-      await writeAuditLog(tx, {
-        organizationId: context.organizationId,
-        projectId: project.id,
-        environmentId: environment.id,
-        actor: context.userId,
-        actorName: context.userName,
-        action: "flag.created",
-        target: flagId,
-        changes: {
-          key: input.key,
-          name: input.name,
-          type: input.type,
-          environment: environment.key,
-        },
-      });
-
-      await this.repository.insertVersion(tx, {
-        flagId,
-        projectId: project.id,
-        version: await this.repository.nextVersion(tx, flagId),
-        description: "Flag created",
-        author: context.userId,
-        snapshot: {
-          environment: environment.key,
-          key: input.key,
-          type: input.type,
-          tags: input.tags,
-        },
-      });
-    });
-
-    return this.loadDetail(
-      await this.requireFlag(project.id, environment.id, input.key),
-      environment,
-    );
-  }
-
-  async get(
-    context: FlagsActorContext,
-    projectKey: string,
-    environmentKey: string,
-    flagKey: string,
-  ): Promise<FlagDetail> {
-    const scope = await this.environmentScope(
-      context,
-      projectKey,
-      environmentKey,
-      flagKey,
-      "viewer",
-    );
-
-    return this.loadDetail(scope.flag, scope.environment);
-  }
-
-  async update(
-    context: FlagsActorContext,
-    projectKey: string,
-    environmentKey: string,
-    flagKey: string,
-    input: UpdateFlagInput,
-  ): Promise<FlagDetail> {
-    const scope = await this.environmentScope(
-      context,
-      projectKey,
-      environmentKey,
-      flagKey,
-      "engineer",
-    );
-
-    await db.transaction(async (tx) => {
-      await this.repository.update(tx, scope.flag.id, input);
-
-      await writeAuditLog(tx, {
-        organizationId: context.organizationId,
-        projectId: scope.project.id,
-        environmentId: scope.environment.id,
-        actor: context.userId,
-        actorName: context.userName,
-        action: "flag.updated",
-        target: scope.flag.id,
-        changes: input,
-      });
-    });
-
-    return this.loadDetail(
-      await this.requireFlag(
-        scope.project.id,
-        scope.environment.id,
-        flagKey,
-      ),
-      scope.environment,
-    );
-  }
-
-  async archive(
-    context: FlagsActorContext,
-    projectKey: string,
-    environmentKey: string,
-    flagKey: string,
-  ): Promise<{ key: string; status: string }> {
-    const scope = await this.environmentScope(
-      context,
-      projectKey,
-      environmentKey,
-      flagKey,
-      // docs/architecture.md §3 lets an engineer archive a flag.
-      "engineer",
-    );
-
-    await db.transaction(async (tx) => {
-      await this.repository.archive(tx, scope.flag.id);
-
-      await writeAuditLog(tx, {
-        organizationId: context.organizationId,
-        projectId: scope.project.id,
-        environmentId: scope.environment.id,
-        actor: context.userId,
-        actorName: context.userName,
-        action: "flag.archived",
-        target: scope.flag.id,
-        changes: { status: "archived", environment: scope.environment.key },
-      });
-    });
-
-    return { key: scope.flag.key, status: "archived" };
-  }
-
-  async updateEnvironmentConfig(
-    context: FlagsActorContext,
-    projectKey: string,
-    environmentKey: string,
-    flagKey: string,
-    input: UpdateFlagConfigInput,
-  ): Promise<FlagDetail> {
-    const scope = await this.environmentScope(
-      context,
-      projectKey,
-      environmentKey,
-      flagKey,
-      "engineer",
-    );
-
-    this.assertPublishable(scope.environment);
-    await this.validateConfigInput(scope.flag, input);
-
-    const action =
-      scope.flag.enabled !== input.enabled
-        ? input.enabled
-          ? "flag.enabled"
-          : "flag.disabled"
-        : scope.flag.rolloutPercentage !== input.rolloutPercentage
-          ? "rollout.updated"
-          : "flag.updated";
-
-    await db.transaction(async (tx) => {
-      await this.publishConfig(tx, context, scope, input, action);
-    });
-
-    return this.loadDetail(
-      await this.requireFlag(
-        scope.project.id,
-        scope.environment.id,
-        flagKey,
-      ),
-      scope.environment,
-    );
-  }
-
-  /**
-   * Copies one flag, whole, into another environment of the same project.
-   *
-   * The two flags are independent from here on: this is how a change reaches
-   * production, not a link between the environments.
-   */
-  async promote(
-    context: FlagsActorContext,
-    projectKey: string,
-    environmentKey: string,
-    flagKey: string,
-    input: PromoteFlagInput,
-  ): Promise<FlagDetail> {
-    const scope = await this.environmentScope(
-      context,
-      projectKey,
-      environmentKey,
-      flagKey,
-      "engineer",
-    );
-
-    const target = await this.requireEnvironment(scope.project.id, input.to);
-
-    if (target.id === scope.environment.id) {
-      throw ApiError.badRequest(
-        "That flag is already in this environment; choose a different one.",
-      );
-    }
-
-    if (target.archivedAt) {
-      throw ApiError.conflict(
-        "That environment is archived. Unarchive it before promoting into it.",
-      );
-    }
-
-    // Promotion writes a whole new flag into the target, so a protected
-    // environment refuses it exactly as a direct publish would.
-    this.assertPublishable(target);
-
-    if (await this.repository.findByKey(scope.project.id, target.id, flagKey)) {
-      throw ApiError.conflict(
-        `"${flagKey}" already exists in ${target.name}. Rename one of them first.`,
-      );
-    }
-
-    await db.transaction(async (tx) => {
-      const newFlagId = await this.copyFlag(tx, {
-        source: scope.flag,
-        target,
-        projectId: scope.project.id,
-        author: context.userId,
-        reason: `Promoted from ${scope.environment.name}`,
-      });
-
-      await writeAuditLog(tx, {
-        organizationId: context.organizationId,
-        projectId: scope.project.id,
-        environmentId: target.id,
-        actor: context.userId,
-        actorName: context.userName,
-        action: "flag.promoted",
-        target: newFlagId,
-        changes: {
-          key: flagKey,
-          from: scope.environment.key,
-          to: target.key,
-        },
-      });
-    });
-
-    return this.loadDetail(
-      await this.requireFlag(scope.project.id, target.id, flagKey),
-      target,
-    );
-  }
-
-  /**
-   * The `copy-source` half of creating an environment: every flag of the
-   * source environment is copied into the new one. Runs in the caller's
-   * transaction so an environment is never half-populated.
-   *
-   * The flags have no audit rows of their own; `environment.created` records
-   * the copy once, which is what a reader is looking for.
-   */
-  async copyEnvironmentFlags(
-    tx: Transaction,
-    input: {
-      projectId: string;
-      source: EnvironmentRef;
-      target: EnvironmentRef;
-      author: string;
-    },
-  ): Promise<number> {
-    const sourceFlagIds = await this.repository.listIdsInEnvironment(
-      tx,
-      input.source.id,
-    );
-
-    for (const sourceFlagId of sourceFlagIds) {
-      const source = await this.repository.findById(tx, sourceFlagId);
-
-      if (!source) continue;
-
-      await this.copyFlag(tx, {
-        source,
-        target: input.target,
-        projectId: input.projectId,
-        author: input.author,
-        reason: `Copied from ${input.source.name}`,
-      });
-    }
-
-    return sourceFlagIds.length;
-  }
 
   /**
    * The workspace-wide screen. Scoped by the session's workspace rather than a
@@ -439,7 +124,6 @@ export class FlagsService {
         search: query.search,
         status: query.status,
         projectKey: query.projectKey,
-        environmentKey: query.environmentKey,
         limit: query.limit,
         cursor: decodeCursor(query.cursor),
       },
@@ -449,56 +133,467 @@ export class FlagsService {
       rows,
       query.limit,
       (row) =>
-        `${row.projectKey}${WORKSPACE_FLAG_CURSOR_SEPARATOR}${row.environmentKey}${WORKSPACE_FLAG_CURSOR_SEPARATOR}${row.key}`,
+        `${row.projectKey}${WORKSPACE_FLAG_CURSOR_SEPARATOR}${row.key}`,
     );
 
+    const data = await this.loadListRows(page.data, {
+      environmentKey: query.environmentKey,
+    });
+
     return {
-      data: page.data.map((row) =>
-        toWorkspaceFlagSummary(row, row.projectKey),
-      ),
+      data: data.map((row) => toWorkspaceFlagSummary(row)),
       nextCursor: page.nextCursor,
     };
   }
 
-  /** `GET /v1/flags/:flagKey` requires a project key: keys collide across projects. */
-  async resolve(
+  async list(
     context: FlagsActorContext,
-    flagKey: string,
     projectKey: string,
-    environmentKey: string,
+    query: FlagListQuery,
+  ): Promise<Page<FlagSummary>> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "viewer",
+    });
+
+    const environment = query.environmentKey
+      ? await this.requireEnvironment(project.id, query.environmentKey)
+      : null;
+
+    const rows = await this.repository.list(project.id, {
+      search: query.search,
+      status: query.status,
+      limit: query.limit,
+      // The cursor is opaque base64url; the repository compares real keys.
+      cursor: decodeCursor(query.cursor),
+    });
+
+    const page = toPage(rows, query.limit, (row) => row.key);
+    const data = await this.loadListRows(page.data, {
+      environmentId: environment?.id,
+    });
+
+    return {
+      data: data.map((row) => toFlagSummary(row)),
+      nextCursor: page.nextCursor,
+    };
+  }
+
+  /**
+   * Creating a flag configures it everywhere at once: every environment of the
+   * project gets its own configuration and its own first history entry.
+   */
+  async create(
+    context: FlagsActorContext,
+    projectKey: string,
+    input: CreateFlagInput,
   ): Promise<FlagDetail> {
-    return this.get(context, projectKey, environmentKey, flagKey);
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "engineer",
+    });
+
+    if (await this.repository.findByKey(project.id, input.key)) {
+      throw ApiError.conflict(
+        "A flag with that key already exists in this project.",
+      );
+    }
+
+    const environments = await this.repository.listEnvironments(project.id);
+    const flagId = randomUUID();
+    const values = input.values ?? defaultVariations(input.type);
+    const keys = input.variationKeys ?? { on: "on", off: "off" };
+    const variations = [
+      { key: keys.on, name: variationLabel(keys.on), value: values.on },
+      { key: keys.off, name: variationLabel(keys.off), value: values.off },
+    ];
+
+    await db.transaction(async (tx) => {
+      await this.repository.insert(tx, {
+        id: flagId,
+        projectId: project.id,
+        key: input.key,
+        name: input.name,
+        description: input.description ?? null,
+        type: input.type,
+        tags: input.tags,
+        owner: input.owner ?? null,
+      });
+
+      await this.repository.insertVariations(tx, { flagId, variations });
+
+      for (const environment of environments) {
+        await this.repository.insertConfig(tx, {
+          flagId,
+          environmentId: environment.id,
+          // The environment's selections have to name variations that exist,
+          // which a string flag's own keys are.
+          offVariationKey: keys.off,
+          defaultVariationKey: keys.on,
+        });
+
+        await this.repository.insertVersion(tx, {
+          flagId,
+          projectId: project.id,
+          environmentId: environment.id,
+          version: 1,
+          description: "Flag created",
+          author: context.userId,
+          snapshot: {
+            environment: environment.key,
+            key: input.key,
+            type: input.type,
+            tags: input.tags,
+          },
+        });
+      }
+
+      await writeAuditLog(tx, {
+        organizationId: context.organizationId,
+        projectId: project.id,
+        actor: context.userId,
+        actorName: context.userName,
+        action: "flag.created",
+        target: flagId,
+        changes: {
+          key: input.key,
+          name: input.name,
+          type: input.type,
+          environments: environments.map((environment) => environment.key),
+        },
+      });
+    });
+
+    return this.loadDetail(await this.requireFlag(project.id, input.key));
+  }
+
+  async get(
+    context: FlagsActorContext,
+    projectKey: string,
+    flagKey: string,
+  ): Promise<FlagDetail> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "viewer",
+    });
+
+    return this.loadDetail(await this.requireFlag(project.id, flagKey));
+  }
+
+  /** What the flag does in one environment. */
+  async getEnvironmentConfig(
+    context: FlagsActorContext,
+    projectKey: string,
+    flagKey: string,
+    environmentKey: string,
+  ): Promise<FlagEnvironmentConfig> {
+    return this.loadEnvironmentConfig(
+      await this.environmentScope(
+        context,
+        projectKey,
+        flagKey,
+        environmentKey,
+        "viewer",
+      ),
+    );
+  }
+
+  async getVariations(
+    context: FlagsActorContext,
+    projectKey: string,
+    flagKey: string,
+  ): Promise<FlagVariation[]> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "viewer",
+    });
+    const row = await this.requireFlag(project.id, flagKey);
+
+    return toVariations(await this.repository.listVariations(row.id));
+  }
+
+  async addVariation(
+    context: FlagsActorContext,
+    projectKey: string,
+    flagKey: string,
+    input: CreateFlagVariationInput,
+  ): Promise<FlagVariation[]> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "engineer",
+    });
+    const row = await this.requireFlag(project.id, flagKey);
+    const variations = await this.repository.listVariations(row.id);
+
+    if (variations.some((variation) => variation.key === input.key)) {
+      throw ApiError.conflict(
+        `"${input.key}" is already one of this flag's variations.`,
+      );
+    }
+
+    if (!variationValueMatchesType(row.type as FlagType, input.value)) {
+      throw ApiError.badRequest(
+        `The value of "${input.key}" is not a ${row.type}. A flag serves values of the type it was created with.`,
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      await this.repository.insertVariation(tx, {
+        flagId: row.id,
+        variation: input,
+      });
+
+      await writeAuditLog(tx, {
+        organizationId: context.organizationId,
+        projectId: project.id,
+        actor: context.userId,
+        actorName: context.userName,
+        action: "flag.variation.added",
+        target: row.id,
+        changes: { key: input.key },
+      });
+    });
+
+    return toVariations(await this.repository.listVariations(row.id));
+  }
+
+  /** A variation's value or label. Its key identifies it and is not editable. */
+  async updateVariation(
+    context: FlagsActorContext,
+    projectKey: string,
+    flagKey: string,
+    variationKey: string,
+    input: UpdateFlagVariationInput,
+  ): Promise<FlagVariation[]> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "engineer",
+    });
+    const row = await this.requireFlag(project.id, flagKey);
+    const variations = await this.repository.listVariations(row.id);
+
+    if (!variations.some((variation) => variation.key === variationKey)) {
+      throw ApiError.notFound("Variation not found.");
+    }
+
+    if (
+      input.value !== undefined &&
+      !variationValueMatchesType(row.type as FlagType, input.value)
+    ) {
+      throw ApiError.badRequest(
+        `The value of "${variationKey}" is not a ${row.type}.`,
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      await this.repository.updateVariation(tx, row.id, variationKey, input);
+
+      await writeAuditLog(tx, {
+        organizationId: context.organizationId,
+        projectId: project.id,
+        actor: context.userId,
+        actorName: context.userName,
+        action: "flag.variation.updated",
+        target: row.id,
+        changes: { key: variationKey, ...input },
+      });
+    });
+
+    return toVariations(await this.repository.listVariations(row.id));
+  }
+
+  /**
+   * A variation key can only go once nothing names it, because environments,
+   * rules and targets all reference it by key.
+   */
+  async removeVariation(
+    context: FlagsActorContext,
+    projectKey: string,
+    flagKey: string,
+    variationKey: string,
+  ): Promise<FlagVariation[]> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "engineer",
+    });
+    const row = await this.requireFlag(project.id, flagKey);
+    const variations = await this.repository.listVariations(row.id);
+
+    if (!variations.some((variation) => variation.key === variationKey)) {
+      throw ApiError.notFound("Variation not found.");
+    }
+
+    if (variations.length === 1) {
+      throw ApiError.conflict("A flag has to keep at least one variation.");
+    }
+
+    const references = await this.repository.findVariationReferences(
+      row.id,
+      variationKey,
+    );
+
+    if (references.length > 0) {
+      throw ApiError.conflict(
+        `"${variationKey}" is still referenced by ${describeReferences(references)}. Re-point them before removing it.`,
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      await this.repository.deleteVariation(tx, row.id, variationKey);
+
+      await writeAuditLog(tx, {
+        organizationId: context.organizationId,
+        projectId: project.id,
+        actor: context.userId,
+        actorName: context.userName,
+        action: "flag.variation.removed",
+        target: row.id,
+        changes: { key: variationKey },
+      });
+    });
+
+    return toVariations(await this.repository.listVariations(row.id));
+  }
+
+  async update(
+    context: FlagsActorContext,
+    projectKey: string,
+    flagKey: string,
+    input: UpdateFlagInput,
+  ): Promise<FlagDetail> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "engineer",
+    });
+    const row = await this.requireFlag(project.id, flagKey);
+
+    await db.transaction(async (tx) => {
+      await this.repository.update(tx, row.id, input);
+
+      await writeAuditLog(tx, {
+        organizationId: context.organizationId,
+        projectId: project.id,
+        actor: context.userId,
+        actorName: context.userName,
+        action: "flag.updated",
+        target: row.id,
+        changes: input,
+      });
+    });
+
+    return this.loadDetail(await this.requireFlag(project.id, flagKey));
+  }
+
+  /**
+   * Archiving is project-wide: `status` belongs to the flag, not to one
+   * environment's configuration.
+   */
+  async archive(
+    context: FlagsActorContext,
+    projectKey: string,
+    flagKey: string,
+  ): Promise<{ key: string; status: string }> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      // docs/architecture.md §3 lets an engineer archive a flag.
+      minimumRole: "engineer",
+    });
+    const row = await this.requireFlag(project.id, flagKey);
+
+    await db.transaction(async (tx) => {
+      await this.repository.archive(tx, row.id);
+
+      await writeAuditLog(tx, {
+        organizationId: context.organizationId,
+        projectId: project.id,
+        actor: context.userId,
+        actorName: context.userName,
+        action: "flag.archived",
+        target: row.id,
+        changes: { status: "archived" },
+      });
+    });
+
+    return { key: row.key, status: "archived" };
+  }
+
+  async updateEnvironmentConfig(
+    context: FlagsActorContext,
+    projectKey: string,
+    flagKey: string,
+    environmentKey: string,
+    input: UpdateFlagConfigInput,
+  ): Promise<FlagEnvironmentConfig> {
+    const scope = await this.environmentScope(
+      context,
+      projectKey,
+      flagKey,
+      environmentKey,
+      "engineer",
+    );
+
+    this.assertPublishable(scope.environment);
+    await this.validateConfigInput(scope, input);
+
+    const action =
+      scope.config.enabled !== input.enabled
+        ? input.enabled
+          ? "flag.enabled"
+          : "flag.disabled"
+        : scope.config.rolloutPercentage !== input.rolloutPercentage
+          ? "rollout.updated"
+          : "flag.updated";
+
+    await db.transaction(async (tx) => {
+      await this.publishConfig(tx, context, scope, input, action);
+    });
+
+    return this.loadEnvironmentConfig({
+      ...scope,
+      config: await this.requireConfig(scope.flag.id, scope.environment.id),
+    });
   }
 
   async getRules(
     context: FlagsActorContext,
     projectKey: string,
-    environmentKey: string,
     flagKey: string,
+    environmentKey: string,
   ): Promise<TargetingRule[]> {
     const scope = await this.environmentScope(
       context,
       projectKey,
-      environmentKey,
       flagKey,
+      environmentKey,
       "viewer",
     );
 
-    return toTargetingRules(await this.repository.listRules(scope.flag.id));
+    return toTargetingRules(
+      await this.repository.listRules(scope.flag.id, scope.environment.id),
+    );
   }
 
   async replaceRules(
     context: FlagsActorContext,
     projectKey: string,
-    environmentKey: string,
     flagKey: string,
+    environmentKey: string,
     input: ReplaceTargetingRulesInput,
   ): Promise<TargetingRule[]> {
     const scope = await this.environmentScope(
       context,
       projectKey,
-      environmentKey,
       flagKey,
+      environmentKey,
       "engineer",
     );
 
@@ -509,40 +604,42 @@ export class FlagsService {
       await this.publishRules(tx, context, scope, input.rules);
     });
 
-    return toTargetingRules(await this.repository.listRules(scope.flag.id));
+    return toTargetingRules(
+      await this.repository.listRules(scope.flag.id, scope.environment.id),
+    );
   }
 
   async getTargets(
     context: FlagsActorContext,
     projectKey: string,
-    environmentKey: string,
     flagKey: string,
+    environmentKey: string,
   ): Promise<FlagIndividualTarget[]> {
     const scope = await this.environmentScope(
       context,
       projectKey,
-      environmentKey,
       flagKey,
+      environmentKey,
       "viewer",
     );
 
     return toIndividualTargets(
-      await this.repository.listTargets(scope.flag.id),
+      await this.repository.listTargets(scope.flag.id, scope.environment.id),
     );
   }
 
   async replaceTargets(
     context: FlagsActorContext,
     projectKey: string,
-    environmentKey: string,
     flagKey: string,
+    environmentKey: string,
     input: ReplaceIndividualTargetsInput,
   ): Promise<FlagIndividualTarget[]> {
     const scope = await this.environmentScope(
       context,
       projectKey,
-      environmentKey,
       flagKey,
+      environmentKey,
       "engineer",
     );
 
@@ -554,60 +651,55 @@ export class FlagsService {
     });
 
     return toIndividualTargets(
-      await this.repository.listTargets(scope.flag.id),
+      await this.repository.listTargets(scope.flag.id, scope.environment.id),
     );
   }
 
+  /** Dependencies are project-scoped: an edge links two flag keys, not two configurations. */
   async getDependencies(
     context: FlagsActorContext,
     projectKey: string,
-    environmentKey: string,
     flagKey: string,
   ): Promise<FlagDependencyGraph> {
-    const scope = await this.environmentScope(
-      context,
+    const { project } = await this.projectAccess.require({
+      ...context,
       projectKey,
-      environmentKey,
-      flagKey,
-      "viewer",
-    );
+      minimumRole: "viewer",
+    });
+    const row = await this.requireFlag(project.id, flagKey);
 
-    const rows = await this.repository.listDependencies(
-      scope.project.id,
-      flagKey,
-    );
-    const keys = new Set<string>([flagKey]);
+    const rows = await this.repository.listDependencies(project.id, row.key);
+    const keys = new Set<string>([row.key]);
 
-    for (const row of rows) {
-      keys.add(row.key);
-      keys.add(row.requires);
+    for (const dependency of rows) {
+      keys.add(dependency.key);
+      keys.add(dependency.requires);
     }
 
-    const statuses = await this.repository.findStatuses(scope.project.id, [
-      ...keys,
-    ]);
+    const statuses = await this.repository.findStatuses(project.id, [...keys]);
 
-    return buildDependencyGraph(flagKey, rows, statuses);
+    return buildDependencyGraph(row.key, rows, statuses);
   }
 
   async listVersions(
     context: FlagsActorContext,
     projectKey: string,
-    environmentKey: string,
     flagKey: string,
+    environmentKey: string,
     limit: number,
     cursor: string | undefined,
   ): Promise<Page<FlagVersion>> {
     const scope = await this.environmentScope(
       context,
       projectKey,
-      environmentKey,
       flagKey,
+      environmentKey,
       "viewer",
     );
 
     const rows = await this.repository.listVersions(
       scope.flag.id,
+      scope.environment.id,
       limit,
       decodeCursor(cursor),
     );
@@ -615,9 +707,34 @@ export class FlagsService {
     const page = toPage(rows, limit, (version) => String(version.version));
 
     return {
-      data: page.data.map((version) => toFlagVersion(version)),
+      data: page.data.map((version) =>
+        toFlagVersion(version, scope.environment.key),
+      ),
       nextCursor: page.nextCursor,
     };
+  }
+
+  /** `GET /v1/flags/:flagKey` requires a project key: keys collide across projects. */
+  async resolve(
+    context: FlagsActorContext,
+    flagKey: string,
+    projectKey: string,
+    environmentKey?: string,
+  ): Promise<FlagDetail> {
+    const { project } = await this.projectAccess.require({
+      ...context,
+      projectKey,
+      minimumRole: "viewer",
+    });
+    const row = await this.requireFlag(project.id, flagKey);
+
+    if (!environmentKey) {
+      return this.loadDetail(row);
+    }
+
+    const environment = await this.requireEnvironment(project.id, environmentKey);
+
+    return this.loadDetail(row, { environmentId: environment.id });
   }
 
   /**
@@ -667,11 +784,11 @@ export class FlagsService {
 
     const { config } = payload;
     const action: AuditAction = config
-      ? config.enabled !== scope.flag.enabled
+      ? config.enabled !== scope.config.enabled
         ? config.enabled
           ? "flag.enabled"
           : "flag.disabled"
-        : scope.flag.rolloutPercentage !== config.rolloutPercentage
+        : scope.config.rolloutPercentage !== config.rolloutPercentage
           ? "rollout.updated"
           : "flag.updated"
       : "flag.updated";
@@ -689,6 +806,60 @@ export class FlagsService {
     }
   }
 
+  /**
+   * Gives every flag of the project a configuration in one environment. Runs in
+   * the caller's transaction so an environment is never half-configured, and is
+   * idempotent for a flag that already has one.
+   */
+  async initializeEnvironmentConfigs(
+    tx: Transaction,
+    input: {
+      projectId: string;
+      target: EnvironmentRef;
+      source: EnvironmentRef | null;
+      author: string;
+    },
+  ): Promise<number> {
+    const rows = await this.repository.listForProject(tx, input.projectId);
+
+    for (const row of rows) {
+      if (await this.repository.findConfigInTx(tx, row.id, input.target.id)) {
+        continue;
+      }
+
+      if (input.source) {
+        await this.repository.copyConfigIntoEnvironment(tx, {
+          sourceFlagId: row.id,
+          sourceEnvironmentId: input.source.id,
+          targetEnvironmentId: input.target.id,
+        });
+      } else {
+        await this.repository.insertConfig(tx, {
+          flagId: row.id,
+          environmentId: input.target.id,
+        });
+      }
+
+      await this.repository.insertVersion(tx, {
+        flagId: row.id,
+        projectId: input.projectId,
+        environmentId: input.target.id,
+        version: 1,
+        description: input.source
+          ? `Copied from ${input.source.name}`
+          : "Flag created",
+        author: input.author,
+        snapshot: {
+          environment: input.target.key,
+          key: row.key,
+          type: row.type,
+        },
+      });
+    }
+
+    return rows.length;
+  }
+
   private async resolveApprovedChange(
     context: FlagsActorContext,
     projectKey: string,
@@ -699,13 +870,13 @@ export class FlagsService {
     const scope = await this.environmentScope(
       context,
       projectKey,
-      environmentKey,
       flagKey,
+      environmentKey,
       "engineer",
     );
 
     if (payload.config) {
-      await this.validateConfigInput(scope.flag, payload.config);
+      await this.validateConfigInput(scope, payload.config);
     }
 
     if (payload.rules) {
@@ -720,14 +891,14 @@ export class FlagsService {
   }
 
   /**
-   * The one flag every environment-scoped method starts from: the project gate,
-   * the environment, and the flag row — which carries its own configuration.
+   * The one environment-scoped method every configuration read and write starts
+   * from: the project gate, the environment, the flag, and its configuration.
    */
   private async environmentScope(
     context: FlagsActorContext,
     projectKey: string,
-    environmentKey: string,
     flagKey: string,
+    environmentKey: string,
     minimumRole: "viewer" | "engineer",
   ): Promise<EnvironmentScope> {
     const { project } = await this.projectAccess.require({
@@ -736,64 +907,177 @@ export class FlagsService {
       minimumRole,
     });
 
-    const environment = await this.requireEnvironment(
-      project.id,
-      environmentKey,
-    );
-    const flagRow = await this.requireFlag(project.id, environment.id, flagKey);
+    const environment = await this.requireEnvironment(project.id, environmentKey);
+    const row = await this.requireFlag(project.id, flagKey);
+    const config = await this.requireConfig(row.id, environment.id);
 
-    return { project, flag: flagRow, environment };
+    return { project, flag: row, environment, config };
   }
 
+  /** One flag's identity, its environments and the values it can serve. */
   private async loadDetail(
     row: FlagRow,
-    environment: EnvironmentRef,
+    options: { environmentId?: string } = {},
   ): Promise<FlagDetail> {
-    const [variations, parts] = await Promise.all([
+    const [variations, summaries] = await Promise.all([
       this.repository.listVariations(row.id),
-      this.repository.detailParts(row.id),
+      this.repository.listEnvironmentSummaries([row.id], {
+        environmentId: options.environmentId,
+      }),
     ]);
 
-    return toFlagDetail(row, environment, {
+    return toFlagDetail(
+      { ...row, environments: summaries.map(toEnvironmentSummary) },
       variations,
-      rules: parts.rules,
-      targets: parts.targets,
-    });
+    );
   }
 
-  /**
-   * The one place a flag is written into an environment it did not come from.
-   * The caller has already decided that the copy is allowed.
-   */
-  private async copyFlag(
+  private loadEnvironmentConfig(
+    scope: EnvironmentScope,
+  ): Promise<FlagEnvironmentConfig> {
+    return this.repository
+      .detailParts(scope.flag.id, scope.environment.id)
+      .then((parts) =>
+        toFlagEnvironmentConfig(scope.environment, scope.config, parts),
+      );
+  }
+
+  /** One query attaches every environment's state to a page of flags. */
+  private async loadListRows<T extends FlagRow>(
+    rows: T[],
+    filter: { environmentId?: string; environmentKey?: string },
+  ): Promise<Array<T & { environments: FlagEnvironmentSummaryRow[] }>> {
+    if (rows.length === 0) return [];
+
+    const summaries = await this.repository.listEnvironmentSummaries(
+      rows.map((row) => row.id),
+      filter,
+    );
+
+    return rows.map((row) => ({
+      ...row,
+      environments: summaries
+        .filter((summary) => summary.flagId === row.id)
+        .map(toEnvironmentSummary),
+    }));
+  }
+
+  private publishConfig(
     tx: Transaction,
-    input: {
-      source: FlagRow;
-      target: EnvironmentRef;
-      projectId: string;
-      author: string;
-      reason: string;
-    },
-  ): Promise<string> {
-    const newFlagId = await this.repository.copyFlagIntoEnvironment(tx, {
-      sourceFlagId: input.source.id,
-      targetEnvironmentId: input.target.id,
+    context: FlagsActorContext,
+    scope: EnvironmentScope,
+    input: UpdateFlagConfigInput,
+    action: AuditAction,
+  ): Promise<void> {
+    return this.writeEnvironmentChange(
+      tx,
+      context,
+      scope,
+      action,
+      {
+        enabled: input.enabled,
+        defaultVariation: input.defaultVariation,
+        rolloutPercentage: input.rolloutPercentage,
+      },
+      async () => {
+        await this.repository.updateConfig(tx, scope.config.id, input);
+      },
+      `Configuration published to ${scope.environment.name}`,
+      {
+        environment: scope.environment.key,
+        enabled: input.enabled,
+        serve: input.defaultVariation,
+      },
+    );
+  }
+
+  private publishRules(
+    tx: Transaction,
+    context: FlagsActorContext,
+    scope: EnvironmentScope,
+    rules: TargetingRuleInput[],
+  ): Promise<void> {
+    return this.writeEnvironmentChange(
+      tx,
+      context,
+      scope,
+      "flag.updated",
+      { rules },
+      async () => {
+        await this.repository.replaceRules(
+          tx,
+          scope.flag.id,
+          scope.environment.id,
+          rules,
+        );
+      },
+      `Targeting rules published to ${scope.environment.name}`,
+      { environment: scope.environment.key, rules },
+    );
+  }
+
+  private publishTargets(
+    tx: Transaction,
+    context: FlagsActorContext,
+    scope: EnvironmentScope,
+    targets: FlagIndividualTarget[],
+  ): Promise<void> {
+    return this.writeEnvironmentChange(
+      tx,
+      context,
+      scope,
+      "flag.updated",
+      { targets },
+      async () => {
+        await this.repository.replaceTargets(
+          tx,
+          scope.flag.id,
+          scope.environment.id,
+          targets,
+        );
+      },
+      `Individual targets published to ${scope.environment.name}`,
+      { environment: scope.environment.key, targets },
+    );
+  }
+
+  /** One environment change: the write, its audit row and its history entry. */
+  private async writeEnvironmentChange(
+    tx: Transaction,
+    context: FlagsActorContext,
+    scope: EnvironmentScope,
+    action: AuditAction,
+    changes: Record<string, unknown>,
+    write: () => Promise<void>,
+    description: string,
+    snapshot: Record<string, unknown>,
+  ): Promise<void> {
+    await write();
+
+    await writeAuditLog(tx, {
+      organizationId: context.organizationId,
+      projectId: scope.project.id,
+      environmentId: scope.environment.id,
+      actor: context.userId,
+      actorName: context.userName,
+      action,
+      target: scope.flag.id,
+      changes: { environment: scope.environment.key, ...changes },
     });
 
     await this.repository.insertVersion(tx, {
-      flagId: newFlagId,
-      projectId: input.projectId,
-      version: 1,
-      description: input.reason,
-      author: input.author,
-      snapshot: {
-        environment: input.target.key,
-        key: input.source.key,
-        type: input.source.type,
-      },
+      flagId: scope.flag.id,
+      projectId: scope.project.id,
+      environmentId: scope.environment.id,
+      version: await this.repository.nextVersion(
+        tx,
+        scope.flag.id,
+        scope.environment.id,
+      ),
+      description,
+      author: context.userId,
+      snapshot,
     });
-
-    return newFlagId;
   }
 
   /**
@@ -808,21 +1092,14 @@ export class FlagsService {
   }
 
   private async validateConfigInput(
-    row: FlagRow,
+    scope: EnvironmentScope,
     input: UpdateFlagConfigInput,
   ): Promise<void> {
-    const variationKeys = new Set(input.variations.map((v) => v.key));
-
-    const mismatched = input.variations.find(
-      (variation) =>
-        !variationValueMatchesType(row.type as FlagType, variation.value),
+    const variationKeys = new Set(
+      (await this.repository.listVariations(scope.flag.id)).map(
+        (variation) => variation.key,
+      ),
     );
-
-    if (mismatched) {
-      throw ApiError.badRequest(
-        `The value of "${mismatched.key}" is not a ${row.type}. A flag serves values of the type it was created with.`,
-      );
-    }
 
     for (const [field, key] of [
       ["defaultVariation", input.defaultVariation],
@@ -830,7 +1107,7 @@ export class FlagsService {
     ] as const) {
       if (!variationKeys.has(key)) {
         throw ApiError.badRequest(
-          `"${key}" is not one of the flag's variations for this environment (${field}).`,
+          `"${key}" is not one of the flag's variations (${field}).`,
         );
       }
     }
@@ -849,7 +1126,7 @@ export class FlagsService {
     for (const rule of input.rules) {
       if (!known.has(rule.variation)) {
         throw ApiError.badRequest(
-          `"${rule.variation}" is not one of the flag's variations in this environment.`,
+          `"${rule.variation}" is not one of the flag's variations.`,
         );
       }
     }
@@ -857,6 +1134,7 @@ export class FlagsService {
     const segmentKeys = [
       ...new Set(input.rules.flatMap((rule) => rule.segmentKeys)),
     ];
+
     const unknownSegments = await this.findUnknownSegments(
       scope.project.id,
       segmentKeys,
@@ -882,127 +1160,30 @@ export class FlagsService {
     for (const target of input.targets) {
       if (!known.has(target.variationKey)) {
         throw ApiError.badRequest(
-          `"${target.variationKey}" is not one of the flag's variations in this environment.`,
+          `"${target.variationKey}" is not one of the flag's variations.`,
         );
       }
     }
   }
 
-  private async publishConfig(
-    tx: Transaction,
-    context: FlagsActorContext,
-    scope: EnvironmentScope,
-    input: UpdateFlagConfigInput,
-    action: AuditAction,
-  ): Promise<void> {
-    const { flag, project, environment } = scope;
+  private async requireConfig(
+    flagId: string,
+    environmentId: string,
+  ): Promise<EnvironmentScope["config"]> {
+    const config = await this.repository.findConfig(flagId, environmentId);
 
-    await this.repository.updateConfig(tx, flag.id, input);
-    await this.repository.replaceVariations(tx, flag.id, input.variations);
+    if (!config) {
+      throw ApiError.notFound("Flag configuration not found.");
+    }
 
-    await writeAuditLog(tx, {
-      organizationId: context.organizationId,
-      projectId: project.id,
-      environmentId: environment.id,
-      actor: context.userId,
-      actorName: context.userName,
-      action,
-      target: flag.id,
-      changes: {
-        environment: environment.key,
-        enabled: input.enabled,
-        defaultVariation: input.defaultVariation,
-        rolloutPercentage: input.rolloutPercentage,
-      },
-    });
-
-    await this.repository.insertVersion(tx, {
-      flagId: flag.id,
-      projectId: project.id,
-      version: await this.repository.nextVersion(tx, flag.id),
-      description: `Configuration published to ${environment.name}`,
-      author: context.userId,
-      snapshot: {
-        environment: environment.key,
-        enabled: input.enabled,
-        serve: input.defaultVariation,
-        variations: input.variations,
-      },
-    });
-  }
-
-  private async publishRules(
-    tx: Transaction,
-    context: FlagsActorContext,
-    scope: EnvironmentScope,
-    rules: TargetingRuleInput[],
-  ): Promise<void> {
-    const { flag, project, environment } = scope;
-
-    await this.repository.replaceRules(tx, flag.id, rules);
-
-    await writeAuditLog(tx, {
-      organizationId: context.organizationId,
-      projectId: project.id,
-      environmentId: environment.id,
-      actor: context.userId,
-      actorName: context.userName,
-      action: "flag.updated",
-      target: flag.id,
-      changes: { environment: environment.key, rules },
-    });
-
-    await this.repository.insertVersion(tx, {
-      flagId: flag.id,
-      projectId: project.id,
-      version: await this.repository.nextVersion(tx, flag.id),
-      description: `Targeting rules published to ${environment.name}`,
-      author: context.userId,
-      snapshot: { environment: environment.key, rules },
-    });
-  }
-
-  private async publishTargets(
-    tx: Transaction,
-    context: FlagsActorContext,
-    scope: EnvironmentScope,
-    targets: FlagIndividualTarget[],
-  ): Promise<void> {
-    const { flag, project, environment } = scope;
-
-    await this.repository.replaceTargets(tx, flag.id, targets);
-
-    await writeAuditLog(tx, {
-      organizationId: context.organizationId,
-      projectId: project.id,
-      environmentId: environment.id,
-      actor: context.userId,
-      actorName: context.userName,
-      action: "flag.updated",
-      target: flag.id,
-      changes: { environment: environment.key, targets },
-    });
-
-    await this.repository.insertVersion(tx, {
-      flagId: flag.id,
-      projectId: project.id,
-      version: await this.repository.nextVersion(tx, flag.id),
-      description: `Individual targets published to ${environment.name}`,
-      author: context.userId,
-      snapshot: { environment: environment.key, targets },
-    });
+    return config;
   }
 
   private async requireFlag(
     projectId: string,
-    environmentId: string,
     flagKey: string,
   ): Promise<FlagRow> {
-    const row = await this.repository.findByKey(
-      projectId,
-      environmentId,
-      flagKey,
-    );
+    const row = await this.repository.findByKey(projectId, flagKey);
 
     if (!row) {
       throw ApiError.notFound("Flag not found.");

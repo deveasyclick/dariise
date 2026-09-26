@@ -98,7 +98,6 @@ describe("audit log module", () => {
       method: "POST",
       headers: headers(underTest.session),
       body: JSON.stringify({
-        environmentKey: "development",
         key: "checkout-v2",
         name: "Checkout",
         type: "boolean",
@@ -154,12 +153,28 @@ describe("audit log module", () => {
       method: "POST",
       headers: headers(underTest.session),
       body: JSON.stringify({
-        environmentKey: "development",
         key: "checkout-v2",
         name: "Checkout",
         type: "boolean",
       }),
     });
+
+    // A flag's identity is project-wide, so only a configuration publish is
+    // scoped to one environment and carries its id.
+    await app.request(
+      `/v1/projects/${underTest.projectKey}/flags/checkout-v2/environments/development`,
+      {
+        method: "PATCH",
+        headers: headers(underTest.session),
+        body: JSON.stringify({
+          enabled: true,
+          offVariation: "off",
+          defaultVariation: "on",
+          rolloutPercentage: 0,
+          bucketBy: "userId",
+        }),
+      },
+    );
 
     const environments = await pageOf("/v1/audit-logs", underTest.session).then(
       () =>
@@ -183,14 +198,14 @@ describe("audit log module", () => {
       `/v1/projects/${underTest.projectKey}/audit-logs?actor=${underTest.session.userId}`,
       underTest.session,
     );
-    expect(byActor.data).toHaveLength(2);
+    expect(byActor.data).toHaveLength(3);
 
     const byEnvironment = await pageOf(
       `/v1/projects/${underTest.projectKey}/audit-logs?environmentId=${environmentId}`,
       underTest.session,
     );
     expect(byEnvironment.data).toHaveLength(1);
-    expect(byEnvironment.data[0]?.action).toBe("flag.created");
+    expect(byEnvironment.data[0]?.action).toBe("flag.enabled");
 
     const bad = await app.request(
       `/v1/projects/${underTest.projectKey}/audit-logs?from=not-a-date`,
@@ -208,7 +223,6 @@ describe("audit log module", () => {
         method: "POST",
         headers: headers(underTest.session),
         body: JSON.stringify({
-          environmentKey: "development",
           key,
           name: key,
           type: "boolean",
@@ -283,7 +297,6 @@ describe("audit log module", () => {
       method: "POST",
       headers: headers(session),
       body: JSON.stringify({
-        environmentKey: "development",
         key: "checkout-v2",
         name: "Checkout",
         type: "boolean",
