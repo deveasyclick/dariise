@@ -41,17 +41,18 @@ later without redesigning the application.
 ```text
 organization (workspace / tenant)
 └── project
+    ├── flags
+    │   └── variations
     └── environment
-        └── flags
-            └── environment configuration
+        └── flag configuration
 ```
 
 - Better Auth's organization **is** the workspace/tenant; there is no separate tenant
   table.
-- A flag is **environment-scoped**. `flags.environment_id` is `NOT NULL` and the flag key
-  is unique per `(environment_id, key)`, so the same key may name different flags in
-  different environments. There is deliberately no `flag_environment_configs` table: a
-  flag that exists in exactly one environment has exactly one configuration.
+- A flag is **project-scoped**: `flags.project_id` is `NOT NULL` and the flag key is unique
+  per `(project_id, key)`. What the flag does in one environment is a
+  `flag_environment_configs` row, unique per `(flag_id, environment_id)` and written eagerly
+  for every environment of the project.
 - `project.key` is unique within a workspace, not globally.
 - Access outside the caller's tenant or membership scope returns **404**, not 403.
 - Environments are archived rather than deleted, and every project retains at least one
@@ -89,17 +90,17 @@ requests instead.
 
 ## 4. Flags and environments
 
-A flag belongs to one environment and carries its own configuration: variations, an off
-variation, a default variation, a rollout percentage and a bucketing attribute. Targeting
-rules are ordered and their conditions are AND-ed; individual targets override a single
-user; segments are project-scoped and reusable across flags.
+A flag belongs to the project and carries its identity and its variations; what it does in
+one environment is that environment's configuration: an off variation, a default variation,
+a rollout percentage and a bucketing attribute, plus that environment's rules and targets.
+Targeting rules are ordered and their conditions are AND-ed; individual targets override a
+single user; segments are project-scoped and reusable across flags.
 
-Promotion copies a flag **whole** into another environment of the same project. The two
-flags are independent afterwards — promotion is how a change reaches production, not a
-link between environments. Flag configuration history is recorded in flag versions, and
-archiving is the only delete-like operation.
+An environment changes when its own configuration is published, and the one project-wide
+switch is `status`. Flag configuration history is recorded per environment in flag
+versions, and archiving — which is project-wide — is the only delete-like operation.
 
-→ Flag anatomy, routes, rules, targeting, promotion, versions and dependencies:
+→ Flag anatomy, routes, rules, targeting, versions and dependencies:
 `docs/flags.md`
 → Protected environments and approvals: `docs/change-requests.md`
 

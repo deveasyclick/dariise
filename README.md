@@ -27,13 +27,12 @@ gradually roll out features, and track configuration changes from a central dash
 
 ## Features
 
-- Feature flag management — create, configure, archive and promote flags
+- Feature flag management — create, configure, archive and target flags
 - Multiple environments per project, with archive and restore
-- Environment-scoped flags: a flag key is unique within its environment
+- Project-scoped flags: a flag key is unique within its project, with a configuration per environment
 - User-based targeting and per-user individual targets
 - Percentage-based rollouts with deterministic bucketing
 - Reusable, project-scoped user segments
-- Flag promotion between environments
 - Flag configuration history and dependency reads
 - Protected environments with change-request approvals
 - Audit log of every configuration change
@@ -368,7 +367,7 @@ The durable reference lives in [`docs/`](docs/README.md).
 | [`architecture.md`](docs/architecture.md) | The decision record: system shape, tenancy, authorization, evaluation, persistence, the wire contract, future commitments and open gaps |
 | [`domain-model.md`](docs/domain-model.md) | Entities, keys versus ids, lifecycle, tables and audit events |
 | [`authorization.md`](docs/authorization.md) | Roles, the operation matrix and tenant isolation |
-| [`flags.md`](docs/flags.md) | Flag anatomy, targeting, rollout, promotion, versions and dependencies |
+| [`flags.md`](docs/flags.md) | Flag anatomy, targeting, rollout, versions and dependencies |
 | [`change-requests.md`](docs/change-requests.md) | Protected environments and the approval workflow |
 | [`evaluation.md`](docs/evaluation.md) | Resolution order, reasons, operators, bucketing and `/v1/evaluate` |
 | [`api-conventions.md`](docs/api-conventions.md) | Contracts, routes, errors, pagination and versioning |

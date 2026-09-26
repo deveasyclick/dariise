@@ -40,7 +40,7 @@ backward.
 A module reaches another module through its `index.ts` only. `app.ts` is the sole composition point: it builds
 the graph in dependency order (repositories → services → controllers → routers), mounts the routers and owns
 the error boundary. Cross-module needs are injected there — the flags service gets a segment-key validator, the
-environments service a flag copier, the projects service a default-environment creator, and the change-requests
+environments service a flag configuration copier, the projects service a default-environment creator, and the change-requests
 service the flags module's validate/apply pair.
 
 Shared types and constants live in `src/shared/types/` and `src/shared/constants.ts`; session middleware and
@@ -52,7 +52,7 @@ gates in `src/middleware/authorization.ts`; the Drizzle client, schema and audit
 
 A routes file exports a `create<Name>Routes(deps)` factory that receives its controller and middleware; it never constructs a class. Routers mounted at `/v1/projects` own the paths below that prefix; routers mounted at
 `/` spell out their `/v1` paths. Every router applies the session middleware to all of its paths except the auth router, which applies it to `/v1/me` alone; `/healthz` and `/readyz` are registered on the app before any
-module router. Below, `…` stands for `/v1/projects/:projectKey/environments/:environmentKey`.
+module router. Below, `…` stands for `/v1/projects/:projectKey/flags/:flagKey`.
 
 | Mount | Method | Path | Purpose |
 | --- | --- | --- | --- |
@@ -72,21 +72,25 @@ module router. Below, `…` stands for `/v1/projects/:projectKey/environments/:e
 | `/` | POST | `/v1/evaluate` | Evaluate one flag; semantics in `docs/evaluation.md`. |
 | `/` | GET | `/v1/audit-logs` | Workspace-wide audit page. |
 | `/` | GET | `/v1/projects/:projectKey/audit-logs` | Project-scoped audit page. |
-| `/` | GET | `/v1/flags` | Workspace-wide flag list; optional `projectKey`, `environmentKey` filters. |
-| `/` | GET | `/v1/flags/:flagKey` | Resolve a flag; requires `projectKey` and `environmentKey` query parameters. |
-| `/` | GET | `/v1/projects/:projectKey/flags` | Flags in one environment; `environmentKey` required. |
-| `/` | POST | `/v1/projects/:projectKey/flags` | Create a flag; 201. |
-| `/` | GET | `/v1/projects/:projectKey/environments/:environmentKey/flags/:flagKey` | Read the environment-scoped flag. |
-| `/` | PATCH | `/v1/projects/:projectKey/environments/:environmentKey/flags/:flagKey` | Update the flag's metadata. |
-| `/` | DELETE | `/v1/projects/:projectKey/environments/:environmentKey/flags/:flagKey` | Archive the flag. |
-| `/` | PATCH | `…/flags/:flagKey/config` | Update the environment configuration. |
-| `/` | GET | `…/flags/:flagKey/rules` | Read the targeting rules. |
-| `/` | PUT | `…/flags/:flagKey/rules` | Replace the targeting rules. |
-| `/` | GET | `…/flags/:flagKey/targets` | Read the individual targets. |
-| `/` | PUT | `…/flags/:flagKey/targets` | Replace the individual targets. |
-| `/` | GET | `…/flags/:flagKey/dependencies` | Read the flag's dependencies. |
-| `/` | GET | `…/flags/:flagKey/versions` | Flag version history; paginated. |
-| `/` | POST | `…/flags/:flagKey/promote` | Copy the flag into another environment; 201. |
+| `/` | GET | `/v1/flags` | Workspace-wide flag list; optional `projectKey`, `environmentKey`, `status`, `search` filters. |
+| `/` | GET | `/v1/flags/:flagKey` | Resolve a flag; requires the `projectKey` query parameter, `environmentKey` is optional. |
+| `/` | GET | `/v1/projects/:projectKey/flags` | List the project's flags; optional `environmentKey` filter. |
+| `/` | POST | `/v1/projects/:projectKey/flags` | Create a flag; the body names no environment; 201. |
+| `/` | GET | `/v1/projects/:projectKey/flags/:flagKey` | Read the flag: identity, per-environment summaries and variations. |
+| `/` | PATCH | `/v1/projects/:projectKey/flags/:flagKey` | Update the flag's identity. |
+| `/` | DELETE | `/v1/projects/:projectKey/flags/:flagKey` | Archive the flag in every environment. |
+| `/` | GET | `…/variations` | Read the flag's variations. |
+| `/` | POST | `…/variations` | Add a variation; 201. |
+| `/` | PATCH | `…/variations/:variationKey` | Edit a variation's name, value or description; the key is immutable. |
+| `/` | DELETE | `…/variations/:variationKey` | Remove a variation; 409 while an environment references it. |
+| `/` | GET | `…/environments/:environmentKey` | Read that environment's configuration. |
+| `/` | PATCH | `…/environments/:environmentKey` | Publish that environment's configuration; no variations. |
+| `/` | GET | `…/environments/:environmentKey/rules` | Read the targeting rules. |
+| `/` | PUT | `…/environments/:environmentKey/rules` | Replace the targeting rules. |
+| `/` | GET | `…/environments/:environmentKey/targets` | Read the individual targets. |
+| `/` | PUT | `…/environments/:environmentKey/targets` | Replace the individual targets. |
+| `/` | GET | `…/environments/:environmentKey/versions` | That environment's configuration history; paginated. |
+| `/` | GET | `…/dependencies` | Read the flag's dependencies. |
 | `/v1/projects` | GET | `/v1/projects` | List projects; the only filter is `search`. |
 | `/v1/projects` | POST | `/v1/projects` | Create a project with its default environment and owner membership; 201. |
 | `/v1/projects` | GET | `/v1/projects/:projectKey` | Read one project. |
@@ -157,8 +161,8 @@ both flag lists, flag versions, change requests and audit logs.
 - A named resource is addressed by its `key` in the URL (`:projectKey`, `:environmentKey`, `:flagKey`, `:segmentKey`);
   a foreign key is addressed by an id (`:userId` for a member, `:keyId` for an API key row). The rule is `key` in the URL, `id` for a foreign key.
 - Keys are unique per parent, never globally, so the path carries the parent: `project.key` is unique within a workspace
-  (`docs/architecture.md §2`), and a flag key is unique within an environment, which is why the canonical flag path includes `:environmentKey`.
-- A sub-resource nests under its parent (`/v1/projects/:projectKey/flags/:flagKey/rules`), not by repeating the prefix in each handler.
+  (`docs/architecture.md §2`), and a flag key is unique within a project, which is why the canonical flag path is `/v1/projects/:projectKey/flags/:flagKey`.
+- A sub-resource nests under its parent (`/v1/projects/:projectKey/flags/:flagKey/environments/:environmentKey/rules`), not by repeating the prefix in each handler.
 - Query parameters are camelCase and mirror the contract field names: `projectKey`, `environmentKey`, `includeArchived`, `includeRevoked`, `cursor`, `limit`.
 
 ## Validation
@@ -183,7 +187,7 @@ Generating one from those contracts is an open gap in `docs/architecture.md §9`
 
 ## Status
 
-- Exists: `packages/contracts` as the single source of truth; the `controller → service → repository` layering with `app.ts` as the only composition root; the fifty-nine routes above;
+- Exists: `packages/contracts` as the single source of truth; the `controller → service → repository` layering with `app.ts` as the only composition root; the sixty-three routes above;
   the `ApiError` envelope and the seven-value `ERROR_CODE` vocabulary; controller-side `safeParse` validation; cursor pagination on the list endpoints named above.
 - Partial: two list endpoints return a bare array with no cursor — `GET /v1/projects` and `GET /v1/projects/:projectKey/members`.
 - Not built: an OpenAPI document. `/v1/openapi.json` is not served and no specification is generated from the contract schemas (`docs/architecture.md §9`).

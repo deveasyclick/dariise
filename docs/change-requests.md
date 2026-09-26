@@ -14,10 +14,10 @@ settings. A project admin toggles it through
 `PATCH /v1/projects/:projectKey/environments/:environmentKey/settings` with
 `{ "protectedEnvironment": true }`, audited as `environment.updated`.
 
-Every direct publish into a protected environment is refused by `FlagsService.assertPublishable`:
-`updateEnvironmentConfig` (`PATCH .../config`), `replaceRules` (`PUT .../rules`) and
-`replaceTargets` (`PUT .../targets`) check `scope.environment`, while `promote` checks its target,
-because it writes a whole new flag there. Reads are not gated.
+Every direct publish into a protected environment is refused by `FlagsService.assertPublishable`.
+The three environment-scoped writes — the configuration publish, the rules and the targets,
+all under `/v1/projects/:projectKey/flags/:flagKey/environments/:environmentKey` — check
+`scope.environment`. Reads, flag identity edits and flag-level variation edits are not gated.
 
 The refusal is `ApiError.approvalRequired(environment.key)` — HTTP 409, code `approval_required`,
 with the environment key as the extra detail:
@@ -53,12 +53,13 @@ no note. A request whose flag is not the one in the path answers 404.
 
 ## The proposal payload
 
-A proposal is `{ environmentKey, payload }`. The payload carries up to three parts, each in the
-shape the corresponding direct write endpoint takes:
+A proposal is `{ environmentKey, payload }`, and it targets one flag's configuration in one
+environment. The payload carries up to three parts, each in the shape the corresponding direct
+write endpoint takes:
 
 | Field | Contract schema | Proposes |
 | --- | --- | --- |
-| `config` | `updateFlagConfigSchema` | `enabled`, `offVariation`, `defaultVariation`, `rolloutPercentage`, `bucketBy`, `variations` |
+| `config` | `updateFlagConfigSchema` | `enabled`, `offVariation`, `defaultVariation`, `rolloutPercentage`, `bucketBy` |
 | `rules` | `replaceTargetingRulesSchema` | The environment's ordered targeting rules, replaced whole |
 | `targets` | `replaceIndividualTargetsSchema` | The environment's individual targets, replaced whole |
 

@@ -111,12 +111,12 @@ The suite applies the rule in both directions. `harness.test.ts` asserts that th
 
 `route-coverage.test.ts` holds the route-level edges and pagination the colocated module suites do not reach:
 
-- flag identity updates through `PATCH` that leave the flag's environment and enabled state alone, and write exactly one `flag.updated` audit row;
+- flag identity updates through `PATCH` that leave every environment's configuration untouched, and write exactly one `flag.updated` audit row;
 - an unknown environment answering 404 rather than an empty config, and an archive refused for a viewer with 403;
 - segment rename with replaced conditions, reflected in the list's `conditionCount`, and an unknown segment answering 404;
 - cursor paging walked one row at a time across environments, segments and API keys, with a bound so a non-terminating loop cannot hang the suite;
 - the compound project create de-duplicating a derived key (`alpha-platform`, then `alpha-platform-2`) while still giving each project its own first environment;
-- environment seeding modes: empty by default, and `initialFlagStatus: "copy-source"` copying the source flag's configuration, with 400 when no source is named;
+- environment seeding modes: every flag's configuration written disabled by default, and `initialFlagStatus: "copy-source"` copying the source environment's configurations, with 400 when no source is named;
 - audit `from`/`to` range filters, and a workspace metadata value that is not JSON falling back to defaults on `/v1/workspace` and `/v1/workspace/security`.
 
 ## Not covered

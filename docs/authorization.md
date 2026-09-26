@@ -66,27 +66,26 @@ ladder, and only updating a project compares against it.
 
 The minimum role is the argument each call site passes to the gate.
 
-| Operation                                                             | Minimum project role           |
-| --------------------------------------------------------------------- | ------------------------------ |
-| Read a project                                                        | `viewer`                       |
-| Read flags, one flag, rules, targets, dependencies, versions           | `viewer`                       |
-| Create or update a flag; publish configuration; replace rules/targets  | `engineer`                     |
-| Archive a flag                                                        | `engineer`                     |
-| Promote a flag into another environment                               | `engineer`                     |
-| List or read segments                                                 | `viewer`                       |
-| Create, update or archive a segment                                   | `engineer`                     |
-| List or read environments                                             | `viewer`                       |
-| Create, edit, archive or unarchive an environment                     | `admin`                        |
-| List SDK keys                                                         | `viewer`                       |
-| Issue or revoke an SDK key                                            | `admin`                        |
-| List project members                                                  | `viewer`                       |
-| Add, re-role or remove a project member                               | `admin`                        |
-| Rename or reconfigure a project                                       | `owner`                        |
-| Archive a project                                                     | not built: no route or service method exists |
-| List a flag's change requests                                         | `viewer`                       |
-| Propose a change request                                              | `engineer`                     |
-| Approve or reject a change request                                    | `admin`, and not the author    |
-| Read the project audit log                                            | `viewer`                       |
+| Operation                                                                                                 | Minimum project role                         |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| Read a project                                                                                            | `viewer`                                     |
+| Read flags, one flag, one environment's configuration, variations, rules, targets, dependencies, versions | `viewer`                                     |
+| Create or update a flag; add, edit or remove variations; publish configuration; replace rules/targets     | `engineer`                                   |
+| Archive a flag                                                                                            | `engineer`                                   |
+| List or read segments                                                                                     | `viewer`                                     |
+| Create, update or archive a segment                                                                       | `engineer`                                   |
+| List or read environments                                                                                 | `viewer`                                     |
+| Create, edit, archive or unarchive an environment                                                         | `admin`                                      |
+| List SDK keys                                                                                             | `viewer`                                     |
+| Issue or revoke an SDK key                                                                                | `admin`                                      |
+| List project members                                                                                      | `viewer`                                     |
+| Add, re-role or remove a project member                                                                   | `admin`                                      |
+| Rename or reconfigure a project                                                                           | `owner`                                      |
+| Archive a project                                                                                         | not built: no route or service method exists |
+| List a flag's change requests                                                                             | `viewer`                                     |
+| Propose a change request                                                                                  | `engineer`                                   |
+| Approve or reject a change request                                                                        | `admin`, and not the author                  |
+| Read the project audit log                                                                                | `viewer`                                     |
 
 Environment editing covers `create`, `update`, `updateSettings`, `archive` and `unarchive`, all at `"admin"`.
 
@@ -134,8 +133,8 @@ environment settings write, so it needs project `admin`.
 
 A direct publish into a protected environment is refused. `FlagsService.assertPublishable`
 throws `ApiError.approvalRequired` — `409`, code `approvalRequired`, carrying the
-environment key — for flag configuration, targeting rules, individual targets and promotion
-into that environment, so the change must go through approval instead. The workflow itself
+environment key — for flag configuration, targeting rules and individual targets in that
+environment, so the change must go through approval instead. The workflow itself
 is `docs/change-requests.md`; one rule belongs here: deciding a request needs project
 `admin` and a caller other than the person who proposed it, enforced in
 `ChangeRequestsService.requireDecidable`. An approved change re-enters through

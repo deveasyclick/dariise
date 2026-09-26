@@ -1,6 +1,6 @@
 # Evaluation
 
-How a flag decision is produced: the endpoint, the rows that feed it, the pure engine that decides, and the bucketing that keeps a percentage rollout sticky. Flag configuration and promotion are in `docs/flags.md`; the approval workflow in `docs/change-requests.md`; the role matrix in `docs/authorization.md`; the wire contract, error envelope and pagination in `docs/api-conventions.md`.
+How a flag decision is produced: the endpoint, the rows that feed it, the pure engine that decides, and the bucketing that keeps a percentage rollout sticky. Flag configuration is in `docs/flags.md`; the approval workflow in `docs/change-requests.md`; the role matrix in `docs/authorization.md`; the wire contract, error envelope and pagination in `docs/api-conventions.md`.
 
 ## The purity invariant
 
@@ -19,7 +19,11 @@ The engine returns at the first step that produces a variation.
 5. **Flag-level percentage rollout.** When `0 < rolloutPercentage < 100`, the subject is bucketed and the engine serves `config.defaultVariation` when the bucket is below the percentage and `config.offVariation` otherwise, always with reason `percentage_rollout` and `matchedRuleId` `null`.
 6. **Default variation.** Any other flow serves `config.defaultVariation` with reason `default_variation` and `matchedRuleId` `null`.
 
-A flag or environment that does not resolve never reaches the engine. `EvaluationService.evaluate` in `evaluation.service.ts` calls `repository.findTarget` and, when it returns `null`, returns `{ variation: "off", enabled: false, reason: "flag_not_found", matchedRuleId: null }` itself, echoing the requested flag key. `flag_not_found` is produced by the service, not the engine.
+A flag, environment or configuration that does not resolve never reaches the engine.
+`EvaluationService.evaluate` in `evaluation.service.ts` calls `repository.findTarget` and, when
+it returns `null`, returns `{ variation: "off", enabled: false, reason: "flag_not_found",
+matchedRuleId: null }` itself, echoing the requested flag key. `flag_not_found` is produced by
+the service, not the engine.
 
 ## Evaluation reasons
 
@@ -27,7 +31,7 @@ The vocabulary is `EVALUATION_REASONS` in `packages/contracts/src/evaluation.ts`
 
 | Reason               | Produced when                                                                                       |
 | -------------------- | --------------------------------------------------------------------------------------------------- |
-| `flag_not_found`     | The service resolved no flag row for the requested flag and environment in the caller's workspace.   |
+| `flag_not_found`     | The service resolved no flag, no environment or no configuration of that flag in that environment, in the caller's workspace. |
 | `flag_archived`      | The resolved flag's status is `archived`.                                                            |
 | `flag_disabled`      | The resolved flag's configuration has `enabled` false.                                               |
 | `targeting_rule`     | An individual target matched, or a targeting rule with no segment references matched.                 |
@@ -139,19 +143,19 @@ The endpoint currently requires a session. `evaluation.routes.ts` applies the se
 
 ## How rows are loaded
 
-`EvaluationRepository.findTarget(organizationId, lookup)` loads everything the engine needs, scoped to one flag in one environment of one workspace.
+`EvaluationRepository.findTarget(organizationId, lookup)` loads everything the engine needs, scoped to one workspace: the flag's identity by project and flag key, then that flag's configuration in the named environment.
 
-The base select joins `flags` to `projects` and `environments`, filtered by `projects.organization_id` from the session, `flags.key` and `environments.key`, plus `projects.key` when `projectKey` was supplied, ordered by `projects.key` ascending with a limit of one. That row supplies the flag status and the configuration the engine receives: `enabled`, `off_variation_key`, `default_variation_key`, `rollout_percentage` and `bucket_by`.
+The lookup resolves the flag by `projects.organization_id` from the session, `flags.key` and `environments.key`, plus `projects.key` when it was supplied, ordered by `projects.key` ascending with a limit of one, and joins `flag_environment_configs` on `(flag_id, environment_id)`. No row, or a missing configuration, is `null`. The joined row supplies the flag status and the configuration the engine receives: `enabled`, `off_variation_key`, `default_variation_key`, `rollout_percentage` and `bucket_by`.
 
 The follow-up queries are keyed by ids from that row:
 
-- `targeting_rules` for the flag, ordered by `priority` ascending. Each rule contributes its `variation_key`, `segment_keys`, `rollout_percentage` and `bucket_by`.
+- `targeting_rules` for the flag and environment, ordered by `priority` ascending. Each rule contributes its `variation_key`, `segment_keys`, `rollout_percentage` and `bucket_by`.
 - `targeting_conditions` for those rules, ordered by `priority` ascending, then grouped back onto their rule by `rule_id`.
-- `flag_individual_targets` for the flag, every row, in no particular order.
+- `flag_individual_targets` for the flag and environment, every row, in no particular order.
 - `segments` for the flag's project, restricted to the deduplicated segment keys the loaded rules reference. There is no archived filter, so an archived segment still resolves; the source states that a hidden segment must not silently change what a flag serves.
 - `segment_conditions` for those segments, ordered by `priority` ascending, then grouped by `segment_id`.
 
-Condition values arrive from `jsonb` and are normalised by the repository's `toValues`. `flag_variations` does not contribute: evaluation returns variation keys and never resolves them to values. The configuration always comes from the resolved flag row; `DISABLED_CONFIG` is declared in `evaluation.types.ts` but referenced by no other source file, and no cache sits in front of the query, so every evaluation reads PostgreSQL.
+Condition values arrive from `jsonb` and are normalised by the repository's `toValues`. `flag_variations` does not contribute: evaluation returns variation keys and never resolves them to values. The configuration always comes from the resolved `flag_environment_configs` row; `DISABLED_CONFIG` is declared in `evaluation.types.ts` but referenced by no other source file, and no cache sits in front of the query, so every evaluation reads PostgreSQL.
 
 ## Status
 
@@ -171,7 +175,8 @@ Not built: the Redis configuration cache that would feed evaluation later (`docs
 - `apps/api/src/modules/evaluation/evaluation.routes.ts` — mounts `POST /v1/evaluate` behind the session middleware.
 - `apps/api/src/modules/evaluation/index.ts` — the module's exports.
 - `packages/contracts/src/evaluation.ts` — the request and response schemas and `EVALUATION_REASONS`.
-- `apps/api/src/db/schema/flags.ts` — the flag row, including its configuration columns.
+- `apps/api/src/db/schema/flags.ts` — the flag's identity row.
+- `apps/api/src/db/schema/flag-environment-configs.ts` — the per-environment configuration the engine receives.
 - `apps/api/src/db/schema/targeting-rules.ts` — ordered rules with their variation, segment keys and rollout.
 - `apps/api/src/db/schema/targeting-conditions.ts` — the conditions a rule ANDs.
 - `apps/api/src/db/schema/flag-individual-targets.ts` — per-user variation overrides.

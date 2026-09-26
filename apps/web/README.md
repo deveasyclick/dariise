@@ -53,14 +53,12 @@ second one and points at the existing server instead.
 | `/projects/new` | Create a project | `(app)` |
 | `/projects/[key]` | Project detail — Environments | `(app)` |
 | `/projects/[key]/flags` | Project detail — Flags | `(app)` |
+| `/projects/[key]/flags/[flagKey]` | Flag detail — Configuration / Variations / Targeting / History / Dependencies tabs via `?tab=`, with `?environment=` selecting the configuration | `(app)` |
 | `/projects/[key]/members` | Project detail — Members | `(app)` |
-| `/flags` | Feature flags | `(app)` |
-| `/flags/new` | Create a flag | `(app)` |
-| `/flags/[key]` | Flag detail — Configuration | `(app)` |
-| `/flags/[key]/targeting` | Flag detail — Targeting | `(app)` |
-| `/flags/[key]/compare` | Flag detail — Compare | `(app)` |
-| `/flags/[key]/history` | Flag detail — History | `(app)` |
-| `/flags/[key]/dependencies` | Flag detail — Dependencies | `(app)` |
+| `/environments/[env]/flags` | Flags in one environment | `(app)` |
+| `/environments/[env]/flags/new` | Create a flag | `(app)` |
+| `/environments/[env]/flags/[key]` | Legacy flag detail; redirects to the project-scoped page with the matching tab | `(app)` |
+| `/flags` | Redirect to the current environment's flag list | `(app)` |
 | `/segments` | Segments list | `(app)` |
 | `/segments/new` | Create a segment | `(app)` |
 | `/segments/[key]` | Segment detail — Definition | `(app)` |
@@ -289,10 +287,9 @@ The screens say so rather than inventing a figure:
 - **Audit `actor` and `target` are raw ids**, and `changes` is `unknown` with no
   published shape; the log renders ids as they arrive and flattens `changes`
   defensively instead of guessing a before/after structure.
-- **A flag key is unique per environment, not per project or workspace.** A flag
-  is addressed inside the environment that owns it, so a workspace-wide row is
-  only reachable through its own environment and links nowhere otherwise, rather
-  than opening a same-key flag from the current scope.
+- **A flag key is unique per project, not per workspace.** A flag is addressed
+  under the project that owns it, and a workspace-wide row is reachable through
+  its own project rather than opening a same-key flag from the current scope.
 - `components/app/account-menu.tsx` is the avatar dropdown in the topbar; its
   `Sign out` is a real Better Auth call, not a stub.
 - `components/app/copy-button.tsx` holds the one clipboard implementation. The

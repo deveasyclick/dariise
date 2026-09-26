@@ -18,16 +18,17 @@ column, directly or by walking the tree.
 organization                     workspace / tenant
 └── project                      project.organization_id NOT NULL
     ├── project_members          per-project role, distinct from the workspace role
+    ├── flags                    flags.project_id NOT NULL
+    │   └── flag_variations      the values every environment selects among
     ├── flag_dependencies        project-scoped, keyed by flag key
     ├── segments                 segments.project_id NOT NULL
     │   └── segment_conditions
     └── environments             environment.project_id NOT NULL
-        ├── flags                flags.project_id and flags.environment_id NOT NULL
-        │   ├── flag_variations
+        ├── flag_environment_configs    one per (flag, environment)
         │   ├── targeting_rules ─ targeting_conditions
-        │   ├── flag_individual_targets
-        │   ├── flag_versions
-        │   └── flag_change_requests
+        │   └── flag_individual_targets
+        ├── flag_versions               one per (flag, environment)
+        ├── flag_change_requests        one per (flag, environment)
         └── api_keys             environment-scoped when environment_id is not null
 ```
 
@@ -41,29 +42,22 @@ How identity becomes an access decision is `docs/architecture.md §2` and
 
 ## Where a flag sits
 
-A flag belongs to exactly one environment, not to the project. `flags.environment_id` is
-`NOT NULL`: there is no environment-less flag and no second home for one. The unique
-index is on `(environment_id, key)`, so the same key may name different flags in
-different environments of one project. `flags.project_id` is also `NOT NULL`, carried
-alongside the environment so a flag row is project-scoped directly.
+A flag belongs to the project, not to an environment. `flags.project_id` is `NOT NULL` and
+the flag row carries only identity: key, name, description, type, tags, owner and status.
+The unique index `flag_project_key_idx` is on `(project_id, key)`, so a flag key is unique
+within its project.
 
-There is no `flag_environment_configs` table. The comment at the top of
-`apps/api/src/db/schema/flags.ts` gives the reason:
+What that flag does in one environment is a `flag_environment_configs` row: `enabled`, the
+off and default variation keys, the rollout percentage and the bucketing attribute. It is
+keyed by `(flag_id, environment_id)`, unique through `flag_environment_config_idx`.
+Configurations are eager: creating a flag writes one for every environment of its project,
+archived environments included, and creating an environment writes one for every flag. A
+flag therefore always has a configuration in every environment; a missing row is a bug, and
+evaluation answers `flag_not_found` rather than invent one.
 
-> A flag belongs to one environment, and its configuration belongs to the flag.
->
-> This is why there is no `flag_environment_configs` table: a flag that exists
-> in exactly one environment has exactly one configuration, and a separate row
-> for it could only ever be missing, duplicated or out of step. The key is
-> unique per environment, so the same key may name different flags in different
-> environments — that is what promotion copies.
-
-The flag row itself is the configuration: `enabled`, `off_variation_key`,
-`default_variation_key`, `rollout_percentage` and `bucket_by` are columns of `flags`.
-Anything claiming a separate per-environment configuration table is stale.
-
-What promotion does to those rows is `docs/flags.md`; how they are evaluated is
-`docs/evaluation.md`.
+Variations stay with the flag. `flag_variations` is keyed by `flag_id` alone, so every
+environment selects among the same values; `docs/flags.md` owns that contract and
+`docs/evaluation.md` owns how a configuration decides.
 
 ## Keys and ids
 
@@ -75,12 +69,12 @@ key used by foreign keys. Every table has a `text` primary key `id`.
 | workspace | `organization.slug` | globally unique | `organization_id` |
 | project | `project.key` | per `(organization_id, key)` | `project_id` |
 | environment | `environment.key` | per `(project_id, key)` | `environment_id` |
-| flag | `flag.key` | per `(environment_id, key)` | `flag_id` |
+| flag | `flag.key` | per `(project_id, key)` | `flag_id` |
 | segment | `segment.key` | per `(project_id, key)` | `segment_id` |
 
 `project.key` is unique per workspace, not globally: two tenants may both have a project
 called `web-app`. The paths confirm the
-convention — `/v1/projects/:projectKey/environments/:environmentKey/flags/:flagKey` and
+convention — `/v1/projects/:projectKey/flags/:flagKey` and
 `/v1/projects/:projectKey/segments/:segmentKey`.
 
 The convention is not universal. `targeting_rules.segment_keys` is a `text[]` of segment
@@ -104,8 +98,8 @@ without somewhere to put a flag.
 An environment is archived rather than deleted. Archiving does all of the following
 inside one transaction:
 
-- keeps every flag and its configuration in place — the service calls archiving the
-  reversible half of deletion;
+- keeps every flag of the project and this environment's configuration of each in place —
+  the service calls archiving the reversible half of deletion;
 - revokes that environment's own SDK keys: every `api_keys` row whose `environment_id`
   is this environment and whose `revoked_at` is null. Project-wide keys with a null
   `environment_id` are untouched;
@@ -115,8 +109,7 @@ inside one transaction:
 
 A project must always retain at least one active environment: the active count is read
 inside the transaction, and archiving the last one fails with a conflict. An archived
-environment refuses ordinary updates, and a promotion into it fails with a conflict until
-it is unarchived.
+environment refuses ordinary updates until it is unarchived.
 
 Restore is possible through unarchive, but it is not a rollback: the keys the archive
 revoked stay revoked, so a restored environment has its configuration back and no usable
@@ -124,11 +117,14 @@ environment-scoped key until a new one is created.
 
 ### Flag
 
-`flags.status` defaults to `active`; archiving sets it to `archived` and updates
-`updated_at`, and there is no unarchive route. Evaluation treats an archived flag as the
-off variation: the engine returns the flag's off variation with the `flag_archived` reason
-before it considers enablement or targeting. Archiving deletes nothing — variations,
-rules and individual targets stay.
+`flags.status` defaults to `active` and is project-wide: archiving sets it to `archived`
+for every environment at once, and there is no per-environment archive or unarchive route.
+`enabled` is the per-environment switch and is a column of `flag_environment_configs`, so a
+project-active flag can be turned off in Production alone. Evaluation treats an archived
+flag in every environment as that environment's off variation: the engine returns the off
+variation with the `flag_archived` reason before it considers enablement or targeting.
+Archiving deletes nothing — variations, each environment's configuration, rules and
+individual targets stay.
 
 ### Segment
 
@@ -164,25 +160,26 @@ tables are Better Auth's shape, not Dariise's.
 
 **Flag configuration**
 
-- `flags` → the flag and its configuration: key, name, type, tags, owner, status, enabled, off/default variation keys, rollout percentage, bucket attribute.
+- `flags` → the flag's identity: key, name, description, type, tags, owner, status.
+- `flag_environment_configs` → what one flag does in one environment: enabled, off/default variation keys, rollout percentage, bucket attribute.
 - `flag_variations` → one servable value of a flag: key, name, jsonb value, priority.
 
 **Targeting and segments**
 
-- `targeting_rules` → one ordered rule of a flag: priority, variation key, referenced segment keys, optional rollout and bucket attribute.
+- `targeting_rules` → one ordered rule of a flag in one environment: priority, variation key, referenced segment keys, optional rollout and bucket attribute.
 - `targeting_conditions` → one condition of a targeting rule: attribute, attribute type, operator, jsonb values, priority.
-- `flag_individual_targets` → one explicit subject override: subject id, variation key.
+- `flag_individual_targets` → one explicit subject override in one environment: subject id, variation key.
 - `segments` → one project-scoped segment: key, name, description, `archived_at`.
 - `segment_conditions` → one condition of a segment: attribute, attribute type, operator, jsonb values, priority.
 
 **History and dependencies**
 
-- `flag_versions` → a snapshot of a flag written on publish: version number, description, author, jsonb snapshot.
+- `flag_versions` → a snapshot of a flag in one environment written on publish: version number, description, author, jsonb snapshot.
 - `flag_dependencies` → one project-scoped dependency edge by flag key: `requires` and `referenced_in`.
 
 **Change requests and credentials**
 
-- `flag_change_requests` → a proposed change to a flag in a protected environment: status, jsonb payload, requester and decider ids and names, decision note.
+- `flag_change_requests` → a proposed change to a flag's configuration in a protected environment: status, jsonb payload, requester and decider ids and names, decision note.
 - `api_keys` → an SDK or management credential: kind, name, unique prefix, secret hash, scopes, expiry, revocation and last use.
 
 **Audit**
@@ -195,12 +192,13 @@ part of the schema surface. That rule is `docs/architecture.md §6` and
 
 ## Child tables and the flag
 
-A flag owns its configuration rows, and each cascades on the flag's deletion:
+A flag owns its rows, and each cascades on the flag's deletion:
 
-- `flag_variations` → `flag_id`, unique per `(flag_id, key)`. A variation belongs to the flag, and a flag belongs to one environment, so those are that environment's values.
-- `targeting_rules` → `flag_id`, ordered by `priority`; each rule's `targeting_conditions` hang off `rule_id` and are AND-ed.
-- `flag_individual_targets` → `flag_id`, unique per `(flag_id, user_id)`. The `user_id` is the evaluation subject id the engine matches, not a dashboard user, and it is plain text with no foreign key.
-- `flag_versions` → `flag_id` and `project_id`, unique per `(flag_id, version)`, written on configuration publish and read by the history screen.
+- `flag_variations` → `flag_id`, unique per `(flag_id, key)`. Variations belong to the flag and are shared by every environment, which selects among them.
+- `flag_environment_configs` → `flag_id` and `environment_id`, unique per `(flag_id, environment_id)`: one row for every environment of the project, written when either is created.
+- `targeting_rules` → `flag_id` and `environment_id`, ordered by `priority`; each rule's `targeting_conditions` hang off `rule_id` and are AND-ed.
+- `flag_individual_targets` → `flag_id` and `environment_id`, unique per `(flag_id, environment_id, user_id)`. The `user_id` is the evaluation subject id the engine matches, not a dashboard user, and it is plain text with no foreign key.
+- `flag_versions` → `flag_id`, `environment_id` and `project_id`, unique per `(flag_id, environment_id, version)`, written on configuration publish and read by the history screen. History is per environment: each starts at its own version 1.
 
 Dependencies are the exception to ownership. `flag_dependencies` holds a `project_id`, a
 `key` and a `requires` key, so it links two flags by key within one project rather than by
@@ -239,7 +237,7 @@ are absent, so a stored row always has all nine of these columns plus `created_a
 workspace-level event leaves `projectId` and `environmentId` null.
 
 The action names actually written, derived from the `action` values passed to
-`writeAuditLog` across `apps/api/src` — 24 in total:
+`writeAuditLog` across `apps/api/src` — 26 in total:
 
 ```text
 project.created            project.updated
@@ -247,7 +245,8 @@ environment.created        environment.updated
 environment.archived       environment.unarchived
 flag.created               flag.updated
 flag.enabled               flag.disabled
-flag.archived              flag.promoted
+flag.archived              flag.variation.added
+flag.variation.updated     flag.variation.removed
 rollout.updated
 segment.created            segment.updated
 segment.archived
@@ -259,9 +258,11 @@ project_member.removed
 ```
 
 `flag.enabled`, `flag.disabled` and `rollout.updated` are chosen at publish time from the
-difference between the stored flag and the incoming configuration; the rest are literals at
-their call sites. `packages/contracts` declares two further names, `project.deleted` and
-`api_key.rotated`, that no call site writes.
+difference between the stored environment configuration and the incoming one; the rest are
+literals at their call sites. Identity edits — name, description, tags, owner and archive —
+are project-wide and write no `environmentId`, while a configuration, rule or target write
+carries the environment it touched. `packages/contracts` declares two further names,
+`project.deleted` and `api_key.rotated`, that no call site writes.
 
 Three caveats on the row shape:
 
@@ -271,9 +272,10 @@ Three caveats on the row shape:
 
 ## Status
 
-Existing today: the tenancy tree and its 23 tables, the one-environment flag model with
-its unique `(environment_id, key)` key, the project, environment, flag and segment
-lifecycles above, and the audit helper with its 24 written action names.
+Existing today: the tenancy tree and its 24 tables, the project-scoped flag with its unique
+`(project_id, key)` key and its eager per-environment configurations, the project,
+environment, flag and segment lifecycles above, and the audit helper with its 26 written
+action names.
 
 Partial: audit coverage is per mutation, not per field — `changes` records whatever the
 call site chose, and a write that never calls `writeAuditLog` leaves no trace. Three of
@@ -296,7 +298,8 @@ unwritten). No foreign key constrains `project.default_environment_id` or
 - `apps/api/src/db/schema/project-members.ts` — per-project roles.
 - `apps/api/src/db/schema/user-preferences.ts` — per-user defaults and notification switches.
 - `apps/api/src/db/schema/environments.ts` — the environment table and its archive column.
-- `apps/api/src/db/schema/flags.ts` — the flag table, the environment-scoped key, and the rationale for having no `flag_environment_configs`.
+- `apps/api/src/db/schema/flags.ts` — the flag's identity table and its unique `(project_id, key)`.
+- `apps/api/src/db/schema/flag-environment-configs.ts` — what a flag does in one environment, one row per `(flag_id, environment_id)`.
 - `apps/api/src/db/schema/flag-variations.ts` — servable values.
 - `apps/api/src/db/schema/targeting-rules.ts`, `targeting-conditions.ts` — targeting rules and their conditions.
 - `apps/api/src/db/schema/flag-individual-targets.ts` — explicit subject overrides.
@@ -311,7 +314,7 @@ unwritten). No foreign key constrains `project.default_environment_id` or
 - `apps/api/src/shared/types/db.ts` — the `Transaction` type the audit helper is given.
 - `apps/api/src/modules/projects/projects.service.ts` — project creation and update, and the first environment.
 - `apps/api/src/modules/environments/environments.service.ts` — environment archive, unarchive and the last-active-environment rule.
-- `apps/api/src/modules/flags/flags.service.ts` — flag creation, archive, publish and promotion.
+- `apps/api/src/modules/flags/flags.service.ts` — flag creation, identity updates, archive, variations and the per-environment publish.
 - `apps/api/src/modules/segments/segments.service.ts` — segment creation, update and archive.
 - `apps/api/src/modules/evaluation/evaluation.engine.ts` — where an archived flag resolves to the off variation.
 - `packages/contracts/src/audit-log.ts` — the declared `AUDIT_ACTIONS` list, including two names nothing writes.

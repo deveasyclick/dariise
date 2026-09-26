@@ -5,12 +5,12 @@ it. Everything below is the durable reference.
 
 ## Documents
 
-| Document                                       | Answers                                                                                         |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Document                                       | Answers                                                                                          |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | [`architecture.md`](architecture.md)           | What was decided and why — the decision record, and the stable citation target for code comments |
 | [`domain-model.md`](domain-model.md)           | What the entities are: the tenancy tree, keys versus ids, lifecycle, tables, audit events        |
 | [`authorization.md`](authorization.md)         | Who may do what: roles, the operation matrix, the access gate, tenant isolation                  |
-| [`flags.md`](flags.md)                         | How a flag is put together: variations, rules, targets, rollout, promotion, versions, dependencies |
+| [`flags.md`](flags.md)                         | How a flag is put together: variations, rules, targets, rollout, versions, dependencies          |
 | [`change-requests.md`](change-requests.md)     | Protected environments: proposing a change, who approves it, and how it commits                  |
 | [`evaluation.md`](evaluation.md)               | How a variation is decided: resolution order, reasons, operators, bucketing, `/v1/evaluate`      |
 | [`api-conventions.md`](api-conventions.md)     | The wire contract: schemas, routes, errors, pagination, naming, versioning                       |
