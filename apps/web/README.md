@@ -18,7 +18,7 @@ repository root:
 
 ```bash
 pnpm install
-cp apps/web/.env.example apps/web/.env.local
+cp apps/web/.env.example apps/web/.env
 pnpm dev
 ```
 
@@ -58,6 +58,7 @@ second one and points at the existing server instead.
 | `/flags/new` | Create a flag | `(app)` |
 | `/flags/[key]` | Flag detail — Configuration | `(app)` |
 | `/flags/[key]/targeting` | Flag detail — Targeting | `(app)` |
+| `/flags/[key]/compare` | Flag detail — Compare | `(app)` |
 | `/flags/[key]/history` | Flag detail — History | `(app)` |
 | `/flags/[key]/dependencies` | Flag detail — Dependencies | `(app)` |
 | `/segments` | Segments list | `(app)` |
@@ -125,40 +126,32 @@ components/app/profile/ # Personal profile, password and preference cards
 components/app/account-menu.tsx # avatar dropdown in the topbar
 components/app/copy-button.tsx # shared copy-to-clipboard button
 components/app/environment-switcher.tsx # environment menu in the sidebar header
-components/app/health-badge.tsx # health pill shared by environments and projects
 components/app/project-switcher.tsx # project menu in the sidebar header
 components/app/settings-card.tsx # card shared by Settings and Profile
 components/app/theme-choice.tsx # shared Light/Dark/System control
 components/auth/        # Auth shell, shared fields, step path, and the five forms
 components/ui/          # shadcn/ui primitives
 components/logo.tsx     # brand mark
-lib/analytics-data.ts   # temporary analytics fixtures (no backend yet)
-lib/api-key-data.ts     # temporary API key fixtures, scopes and masking
-lib/api-key-stub.ts     # temporary API key issue stand-in + session store
+lib/analytics-data.ts   # analytics fixtures — the API has no metrics route
 lib/api.ts              # typed client for the Dariise API
-lib/audit-log-data.ts   # temporary audit events and their derived labels
-lib/auth-stub.ts        # temporary auth stand-in (no backend yet)
-lib/billing-data.ts     # temporary plan, usage and invoice fixtures
-lib/dashboard-data.ts   # temporary dashboard fixtures (no backend yet)
-lib/environment-data.ts # temporary environment fixtures, coverage and masking
-lib/environment-stub.ts # temporary environment create/settings stand-in
-lib/env.ts              # runtime configuration
-lib/flag-detail-data.ts # temporary per-flag detail records
-lib/flag-stub.ts        # temporary flag create/publish stand-in
+lib/auth-client.ts      # Better Auth client for the browser
+lib/auth.ts             # auth actions: sign in/up, workspace, project creation
+lib/billing-data.ts     # billing fixtures — the API has no billing route
+lib/environment-color.ts # narrows the API's colour string to a palette key
 lib/format.ts           # relative time, date and number formatters
-lib/onboarding-data.ts  # temporary data-region options for onboarding
-lib/project-data.ts     # temporary projects, environments and flags (no backend)
-lib/project-stub.ts     # temporary project create stand-in (no backend yet)
-lib/profile-data.ts     # temporary personal profile fixtures
-lib/profile-stub.ts     # temporary profile/password/preference stand-in
-lib/sdk-data.ts         # temporary SDK snippets and evaluation scopes
-lib/segment-data.ts     # temporary segments plus the sample-audience evaluator
-lib/segment-stub.ts     # temporary segment create/archive stand-in
-lib/settings-data.ts    # temporary workspace, security and integration fixtures
-lib/types.ts            # domain types shared with the API
+lib/scope.ts            # the current project/environment, resolved from the API
+lib/scope-actions.ts    # Server Actions the sidebar switchers write through
+lib/sdk-data.ts         # SDK install snippets — documentation, not API data
+lib/session.ts          # the signed-in user, resolved from the API
 lib/validation.ts       # dependency-free form validators
-lib/workspace-stub.ts   # temporary workspace write stand-in
 ```
+
+Per-screen server loaders sit beside the route they serve — for example
+`app/(app)/overview/load-overview.ts`, `app/(app)/audit-log/load-audit-log.ts`
+and `app/(app)/projects/[key]/load-project.ts` — and the flags and segments areas
+keep theirs in `components/app/flags/flag-queries.ts` and
+`components/app/segments/segment-loader.ts`. They own the `notFound()` mapping
+and the cursor-following loops, so pages stay declarative.
 
 ## Sidebar navigation
 
@@ -169,12 +162,13 @@ soon** — nothing in the sidebar leads to a route that does not exist. To light
 one up, build the screen and add its `href`.
 
 The sidebar header holds two switchers: the project switcher
-(`components/app/project-switcher.tsx`, fed by `lib/project-data.ts`) and the
-environment switcher (`components/app/environment-switcher.tsx`, fed by
-`lib/environment-data.ts`), which is what the design shows instead of a
-workspace name. Their rows are selectors — neither context can actually change
-until the API exists, so the rows are disabled with a title — while the footer
-actions navigate to the screens that exist: Create environment
+(`components/app/project-switcher.tsx`, fed by the workspace's real projects) and
+the environment switcher (`components/app/environment-switcher.tsx`, fed by the
+current project's real environments), which is what the design shows instead of a
+workspace name. Both are functional: selecting a row writes a scope cookie
+through the Server Actions in `lib/scope-actions.ts`, and every screen re-renders
+against the new project or environment. Their footer actions navigate to the
+screens that exist: Create environment
 (`/environments/new`), Manage environments (`/environments`), Create project
 (`/projects/new`) and Manage projects (`/projects`). Environments are therefore
 reached through that switcher and the `/environments` route rather than a nav
@@ -211,131 +205,114 @@ pnpm dlx shadcn@latest add <component>
 
 ## Configuration
 
-Configuration is read in `lib/env.ts`. Only variables prefixed with
-`NEXT_PUBLIC_` reach the browser.
+`next.config.ts` loads `apps/web/.env` explicitly, before the build inlines
+`NEXT_PUBLIC_*`; configuration is read in `shared/env.ts` (copy
+`apps/web/.env.example`), the only module in this app that touches `process.env`.
+Import it as `import env from "shared/env"` and read `env.environment`,
+`env.apiUrl` and `env.apiInternalUrl`. Only variables prefixed with `NEXT_PUBLIC_`
+reach the browser.
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:4000` | Base URL of the Dariise API, as reached from the browser. Required for production builds. |
 | `API_INTERNAL_URL` | `http://localhost:4000` | Server-only. Used by Server Components to call the API without a round trip through the public origin. |
 
-See `docs/backend-proposal.md` for the intended cookie and origin setup: the API is
-proxied under the web origin so the session cookie stays first-party.
+See `docs/architecture.md` §8.3 for the intended cookie and origin setup. Today the
+dashboard and the API are separate origins in development, and the client sends
+`credentials: "include"` against the API's `CORS_ORIGINS` allowlist; a reverse
+proxy under the web origin is still the intended production arrangement, so the
+session cookie never leaves the first-party site.
 
 ## Notes
 
-- Server Components are the default. Each page is a Server Component that renders
+- Server Components are the default. Each page resolves its own data and renders
   small `"use client"` pieces — the auth forms, the sidebar (for `usePathname`),
   the account menu, the flags table (for search and filtering), the audit log view
-  (for search, filtering and row selection) and the API key table (for row menus
-  and the session's newly issued key).
-- `lib/api.ts` is a library only — **no page calls it yet**. `apps/api` does not
-  exist, so every screen still reads a `lib/*-data.ts` fixture module and every
-  write goes through a `lib/*-stub.ts` stand-in. Its flag routes are also stale:
-  they bind a flag to one environment, while `lib/project-data.ts` and the
-  project screens treat a flag as project-scoped with per-environment
-  configuration. `docs/backend-proposal.md` §8 supersedes those routes; do not
-  treat the current `/v1/.../environments/:environmentId/flags` shape as the
-  target contract.
-- `lib/auth-stub.ts` fakes the round-trip to the API so the forms' pending and
-  success states are real. Nothing is persisted, no session exists, and no route
-  is protected. It is the single swap point once `apps/api` lands.
-- `lib/project-stub.ts` does the same for project creation, including the
-  onboarding step's reduced form. `lib/onboarding-data.ts` supplies the
-  data-region options that step offers; the region is chosen but not stored.
-- `lib/dashboard-data.ts` holds the dashboard fixtures, shaped like the API
-  responses. `getDashboardData(now)` takes the current instant so relative
-  timestamps are derived rather than stored, which keeps server output and
-  hydration in agreement. It is the second swap point once `apps/api` lands.
-- `lib/flag-detail-data.ts` holds the per-flag detail records. Only
-  `checkout-v2` is transcribed in full; every other flag derives a plain record
-  from its summary row so no table row leads to an empty page.
-- `lib/flag-stub.ts` stands in for the flag write endpoints. Creating and
-  publishing acknowledge locally and persist nothing — a reload discards them.
-- `lib/segment-data.ts` holds the segment fixtures **and** the evaluator. Member
-  counts, the Members tab and the Definition live preview all run the same
-  `matchesSegment` function over a curated sample audience, so those numbers
-  agree by construction rather than by being copied from the design. It is a
-  sample audience, not a customer list.
-- `lib/segment-stub.ts` stands in for the segment write endpoints, same rules.
-- `lib/environment-data.ts` holds the environment fixtures: three environments,
-  their SDK keys, their endpoints and the flag coverage matrix. Endpoints and
-  masked keys are derived from each record rather than stored twice, so a URL or
-  a mask cannot drift from the environment it belongs to. `maskSdkKey` keeps the
-  prefix and four identifier characters, e.g. `ff_prod_a1b2••••••`.
-- `lib/environment-stub.ts` stands in for the environment write endpoints —
-  creating an environment and saving its settings both acknowledge locally and
-  persist nothing.
-- `lib/analytics-data.ts` holds the analytics fixtures. Each day's total is the
-  sum of its per-environment values and the "Evaluations by Environment" legend
-  goes through `sharePercentages`, so the bars and the percentages add up rather
-  than being copied from the design. The design's two windows — the 24-hour cards
-  and the seven-day chart — are kept as they are; the chart's scale is documented
-  in the fixture because the design prints bare numbers.
-- `lib/audit-log-data.ts` holds the audit events as `ageHours` offsets, resolved
-  against a caller-supplied `now`. Every label a row shows — day heading, clock
-  time, absolute time, context line — is produced there, so the client component
-  can filter and regroup without re-formatting a date and hydration stays in
-  step. The actor name, environment names and the Beta Users member count are
-  read from the other fixtures rather than copied, so the audit log cannot
-  disagree with the screens they came from.
-- `lib/api-key-data.ts` holds the API key fixtures: the credentials, the scope
-  list the create form offers and the resolved rows the table renders. The full
-  credential exists only here, and masking goes through the environment screens'
-  `maskSdkKey` (re-exported as `maskApiKey`), so the two screens cannot disagree
-  about how a key is hidden. Environment names and colours are read from
-  `environment-data.ts` rather than copied.
-- `lib/api-key-stub.ts` stands in for the key-issuing endpoint. It also keeps the
-  key it just issued in memory, which is what makes the list's "shown once"
-  banner real: `create-api-key-form.tsx` hands the credential over and returns to
-  the list, where `api-key-table.tsx` reads it with `useSyncExternalStore`. A
-  reload clears it, exactly as the copy promises.
+  (for search, filtering and row selection), the API key table (for row menus and
+  the key it just issued) and the create/edit forms.
+
+### Where the data comes from
+
+- **`lib/api.ts` is the only way to the API.** It is one thin typed client over
+  `@dariise/contracts`, with no data-fetching framework attached. On the server it
+  calls `API_INTERNAL_URL` and forwards the incoming session cookie; in the browser
+  it calls `NEXT_PUBLIC_API_URL` with `credentials: "include"`. Server Components
+  call its resource functions directly, Client Components call the mutations, and
+  nothing calls `fetch` by hand.
+- **`lib/scope.ts` resolves the current project and environment** from
+  `projects.list` and `environments.list`, honouring the cookies the sidebar
+  switchers write through `lib/scope-actions.ts`. It is `cache()`d, so a page and
+  its layout share one resolution. A stale or unknown selection falls back to the
+  first project and that project's default environment rather than failing.
+- **Every API-backed screen is real.** Projects, environments, flags, segments,
+  API keys, the audit log, workspace settings and the personal profile all read
+  and write through `lib/api.ts`; there are no fixture modules left for them and no
+  `*-stub.ts` stand-ins at all. A screen that cannot resolve its resource calls
+  `notFound()`, and `ApiError.status` decides that.
+- **Three modules are still fixtures, on purpose**, because the API exposes no
+  route for them: `lib/analytics-data.ts` (no metrics endpoint),
+  `lib/billing-data.ts` (no billing endpoint) and `lib/sdk-data.ts` (install
+  snippets are documentation, not tenant data). Billing takes the real environment
+  count from `getScope()` so its allowance cannot disagree with the Environments
+  screen; the Analytics screen is the only one that is entirely design figures.
+- **Per-screen loaders own the paging loops.** `app/(app)/overview/load-overview.ts`
+  and `app/(app)/audit-log/load-audit-log.ts`, `app/(app)/projects/[key]/load-project.ts`,
+  `app/(app)/environments/[key]/load-environment.ts`,
+  `components/app/flags/flag-queries.ts` and
+  `components/app/segments/segment-loader.ts` follow `nextCursor` where a complete
+  set is required and map 404s to `null` so the page can call `notFound()`.
+
+### What the API cannot answer yet
+
+The screens say so rather than inventing a figure:
+
+- **No count endpoints.** Counts come from one capped page and render `100+` (or
+  the page size, e.g. `50+`) when `nextCursor` is set.
+- **No metrics endpoint.** The Overview's evaluation/latency card was removed
+  rather than printed from nothing; `scheduled` and `stale` became **In Rollout**
+  and **Archived**, both derived from real flags. The Analytics screen keeps its
+  design fixtures and is the one screen that is not API-backed.
+- **No environment health endpoint**, so `health-badge.tsx` is gone and
+  environments show their real `Default`/`Protected` flags instead of a made-up
+  Healthy/Degraded.
+- **No segment membership endpoint.** The Members tab and the Definition preview
+  run locally over a fixed sample audience and are labelled as an estimate, not
+  as this project's users.
+- **No integrations, workspace-theme or account-created-at data**, so those cards
+  render an explicit unavailable state, and no `GET` exists for preferences or
+  notifications, so those forms start from the API's defaults and say that stored
+  values cannot be read back.
+- **`projects.create` takes only a name and the first environment.** The create
+  screen keeps its colour, preset and initial-flag-state controls but states
+  plainly that they are not applied yet; `environments.create` does model colour,
+  copy source and initial flag status, so those are sent.
+- **Audit `actor` and `target` are raw ids**, and `changes` is `unknown` with no
+  published shape; the log renders ids as they arrive and flattens `changes`
+  defensively instead of guessing a before/after structure.
+- **A flag key is unique per environment, not per project or workspace.** A flag
+  is addressed inside the environment that owns it, so a workspace-wide row is
+  only reachable through its own environment and links nowhere otherwise, rather
+  than opening a same-key flag from the current scope.
+- `components/app/account-menu.tsx` is the avatar dropdown in the topbar; its
+  `Sign out` is a real Better Auth call, not a stub.
 - `components/app/copy-button.tsx` holds the one clipboard implementation. The
-  SDK key chips and the API key screens both use it; the menu item that cannot be
-  a button calls its `writeToClipboard` helper directly.
-- `lib/settings-data.ts` holds the workspace, security and integration fixtures.
-  The workspace name is read by the Settings → General tab and the account card on
-  the Profile screen; it is deliberately **not** shown in the chrome, which is
-  scoped to a project and an environment instead. The workspace URL is a
-  projection of the immutable slug rather than a second stored value — note that
-  with projects in the model, a slug and a project key must be unique *per
-  workspace*, not globally.
-- `lib/billing-data.ts` derives the renewal and invoice dates from a caller-supplied
-  `now` (next month, and this month plus the two before it), so the Billing tab
-  never goes stale, and reads the environment count from `environment-data.ts` so
-  the allowance matches the Environments screen.
-- `lib/workspace-stub.ts` stands in for the workspace write endpoints. The
-  General tab uses the app's explicit save pattern (dirty → `Save changes` →
-  `Saved just now`); the Security tab has no save button in the design, so each
-  control applies through the stub on change and the card header acknowledges it
-  briefly. Neither persists, and the sidebar keeps the fixture name.
-- `lib/profile-data.ts` assembles the personal record instead of duplicating it:
-  identity from `dashboard-data.ts`, workspace name and theme from
-  `settings-data.ts`, default environment from the environments fixture. Member
-  since is a fixed instant rather than an age offset, because it is a fact about
-  the account rather than a relative label.
-- `lib/profile-stub.ts` stands in for the personal write endpoints (`/v1/me`).
-  The Profile and Password cards keep explicit save buttons; Preferences and
-  Notifications apply on change with the same transient acknowledgement the
-  Security tab uses.
-- `components/app/account-menu.tsx` is the avatar dropdown in the topbar. It links
-  to Profile, Settings and API keys, and its `Sign out` is the one place the auth
-  stub is used outside the access screens: there is no session to end, so it fakes
-  the round-trip and returns to `/`.
-- The topbar's search, environment switcher, notifications and theme toggle are
-  presentational and marked as coming soon, matching the sidebar rule. So is the
-  theme control, which is shared by the Appearance and Preferences cards — the
-  design tokens ship dark values, but nothing switches them yet.
+  SDK key chips, the connection rows and the API key screens all use it; the menu
+  item that cannot be a button calls its `writeToClipboard` helper directly.
+- The topbar's search and notifications are still presentational and marked as
+  coming soon, as is the theme control — the design tokens ship dark values, but
+  nothing switches them yet.
 - Interactive controls without an implementation — `Edit Flag`, `Auto segment`,
   `Add user`, `Archive Flag`, `Edit` on a segment, `Edit environment`,
   `Create key`, `Delete environment`, version diffing, `Export`, `Export CSV`,
-  `Revert this change`, `Rename key`, `Rotate key`, `Revoke key`, `Theme`,
-  `Delete workspace`, `Manage` (SSO), `Add` (email domains), `Configure` (IP
-  allowlist), `Connect`, `Open SDKs & Integration`, `Change plan`, `Update`
-  (payment method), invoice downloads and `Change photo` — are disabled with a
-  title rather than pretending to work. Creating, archiving, searching, filtering
-  the audit log and selecting an audit event, editing rules, revealing and copying
-  a key, issuing an API key and copying it, saving environment settings, the
-  workspace profile and the personal profile, changing the password, the security,
-  preference and notification controls, signing out, and tab navigation do work,
-  locally.
+  `Revert this change`, `Rename key`, `Rotate key`, `Theme`, `Delete workspace`,
+  `Manage` (SSO), `Add` (email domains), `Configure` (IP allowlist), `Connect`,
+  `Open SDKs & Integration`, `Change plan`, `Update` (payment method), invoice
+  downloads and `Change photo` — are disabled with a title rather than pretending
+  to work. Creating flags, segments, environments, projects and API keys;
+  archiving flags and segments; revoking API keys; editing targeting rules and
+  individual targets; saving environment settings; searching and filtering every
+  list; the audit log's search, filters and row selection; saving the workspace
+  and personal profiles; changing the password; the security, preference and
+  notification controls; switching project and environment; signing out; and tab
+  navigation all work against the API.
+
