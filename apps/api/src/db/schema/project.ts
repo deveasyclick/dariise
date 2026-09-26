@@ -17,7 +17,7 @@ export const project = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     // Slug used in API paths, e.g. `checkout-platform`. Unique per workspace, not
-    // globally: two tenants may both have a project called `web-app`. See ADR-0003.
+    // globally: two tenants may both have a project called `web-app`.
     key: text("key").notNull(),
     name: text("name").notNull(),
     description: text("description"),

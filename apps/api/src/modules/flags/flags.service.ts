@@ -50,9 +50,8 @@ import {
 } from "./flags.types.js";
 
 /**
- * Reads are viewer-level; every write needs the project role the ADR-0004
- * matrix grants, and each mutation writes its audit row inside its own
- * transaction.
+ * Reads are viewer-level; every write needs the project role docs/architecture.md
+ * §3 grants, and each mutation writes its audit row inside its own transaction.
  */
 export class FlagsService {
   constructor(
@@ -248,7 +247,7 @@ export class FlagsService {
       projectKey,
       environmentKey,
       flagKey,
-      // The ADR-0004 matrix lets an engineer archive a flag.
+      // docs/architecture.md §3 lets an engineer archive a flag.
       "engineer",
     );
 

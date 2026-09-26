@@ -27,8 +27,8 @@ const MAX_PREFIX_ATTEMPTS = 5;
 
 /**
  * Listing is viewer-level; issuing and revoking a key is admin-level per the
- * ADR-0004 matrix. Only a hash of the secret is ever stored, and the secret
- * itself appears once, in the create response.
+ * role matrix in docs/architecture.md §3. Only a hash of the secret is ever
+ * stored, and the secret itself appears once, in the create response.
  */
 export class ApiKeysService {
   constructor(

@@ -69,7 +69,7 @@ export class ProjectsService {
     return toProject(row);
   }
 
-  /** Renaming and reconfiguring a project is owner-level per the ADR-0004 matrix. */
+  /** Renaming and reconfiguring a project is owner-level per docs/architecture.md §3. */
   async update(
     context: ProjectsActorContext,
     projectKey: string,

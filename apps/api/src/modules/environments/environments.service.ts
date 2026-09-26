@@ -33,7 +33,7 @@ import {
 
 /**
  * Reads are viewer-level; creating or reconfiguring an environment needs the
- * project admin role the ADR-0004 matrix requires.
+ * project admin role docs/architecture.md
  */
 export class EnvironmentsService {
   constructor(
@@ -342,7 +342,6 @@ export class EnvironmentsService {
     return this.loadDetail(project.id, environmentKey, origin);
   }
 
-
   /**
    * The first environment of a new project, created inside the project's
    * transaction so onboarding cannot strand a project with nowhere to put a flag.
@@ -365,7 +364,6 @@ export class EnvironmentsService {
       isProtected: false,
       settings: DEFAULT_ENVIRONMENT_SETTINGS,
     });
-
   }
 
   private async loadDetail(
@@ -386,8 +384,6 @@ export class EnvironmentsService {
 
     return toEnvironmentDetail(row, connection);
   }
-
-
 
   private async requireEnvironment(projectId: string, key: string) {
     const row = await this.repository.findByKey(projectId, key);

@@ -30,8 +30,8 @@ function toProjectMember(row: ProjectMemberRow): ProjectMember {
 }
 
 /**
- * Membership is admin-level per the ADR-0004 matrix. A workspace owner or admin
- * is an implicit project admin, so the gate already covers them.
+ * Membership is admin-level per docs/architecture.md §3. A workspace owner or
+ * admin is an implicit project admin, so the gate already covers them.
  */
 export class ProjectMembersService {
   constructor(

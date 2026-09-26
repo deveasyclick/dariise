@@ -25,7 +25,7 @@ import type { SegmentActorContext } from "./segments.types.js";
 
 /**
  * Reads are viewer-level; creating, editing and archiving a segment is
- * engineer-level per the ADR-0004 matrix.
+ * engineer-level per docs/architecture.md §3.
  */
 export class SegmentsService {
   constructor(
