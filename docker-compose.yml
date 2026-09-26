@@ -30,7 +30,7 @@ services:
     container_name: dariise-redis
     restart: unless-stopped
     # Cache-only. No volume: nothing here needs to survive a restart, and
-    # treating it as durable would invite depending on it (ADR-0002).
+    # treating it as durable would invite depending on it (docs/architecture.md §8.1).
     ports:
       - "6389:6379"
     healthcheck:
