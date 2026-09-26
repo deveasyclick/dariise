@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { CheckCheckIcon, ChevronLeftIcon, PencilIcon } from "lucide-react";
 import { cn } from "cn";
+import type { FlagStatus } from "@dariise/contracts";
+import { FlagStatusBadge } from "@/components/app/flags/flag-state-pill";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -67,20 +69,21 @@ interface FlagDetailHeaderProps {
   description: string;
   environmentKey: string;
   environmentLabel: string;
+  /** The flag's own status, which every environment shares. */
+  status: FlagStatus;
+  /** Whether the chosen environment serves the flag. */
   enabled: boolean;
-  /** The promotion entry point, rendered beside the status chips. */
-  promotion: React.ReactNode;
 }
 
-/** Identity and status strip shown above the tabs on every flag detail screen. */
+/** Identity and status strip shown above the tabs on the flag detail screen. */
 export function FlagDetailHeader({
   flagKey,
   name,
   description,
   environmentKey,
   environmentLabel,
+  status,
   enabled,
-  promotion,
 }: FlagDetailHeaderProps) {
   return (
     <div className="bg-card mb-4 rounded-lg border p-4">
@@ -103,6 +106,7 @@ export function FlagDetailHeader({
               {flagKey}
             </h1>
             <Badge variant="secondary">{name}</Badge>
+            <FlagStatusBadge status={status} />
           </div>
           <p className="text-muted-foreground mt-0.5 text-[13px]">
             {description}
@@ -130,7 +134,6 @@ export function FlagDetailHeader({
             />
             {enabled ? "Enabled" : "Disabled"}
           </span>
-          {promotion}
           <Button
             size="sm"
             disabled

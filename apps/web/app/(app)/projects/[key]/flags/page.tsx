@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { MAX_PAGE_SIZE } from "@dariise/contracts";
 import { ProjectFlagsCard } from "@/components/app/projects/project-cards";
+import { listProjectFlags } from "@/components/app/flags/flag-queries";
 import * as api from "@/lib/api";
 import { loadProject } from "../load-project";
 
 export const metadata: Metadata = {
   title: "Flags · Project",
-  description: "Every flag in this project, with its environment and state.",
+  description: "Every flag in this project, with its state in each environment.",
 };
 
 export const dynamic = "force-dynamic";
@@ -20,25 +20,29 @@ export default async function ProjectFlagsPage(
 
   if (!project) notFound();
 
-  const environmentPage = await api.environments.list(project.key);
-  const flagPages = await Promise.all(
-    environmentPage.data.map((environment) =>
-      api.flags.list(project.key, {
-        environmentKey: environment.key,
-        limit: MAX_PAGE_SIZE,
-      }),
-    ),
-  );
+  // One list call for the project: flags are project-scoped, and each row
+  // carries how it stands in every environment.
+  const [environmentPage, flags] = await Promise.all([
+    api.environments.list(project.key),
+    listProjectFlags(project.key),
+  ]);
 
-  const flags = flagPages.flatMap((page) => page.data);
-  const truncated = flagPages.some((page) => page.nextCursor !== null);
+  const environments = environmentPage.data;
+  const defaultEnvironment =
+    environments.find(
+      (environment) => environment.id === project.defaultEnvironmentId,
+    ) ??
+    environments.find((environment) => environment.isDefault) ??
+    environments[0] ??
+    null;
 
   return (
     <div className="mx-auto max-w-3xl">
       <ProjectFlagsCard
         projectKey={project.key}
         flags={flags}
-        truncated={truncated}
+        environmentKey={defaultEnvironment?.key ?? null}
+        environmentName={defaultEnvironment?.name ?? null}
       />
     </div>
   );

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type {
   FlagDetail,
+  FlagEnvironmentConfig,
   FlagIndividualTarget,
   TargetingCondition,
   TargetingOperator,
@@ -69,6 +70,7 @@ export function FlagTargeting({
   projectKey,
   flagKey,
   flag,
+  config,
   rules: initialRules,
   targets: initialTargets,
   updatedLabel,
@@ -78,6 +80,8 @@ export function FlagTargeting({
   projectKey: string;
   flagKey: string;
   flag: FlagDetail;
+  /** The flag's configuration in the environment this screen is scoped to. */
+  config: FlagEnvironmentConfig;
   rules: TargetingRule[];
   targets: FlagIndividualTarget[];
   updatedLabel: string;
@@ -87,7 +91,7 @@ export function FlagTargeting({
 }) {
   const [rules, setRules] = useState(initialRules);
   const [targets, setTargets] = useState(initialTargets);
-  const [serveDefault, setServeDefault] = useState(flag.defaultVariation);
+  const [serveDefault, setServeDefault] = useState(config.defaultVariation);
   const [pending, setPending] = useState(false);
   const [published, setPublished] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +99,7 @@ export function FlagTargeting({
   const router = useRouter();
   const [submitted, setSubmitted] = useState(false);
 
-  const environmentLabel = flag.environmentName;
+  const environmentLabel = config.environmentName;
 
   function updateCondition(
     ruleId: string,
@@ -139,7 +143,7 @@ export function FlagTargeting({
             values: [],
           },
         ],
-        variation: flag.defaultVariation,
+        variation: config.defaultVariation,
         segmentKeys: [],
         rollout: null,
       },
@@ -168,7 +172,7 @@ export function FlagTargeting({
       rollout: rule.rollout,
     }));
 
-    const changesServing = serveDefault !== flag.defaultVariation;
+    const changesServing = serveDefault !== config.defaultVariation;
 
     try {
       // A protected environment refuses all three writes, so the whole publish
@@ -178,19 +182,18 @@ export function FlagTargeting({
           projectKey,
           flagKey,
           {
-            environmentKey: flag.environmentKey,
+            environmentKey: config.environmentKey,
             payload: {
               rules: { rules: ruleInputs },
               targets: { targets },
               ...(changesServing
                 ? {
                     config: {
-                      enabled: flag.enabled,
-                      offVariation: flag.offVariation,
+                      enabled: config.enabled,
+                      offVariation: config.offVariation,
                       defaultVariation: serveDefault,
-                      rolloutPercentage: flag.rolloutPercentage,
-                      bucketBy: flag.bucketBy,
-                      variations: flag.variations,
+                      rolloutPercentage: config.rolloutPercentage,
+                      bucketBy: config.bucketBy,
                     },
                   }
                 : {}),
@@ -209,14 +212,14 @@ export function FlagTargeting({
         flagsApi.replaceRules(
           projectKey,
           flagKey,
-          flag.environmentKey,
+          config.environmentKey,
           { rules: ruleInputs },
           { signal: controller.signal },
         ),
         flagsApi.replaceTargets(
           projectKey,
           flagKey,
-          flag.environmentKey,
+          config.environmentKey,
           { targets },
           { signal: controller.signal },
         ),
@@ -225,14 +228,13 @@ export function FlagTargeting({
               flagsApi.updateEnvironmentConfig(
                 projectKey,
                 flagKey,
-                flag.environmentKey,
+                config.environmentKey,
                 {
-                  enabled: flag.enabled,
-                  offVariation: flag.offVariation,
+                  enabled: config.enabled,
+                  offVariation: config.offVariation,
                   defaultVariation: serveDefault,
-                  rolloutPercentage: flag.rolloutPercentage,
-                  bucketBy: flag.bucketBy,
-                  variations: flag.variations,
+                  rolloutPercentage: config.rolloutPercentage,
+                  bucketBy: config.bucketBy,
                 },
                 { signal: controller.signal },
               ),

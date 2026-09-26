@@ -8,6 +8,7 @@ import type {
   CreateApiKeyInput,
   CreateEnvironmentInput,
   CreateFlagInput,
+  CreateFlagVariationInput,
   CreateSegmentInput,
   CreatedApiKey,
   EnvironmentDetail,
@@ -22,14 +23,15 @@ import type {
   FlagChangeRequestListQuery,
   FlagDependencyGraph,
   FlagDetail,
+  FlagEnvironmentConfig,
   FlagIndividualTarget,
   FlagListQuery,
   FlagSummary,
+  FlagVariation,
   FlagVersion,
   PaginationQuery,
   Project,
   ProjectMember,
-  PromoteFlagInput,
   ReplaceIndividualTargetsInput,
   ReplaceTargetingRulesInput,
   SegmentDetail,
@@ -42,6 +44,7 @@ import type {
   UpdateEnvironmentSettingsInput,
   UpdateFlagConfigInput,
   UpdateFlagInput,
+  UpdateFlagVariationInput,
   UpdateNotificationsInput,
   UpdatePreferencesInput,
   UpdateProfileInput,
@@ -418,12 +421,23 @@ export const changeRequests = {
     ),
 };
 
-function flagPath(
+/**
+ * The two addresses a flag has.
+ *
+ * A flag is project-scoped: its identity — key, name, tags, owner, status,
+ * variations — lives at `flagPath`, while everything it does in one environment
+ * lives under `flagConfigPath`, which adds the environment segment.
+ */
+function flagPath(projectKey: string, flagKey: string): string {
+  return `/v1/projects/${projectKey}/flags/${flagKey}`;
+}
+
+function flagConfigPath(
   projectKey: string,
-  environmentKey: string,
   flagKey: string,
+  environmentKey: string,
 ): string {
-  return `/v1/projects/${projectKey}/environments/${environmentKey}/flags/${flagKey}`;
+  return `${flagPath(projectKey, flagKey)}/environments/${environmentKey}`;
 }
 
 export const flags = {
@@ -447,39 +461,24 @@ export const flags = {
       body: input,
     }),
 
-  get: (
-    projectKey: string,
-    environmentKey: string,
-    flagKey: string,
-    options?: RequestOptions,
-  ) =>
-    request<FlagDetail>(
-      "GET",
-      flagPath(projectKey, environmentKey, flagKey),
-      options,
-    ),
+  get: (projectKey: string, flagKey: string, options?: RequestOptions) =>
+    request<FlagDetail>("GET", flagPath(projectKey, flagKey), options),
 
   update: (
     projectKey: string,
-    environmentKey: string,
     flagKey: string,
     input: UpdateFlagInput,
     options?: RequestOptions,
   ) =>
-    request<FlagDetail>("PATCH", flagPath(projectKey, environmentKey, flagKey), {
+    request<FlagDetail>("PATCH", flagPath(projectKey, flagKey), {
       ...options,
       body: input,
     }),
 
-  archive: (
-    projectKey: string,
-    environmentKey: string,
-    flagKey: string,
-    options?: RequestOptions,
-  ) =>
+  archive: (projectKey: string, flagKey: string, options?: RequestOptions) =>
     request<{ key: string; status: string }>(
       "DELETE",
-      flagPath(projectKey, environmentKey, flagKey),
+      flagPath(projectKey, flagKey),
       options,
     ),
 
@@ -493,16 +492,78 @@ export const flags = {
       query,
     }),
 
+  /** Resolve one flag by key alone, narrowing it to one environment's state. */
   resolve: (
     flagKey: string,
     projectKey: string,
-    environmentKey: string,
+    environmentKey?: string,
     options?: RequestOptions,
   ) =>
     request<FlagDetail>("GET", `/v1/flags/${flagKey}`, {
       ...options,
       query: { projectKey, environmentKey },
     }),
+
+  listVariations: (
+    projectKey: string,
+    flagKey: string,
+    options?: RequestOptions,
+  ) =>
+    request<FlagVariation[]>(
+      "GET",
+      `${flagPath(projectKey, flagKey)}/variations`,
+      options,
+    ),
+
+  createVariation: (
+    projectKey: string,
+    flagKey: string,
+    input: CreateFlagVariationInput,
+    options?: RequestOptions,
+  ) =>
+    request<FlagVariation[]>(
+      "POST",
+      `${flagPath(projectKey, flagKey)}/variations`,
+      { ...options, body: input },
+    ),
+
+  updateVariation: (
+    projectKey: string,
+    flagKey: string,
+    variationKey: string,
+    input: UpdateFlagVariationInput,
+    options?: RequestOptions,
+  ) =>
+    request<FlagVariation[]>(
+      "PATCH",
+      `${flagPath(projectKey, flagKey)}/variations/${variationKey}`,
+      { ...options, body: input },
+    ),
+
+  /** Refused with a 409 while an environment still refers to the variation. */
+  removeVariation: (
+    projectKey: string,
+    flagKey: string,
+    variationKey: string,
+    options?: RequestOptions,
+  ) =>
+    request<FlagVariation[]>(
+      "DELETE",
+      `${flagPath(projectKey, flagKey)}/variations/${variationKey}`,
+      options,
+    ),
+
+  getEnvironmentConfig: (
+    projectKey: string,
+    flagKey: string,
+    environmentKey: string,
+    options?: RequestOptions,
+  ) =>
+    request<FlagEnvironmentConfig>(
+      "GET",
+      flagConfigPath(projectKey, flagKey, environmentKey),
+      options,
+    ),
 
   updateEnvironmentConfig: (
     projectKey: string,
@@ -511,22 +572,9 @@ export const flags = {
     input: UpdateFlagConfigInput,
     options?: RequestOptions,
   ) =>
-    request<FlagDetail>(
+    request<FlagEnvironmentConfig>(
       "PATCH",
-      `${flagPath(projectKey, environmentKey, flagKey)}/config`,
-      { ...options, body: input },
-    ),
-
-  promote: (
-    projectKey: string,
-    environmentKey: string,
-    flagKey: string,
-    input: PromoteFlagInput,
-    options?: RequestOptions,
-  ) =>
-    request<FlagDetail>(
-      "POST",
-      `${flagPath(projectKey, environmentKey, flagKey)}/promote`,
+      flagConfigPath(projectKey, flagKey, environmentKey),
       { ...options, body: input },
     ),
 
@@ -538,7 +586,7 @@ export const flags = {
   ) =>
     request<TargetingRule[]>(
       "GET",
-      `${flagPath(projectKey, environmentKey, flagKey)}/rules`,
+      `${flagConfigPath(projectKey, flagKey, environmentKey)}/rules`,
       options,
     ),
 
@@ -551,7 +599,7 @@ export const flags = {
   ) =>
     request<TargetingRule[]>(
       "PUT",
-      `${flagPath(projectKey, environmentKey, flagKey)}/rules`,
+      `${flagConfigPath(projectKey, flagKey, environmentKey)}/rules`,
       { ...options, body: input },
     ),
 
@@ -563,7 +611,7 @@ export const flags = {
   ) =>
     request<FlagIndividualTarget[]>(
       "GET",
-      `${flagPath(projectKey, environmentKey, flagKey)}/targets`,
+      `${flagConfigPath(projectKey, flagKey, environmentKey)}/targets`,
       options,
     ),
 
@@ -576,19 +624,15 @@ export const flags = {
   ) =>
     request<FlagIndividualTarget[]>(
       "PUT",
-      `${flagPath(projectKey, environmentKey, flagKey)}/targets`,
+      `${flagConfigPath(projectKey, flagKey, environmentKey)}/targets`,
       { ...options, body: input },
     ),
 
-  dependencies: (
-    projectKey: string,
-    flagKey: string,
-    environmentKey: string,
-    options?: RequestOptions,
-  ) =>
+  /** Project-wide: the dependency graph is not an environment's property. */
+  dependencies: (projectKey: string, flagKey: string, options?: RequestOptions) =>
     request<FlagDependencyGraph>(
       "GET",
-      `${flagPath(projectKey, environmentKey, flagKey)}/dependencies`,
+      `${flagPath(projectKey, flagKey)}/dependencies`,
       options,
     ),
 
@@ -601,7 +645,7 @@ export const flags = {
   ) =>
     request<ApiPage<FlagVersion>>(
       "GET",
-      `${flagPath(projectKey, environmentKey, flagKey)}/versions`,
+      `${flagConfigPath(projectKey, flagKey, environmentKey)}/versions`,
       { ...options, query },
     ),
 };

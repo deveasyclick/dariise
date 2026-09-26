@@ -59,11 +59,29 @@ const headerClass =
   "text-muted-foreground h-8 px-3 text-[10px] font-medium tracking-[0.1em] uppercase";
 const cellClass = "px-3 py-2.5 text-[12px]";
 
-function statusFor(flag: FlagSummary): StatusView {
-  if (flag.status === "archived") return "archived";
-  if (!flag.enabled) return "disabled";
+/**
+ * The flag's state in one environment, taken from the summaries every row
+ * carries. Archiving is the flag's own, project-wide status, so it wins: a flag
+ * that is merely disabled in the selected environment reads as `disabled`.
+ */
+function stateIn(flag: FlagSummary, environmentKey: string | null) {
+  return (
+    flag.environments.find(
+      (environment) => environment.environmentKey === environmentKey,
+    ) ??
+    flag.environments[0] ??
+    null
+  );
+}
 
-  return flag.rolloutPercentage >= 100 ? "active" : "rollout";
+function statusFor(flag: FlagSummary, environmentKey: string | null): StatusView {
+  if (flag.status === "archived") return "archived";
+
+  const state = stateIn(flag, environmentKey);
+
+  if (!state || !state.enabled) return "disabled";
+
+  return state.rolloutPercentage >= 100 ? "active" : "rollout";
 }
 
 function searchableText(flag: FlagSummary): string {
@@ -74,12 +92,19 @@ function searchableText(flag: FlagSummary): string {
 }
 
 export function FlagsTable({
+  projectKey,
   flags,
+  environmentKey,
   environmentName,
   now,
 }: {
+  projectKey: string;
   flags: FlagSummary[];
-  /** The environment the list is scoped to; each row already carries its own. */
+  /**
+   * The environment the list is narrowed to; each row carries the state of all
+   * of them, so this is what the status and rollout columns are read from.
+   */
+  environmentKey: string | null;
   environmentName: string | null;
   /** Passed in so relative labels stay stable across hydration. */
   now: string;
@@ -93,14 +118,14 @@ export function FlagsTable({
     const needle = query.trim().toLowerCase();
 
     return flags.filter((flag) => {
-      if (status !== "all" && statusFor(flag) !== status) {
+      if (status !== "all" && statusFor(flag, environmentKey) !== status) {
         return false;
       }
       if (!needle) return true;
 
       return searchableText(flag).includes(needle);
     });
-  }, [flags, query, status]);
+  }, [flags, query, status, environmentKey]);
 
   return (
     <section className="bg-card rounded-lg border">
@@ -180,18 +205,23 @@ export function FlagsTable({
             </TableRow>
           ) : (
             visible.map((flag) => {
-              const presentation = statusPresentation[statusFor(flag)];
+              const state = stateIn(flag, environmentKey);
+              const presentation = statusPresentation[
+                statusFor(flag, environmentKey)
+              ];
               const subtitle = [flag.name, flag.owner, flag.description]
                 .filter((value): value is string => Boolean(value))
                 .join(" · ");
 
               return (
-                <TableRow
-                  key={`${flag.environmentKey}/${flag.key}`}
-                >
+                <TableRow key={flag.key}>
                   <TableCell className={cellClass}>
                     <Link
-                      href={`/environments/${flag.environmentKey}/flags/${flag.key}`}
+                      href={
+                        environmentKey
+                          ? `/projects/${projectKey}/flags/${flag.key}?environment=${environmentKey}`
+                          : `/projects/${projectKey}/flags/${flag.key}`
+                      }
                       className="hover:text-primary block font-mono text-[12px] font-medium transition-colors"
                     >
                       {flag.key}
@@ -208,15 +238,19 @@ export function FlagsTable({
                   </TableCell>
 
                   <TableCell className={cellClass}>
-                    <div className="flex w-28 items-center gap-2">
-                      <ProgressBar
-                        value={flag.rolloutPercentage}
-                        label={`${flag.key} rollout`}
-                      />
-                      <span className="text-muted-foreground w-8 shrink-0 text-right text-[11px]">
-                        {flag.rolloutPercentage}%
-                      </span>
-                    </div>
+                    {state ? (
+                      <div className="flex w-28 items-center gap-2">
+                        <ProgressBar
+                          value={state.rolloutPercentage}
+                          label={`${flag.key} rollout in ${state.environmentName}`}
+                        />
+                        <span className="text-muted-foreground w-8 shrink-0 text-right text-[11px]">
+                          {state.rolloutPercentage}%
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-[11px]">—</span>
+                    )}
                   </TableCell>
 
                   <TableCell className={cn(cellClass, "text-muted-foreground")}>

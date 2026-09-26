@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { MAX_PAGE_SIZE } from "@dariise/contracts";
 import {
   ArchiveProjectCard,
   DefaultEnvironmentCard,
@@ -13,6 +12,7 @@ import {
   environmentFlagCounts,
   type CappedCount,
 } from "@/components/app/environments/capped-count";
+import { listProjectFlags } from "@/components/app/flags/flag-queries";
 import * as api from "@/lib/api";
 import { loadProject } from "./load-project";
 
@@ -39,36 +39,25 @@ export default async function ProjectEnvironmentsPage(
 
   if (!project) notFound();
 
-  const [environmentPage, apiKeyPage, segmentPage] = await Promise.all([
+  const [environmentPage, apiKeyPage, segmentPage, flags] = await Promise.all([
     api.environments.list(project.key),
     api.apiKeys.list(project.key),
     api.segments.list(project.key),
+    // One list for the whole project: a flag is project-scoped and each row
+    // already carries its state in every environment.
+    listProjectFlags(project.key),
   ]);
 
   const environments = environmentPage.data;
-
-  const flagPages = await Promise.all(
-    environments.map((environment) =>
-      api.flags.list(project.key, {
-        environmentKey: environment.key,
-        limit: MAX_PAGE_SIZE,
-      }),
-    ),
-  );
-
-  const flags = flagPages.flatMap((page) => page.data);
-  const flagsTruncated = flagPages.some((page) => page.nextCursor !== null);
   const enabledByEnvironment: Record<string, CappedCount> = {};
 
-  environments.forEach((environment, index) => {
-    const page = flagPages[index];
-
+  for (const environment of environments) {
     enabledByEnvironment[environment.key] = environmentFlagCounts(
-      page.data,
+      flags,
       environment.key,
-      page.nextCursor !== null,
+      false,
     ).enabled;
-  });
+  }
 
   const defaultEnvironmentKey =
     environments.find(
@@ -76,6 +65,9 @@ export default async function ProjectEnvironmentsPage(
     )?.key ??
     environments.find((environment) => environment.isDefault)?.key ??
     environments[0]?.key ??
+    null;
+  const defaultEnvironment =
+    environments.find((environment) => environment.key === defaultEnvironmentKey) ??
     null;
 
   return (
@@ -89,14 +81,15 @@ export default async function ProjectEnvironmentsPage(
           projectKey={project.key}
           flags={flags}
           limit={4}
-          truncated={flagsTruncated}
+          environmentKey={defaultEnvironmentKey}
+          environmentName={defaultEnvironment?.name ?? null}
         />
       </div>
 
       <div className="space-y-3">
         <ProjectSummaryCard
           project={project}
-          flagCount={{ count: flags.length, truncated: flagsTruncated }}
+          flagCount={{ count: flags.length, truncated: false }}
           segmentCount={cappedCount(segmentPage)}
           apiKeyCount={cappedCount(apiKeyPage)}
         />

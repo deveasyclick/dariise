@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PlusIcon } from "lucide-react";
-import { MAX_PAGE_SIZE, type EnvironmentSummary } from "@dariise/contracts";
+import type { EnvironmentSummary } from "@dariise/contracts";
 import {
   EnvironmentGrid,
   type EnvironmentCardData,
 } from "@/components/app/environments/environment-cards";
 import { environmentFlagCounts } from "@/components/app/environments/capped-count";
+import { listProjectFlags } from "@/components/app/flags/flag-queries";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import * as api from "@/lib/api";
@@ -27,9 +28,10 @@ export default async function EnvironmentsPage() {
 
   const projectKey = project.key;
 
-  const [environments, all] = await Promise.all([
+  const [environments, all, flags] = await Promise.all([
     listEnvironments(projectKey),
     listEnvironments(projectKey, { includeArchived: true }),
+    listProjectFlags(projectKey),
   ]);
 
   const archived = all.filter(
@@ -41,22 +43,17 @@ export default async function EnvironmentsPage() {
   ): Promise<EnvironmentCardData[]> {
     return Promise.all(
       list.map(async (environment) => {
-        const [{ connection }, flagPage] = await Promise.all([
-          api.environments.get(projectKey, environment.key),
-          api.flags.list(projectKey, {
-            environmentKey: environment.key,
-            limit: MAX_PAGE_SIZE,
-          }),
-        ]);
+        const { connection } = await api.environments.get(
+          projectKey,
+          environment.key,
+        );
 
         return {
           environment,
           connection,
-          counts: environmentFlagCounts(
-            flagPage.data,
-            environment.key,
-            flagPage.nextCursor !== null,
-          ),
+          // One project list feeds every card, and each flag carries its own
+          // per-environment summaries.
+          counts: environmentFlagCounts(flags, environment.key, false),
         };
       }),
     );

@@ -48,7 +48,9 @@ export default async function EnvironmentFlagsPage(
       </PageHeader>
 
       <FlagsTable
+        projectKey={projectKey}
         flags={flags}
+        environmentKey={environmentKey}
         environmentName={environmentName}
         now={now.toISOString()}
       />

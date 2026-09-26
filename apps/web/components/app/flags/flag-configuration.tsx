@@ -8,11 +8,9 @@ import {
   LoaderCircleIcon,
   SaveIcon,
 } from "lucide-react";
-import type { FlagDetail, FlagType, FlagVariation } from "@dariise/contracts";
-import { VariationValueInput } from "@/components/app/flags/variation-value-input";
+import type { FlagDetail, FlagEnvironmentConfig } from "@dariise/contracts";
 import { FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -27,16 +25,18 @@ import { ApiError, changeRequests as changeRequestsApi, flags as flagsApi } from
 /**
  * Configuration tab.
  *
- * The interactive column lives here: what the flag serves, how far it has
- * rolled out, and the values themselves. The read-only panels (metadata,
- * danger zone) are passed in from the server page as children and stay Server
+ * What one flag does in one environment: whether it is served, what it serves
+ * by default and while off, how far it has rolled out, and the attribute it
+ * buckets by. The values themselves belong to the flag, not the environment, so
+ * they are edited on the Variations tab. The read-only panels (metadata, danger
+ * zone) are passed in from the server page as children and stay Server
  * Components.
  */
 export function FlagConfiguration({
   projectKey,
   flagKey,
-  type,
   flag,
+  config,
   updatedLabel,
   metadata,
   dangerZone,
@@ -45,9 +45,9 @@ export function FlagConfiguration({
 }: {
   projectKey: string;
   flagKey: string;
-  /** The flag's declared type; decides which value shape each variation takes. */
-  type: FlagType;
   flag: FlagDetail;
+  /** The flag's configuration in the environment this screen is scoped to. */
+  config: FlagEnvironmentConfig;
   updatedLabel: string;
   metadata: React.ReactNode;
   dangerZone: React.ReactNode;
@@ -55,12 +55,10 @@ export function FlagConfiguration({
   approval: React.ReactNode;
   protectedEnvironment: boolean;
 }) {
-  const [enabled, setEnabled] = useState(flag.enabled);
-  const [serving, setServing] = useState(flag.defaultVariation);
-  const [percentage, setPercentage] = useState(flag.rolloutPercentage);
-  const [variations, setVariations] = useState<FlagVariation[]>(
-    flag.variations,
-  );
+  const [enabled, setEnabled] = useState(config.enabled);
+  const [offVariation, setOffVariation] = useState(config.offVariation);
+  const [serving, setServing] = useState(config.defaultVariation);
+  const [percentage, setPercentage] = useState(config.rolloutPercentage);
   const [pending, setPending] = useState(false);
   const [published, setPublished] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -68,7 +66,7 @@ export function FlagConfiguration({
   const controllerRef = useRef<AbortController | null>(null);
   const router = useRouter();
 
-  const environmentLabel = flag.environmentName;
+  const environmentLabel = config.environmentName;
 
   async function handlePublish() {
     if (pending) return;
@@ -81,11 +79,10 @@ export function FlagConfiguration({
 
     const input = {
       enabled,
-      offVariation: flag.offVariation,
+      offVariation,
       defaultVariation: serving,
       rolloutPercentage: percentage,
-      bucketBy: flag.bucketBy,
-      variations,
+      bucketBy: config.bucketBy,
     };
 
     try {
@@ -96,7 +93,7 @@ export function FlagConfiguration({
           projectKey,
           flagKey,
           {
-            environmentKey: flag.environmentKey,
+            environmentKey: config.environmentKey,
             payload: { config: input },
           },
           { signal: controller.signal },
@@ -111,15 +108,15 @@ export function FlagConfiguration({
       const updated = await flagsApi.updateEnvironmentConfig(
         projectKey,
         flagKey,
-        flag.environmentKey,
+        config.environmentKey,
         input,
         { signal: controller.signal },
       );
 
       setEnabled(updated.enabled);
+      setOffVariation(updated.offVariation);
       setServing(updated.defaultVariation);
       setPercentage(updated.rolloutPercentage);
-      setVariations(updated.variations);
       setPublished("just now");
     } catch (publishError) {
       if ((publishError as Error)?.name === "AbortError") return;
@@ -166,7 +163,7 @@ export function FlagConfiguration({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {variations.map((variation) => (
+                {flag.variations.map((variation) => (
                   <SelectItem key={variation.key} value={variation.key}>
                     {variation.name}
                   </SelectItem>
@@ -175,6 +172,29 @@ export function FlagConfiguration({
             </Select>
             <p className="text-muted-foreground text-[11px]">
               Evaluated for every user who does not match a targeting rule.
+            </p>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="flag-off-variation">Off variation</Label>
+            <Select value={offVariation} onValueChange={setOffVariation}>
+              <SelectTrigger
+                id="flag-off-variation"
+                className="h-8 w-full text-[12px]"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {flag.variations.map((variation) => (
+                  <SelectItem key={variation.key} value={variation.key}>
+                    {variation.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-[11px]">
+              Served while the flag is off in {environmentLabel}, and used as the
+              SDK fallback.
             </p>
           </div>
         </section>
@@ -218,7 +238,7 @@ export function FlagConfiguration({
                   ? "Off — nobody receives this variation"
                   : "Deterministic bucketing keeps each user's result stable"}
               </span>
-              <span className="font-mono">bucket-by: {flag.bucketBy}</span>
+              <span className="font-mono">bucket-by: {config.bucketBy}</span>
             </div>
           </div>
 
@@ -262,74 +282,6 @@ export function FlagConfiguration({
                   : "Publish changes"}
             </Button>
           </div>
-        </section>
-
-        <section className="bg-card rounded-lg border p-4">
-          <h2 className="text-[13px] font-medium">Variations</h2>
-          <p className="text-muted-foreground mt-1 text-[11px]">
-            The values this flag can serve. Every value is a {type}, because
-            that is what the flag was created as.
-          </p>
-
-          <div className="mt-3 space-y-3">
-            {variations.map((variation) => (
-              <div
-                key={variation.key}
-                className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-              >
-                <div className="space-y-1">
-                  <Label
-                    htmlFor={`variation-name-${variation.key}`}
-                    className="text-[11px]"
-                  >
-                    {variation.key} · name
-                  </Label>
-                  <Input
-                    id={`variation-name-${variation.key}`}
-                    className="h-8 text-[12px]"
-                    value={variation.name}
-                    onChange={(event) =>
-                      setVariations((previous) =>
-                        previous.map((entry) =>
-                          entry.key === variation.key
-                            ? { ...entry, name: event.target.value }
-                            : entry,
-                        ),
-                      )
-                    }
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label
-                    htmlFor={`variation-value-${variation.key}`}
-                    className="text-[11px]"
-                  >
-                    value
-                  </Label>
-                  <VariationValueInput
-                    id={`variation-value-${variation.key}`}
-                    type={type}
-                    value={variation.value}
-                    onChange={(value) =>
-                      setVariations((previous) =>
-                        previous.map((entry) =>
-                          entry.key === variation.key
-                            ? { ...entry, value }
-                            : entry,
-                        ),
-                      )
-                    }
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <p className="text-muted-foreground mt-3 text-[11px]">
-            Keys stay fixed: the serving behaviour and the off variation refer to
-            them by name.
-          </p>
         </section>
       </div>
 

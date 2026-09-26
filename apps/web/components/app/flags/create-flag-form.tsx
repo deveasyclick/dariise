@@ -60,7 +60,8 @@ type CreateFlagField =
   | "description"
   | "type"
   | "tags"
-  | "values";
+  | "values"
+  | "variationKeys";
 
 type CreateFlagErrors = FieldErrors<CreateFlagField>;
 
@@ -112,6 +113,14 @@ export function CreateFlagForm({
   const [values, setValues] = useState<FlagValuesInput>(
     () => defaultVariations("boolean"),
   );
+  /**
+   * The keys the two starting variations carry.
+   *
+   * Only a string flag may name them: `on` and `off` describe a boolean, while a
+   * string flag's keys are what an environment's selections point at. Every other
+   * type keeps the conventional pair, which the API also defaults to.
+   */
+  const [variationKeys, setVariationKeys] = useState({ on: "on", off: "off" });
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
   const [editedKey, setEditedKey] = useState(false);
@@ -128,7 +137,9 @@ export function CreateFlagForm({
     setType(next);
     // A pair typed for the previous type is meaningless in the next one.
     setValues(defaultVariations(next));
+    setVariationKeys({ on: "on", off: "off" });
     clearError("values");
+    clearError("variationKeys");
   }
 
   function handleNameChange(value: string) {
@@ -147,13 +158,20 @@ export function CreateFlagForm({
 
   function input(): CreateFlagInput {
     return {
-      environmentKey,
       key: key.trim(),
       name: name.trim(),
       description: description.trim() || null,
       type,
       tags,
       ...(type === "boolean" ? {} : { values }),
+      ...(type === "string"
+        ? {
+            variationKeys: {
+              on: variationKeys.on.trim(),
+              off: variationKeys.off.trim(),
+            },
+          }
+        : {}),
     };
   }
 
@@ -214,7 +232,9 @@ export function CreateFlagForm({
        * `push`, so going back cannot land on a filled-in create form and a
        * second submission.
        */
-      router.replace(`/environments/${environmentKey}/flags/${created.key}`);
+      router.replace(
+        `/projects/${projectKey}/flags/${created.key}?environment=${environmentKey}`,
+      );
     } catch (error) {
       // Cleared here rather than in a `finally`: on success the route is about
       // to change, and re-enabling the button first would flash a form the user
@@ -349,11 +369,14 @@ export function CreateFlagForm({
                     A {type} flag still has to serve something while it is off,
                     so both values are set now. The flag starts with them, and
                     each can be changed on its configuration tab.
+                    {type === "string"
+                      ? " Name the two keys as well when on and off say nothing about the values they carry."
+                      : ""}
                   </p>
 
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="flag-value-on">When on</Label>
+                      <Label htmlFor="flag-value-on">Serving value</Label>
                       <VariationValueInput
                         id="flag-value-on"
                         type={type}
@@ -363,10 +386,29 @@ export function CreateFlagForm({
                           clearError("values");
                         }}
                       />
+                      {type === "string" ? (
+                        <>
+                          <Label htmlFor="flag-key-on" className="block pt-1">
+                            Serving key
+                          </Label>
+                          <Input
+                            id="flag-key-on"
+                            value={variationKeys.on}
+                            onChange={(event) => {
+                              setVariationKeys((previous) => ({
+                                ...previous,
+                                on: event.target.value,
+                              }));
+                              clearError("variationKeys");
+                            }}
+                            className="font-mono text-[12px]"
+                          />
+                        </>
+                      ) : null}
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="flag-value-off">When off</Label>
+                      <Label htmlFor="flag-value-off">Off value</Label>
                       <VariationValueInput
                         id="flag-value-off"
                         type={type}
@@ -376,11 +418,33 @@ export function CreateFlagForm({
                           clearError("values");
                         }}
                       />
+                      {type === "string" ? (
+                        <>
+                          <Label htmlFor="flag-key-off" className="block pt-1">
+                            Off key
+                          </Label>
+                          <Input
+                            id="flag-key-off"
+                            value={variationKeys.off}
+                            onChange={(event) => {
+                              setVariationKeys((previous) => ({
+                                ...previous,
+                                off: event.target.value,
+                              }));
+                              clearError("variationKeys");
+                            }}
+                            className="font-mono text-[12px]"
+                          />
+                        </>
+                      ) : null}
                     </div>
                   </div>
 
                   {errors.values ? (
                     <FieldError>{errors.values}</FieldError>
+                  ) : null}
+                  {errors.variationKeys ? (
+                    <FieldError>{errors.variationKeys}</FieldError>
                   ) : null}
                 </section>
               )}
@@ -494,8 +558,9 @@ export function CreateFlagForm({
 
               <h3 className="mt-5 text-[12px] font-medium">Environment</h3>
               <p className="text-muted-foreground mt-1 text-[11px]">
-                The flag is created switched off in this environment only. Other
-                environments get it later, by promotion.
+                The flag belongs to the project, so it exists in every
+                environment at once. It is created switched off here, in the
+                environment you are working in.
               </p>
               <ul className="mt-2 divide-y text-[12px]">
                 <li className="flex items-center justify-between gap-4 py-2">

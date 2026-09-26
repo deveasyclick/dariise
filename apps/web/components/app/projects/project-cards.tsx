@@ -12,7 +12,12 @@ import {
   environmentColorSwatch,
   environmentColorTone,
 } from "@/components/app/environments/environment-colors";
-import { FlagStatePill, flagState, type FlagState } from "@/components/app/flags/flag-state-pill";
+import {
+  FlagStatePill,
+  FlagStatusBadge,
+  flagState,
+  type FlagState,
+} from "@/components/app/flags/flag-state-pill";
 import {
   countLabel,
   type CappedCount,
@@ -379,16 +384,27 @@ interface ProjectFlagsCardProps {
   flags: FlagSummary[];
   /** Cap the list and add a "View all" link, as the design does on Overview. */
   limit?: number;
-  /** True when the flag list is one page of a longer collection. */
-  truncated?: boolean;
+  /**
+   * The environment each row's state is read from. Omit to show the flag's own
+   * status only, which is what the card falls back to.
+   */
+  environmentKey?: string | null;
+  /** Named beside each row so the state is never read as project-wide. */
+  environmentName?: string | null;
 }
 
-/** Flags this project owns, each with the environment it belongs to. */
+/**
+ * Flags this project owns.
+ *
+ * One row per flag: the identity status is the flag's own, and the state pill
+ * belongs to the environment named beside it.
+ */
 export function ProjectFlagsCard({
   projectKey,
   flags,
   limit,
-  truncated = false,
+  environmentKey = null,
+  environmentName = null,
 }: ProjectFlagsCardProps) {
   const visible = limit ? flags.slice(0, limit) : flags;
 
@@ -413,42 +429,54 @@ export function ProjectFlagsCard({
       ) : (
         <ul className="divide-y">
           {visible.map((flag) => {
-            const state = flagState(flag);
+            const summary =
+              environmentKey === null
+                ? null
+                : (flag.environments.find(
+                    (environment) =>
+                      environment.environmentKey === environmentKey,
+                  ) ?? null);
+            const state = summary ? flagState(summary) : null;
 
             return (
               <li
-                key={`${flag.environmentKey}/${flag.key}`}
+                key={flag.key}
                 className="flex items-center gap-2.5 py-2.5 first:pt-0 last:pb-0"
               >
                 <span
                   className={cn(
                     "flex size-6 shrink-0 items-center justify-center rounded-md",
-                    flagTone(state),
+                    state
+                      ? flagTone(state)
+                      : flag.status === "archived"
+                        ? "bg-muted text-muted-foreground"
+                        : "bg-ok-ink/10 text-ok-ink",
                   )}
                 >
                   <FlagIcon aria-hidden="true" className="size-3.5" />
                 </span>
                 <Link
-                  href={`/environments/${flag.environmentKey}/flags/${flag.key}`}
+                  href={
+                    environmentKey === null
+                      ? `/projects/${projectKey}/flags/${flag.key}`
+                      : `/projects/${projectKey}/flags/${flag.key}?environment=${environmentKey}`
+                  }
                   className="min-w-0 flex-1 truncate font-mono text-[12px] hover:underline"
                 >
                   {flag.key}
                 </Link>
-                <span className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-[10px]">
-                  {flag.environmentName}
-                </span>
-                <FlagStatePill state={state} label="long" />
+                {environmentName ? (
+                  <span className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-[10px]">
+                    {environmentName}
+                  </span>
+                ) : null}
+                <FlagStatusBadge status={flag.status} />
+                {state ? <FlagStatePill state={state} label="long" /> : null}
               </li>
             );
           })}
         </ul>
       )}
-
-      {truncated ? (
-        <p className="text-muted-foreground mt-3 text-[11px]">
-          Showing the first {flags.length} flags.
-        </p>
-      ) : null}
     </SectionCard>
   );
 }

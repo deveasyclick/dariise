@@ -37,6 +37,13 @@ export interface EnvironmentFlagCounts {
   enabled: CappedCount;
 }
 
+/**
+ * How a project's flags resolve in one environment.
+ *
+ * Each row is one flag and carries how it stands in every environment, so the
+ * counts are read from the summary for `environmentKey` rather than from a
+ * per-environment list — a flag is no longer duplicated per environment.
+ */
 export function environmentFlagCounts(
   flags: readonly FlagSummary[],
   environmentKey: string,
@@ -47,14 +54,18 @@ export function environmentFlagCounts(
   let off = 0;
 
   for (const flag of flags) {
-    if (flag.environmentKey !== environmentKey) continue;
+    const state = flag.environments.find(
+      (environment) => environment.environmentKey === environmentKey,
+    );
 
-    if (!flag.enabled) {
+    if (!state) continue;
+
+    if (!state.enabled) {
       off += 1;
       continue;
     }
 
-    if (flag.rolloutPercentage >= 100) on += 1;
+    if (state.rolloutPercentage >= 100) on += 1;
     else partial += 1;
   }
 

@@ -1,5 +1,5 @@
 import { CheckCircle2Icon, GitBranchIcon, LayersIcon } from "lucide-react";
-import type { FlagDependencyGraph } from "@dariise/contracts";
+import type { FlagDependencyGraph, FlagStatus } from "@dariise/contracts";
 import { cn } from "cn";
 
 function GraphNode({
@@ -71,13 +71,12 @@ const legend = [
 export function FlagDependencies({
   graph,
   flagKey,
-  environmentName,
-  enabled,
+  status,
 }: {
   graph: FlagDependencyGraph;
   flagKey: string;
-  environmentName: string;
-  enabled: boolean;
+  /** The flag's own status; the graph is project-wide, not per environment. */
+  status: FlagStatus;
 }) {
   const hasAny = graph.upstream.length > 0 || graph.downstream.length > 0;
 
@@ -89,7 +88,7 @@ export function FlagDependencies({
             <div>
               <h2 className="text-[13px] font-medium">Dependency Graph</h2>
               <p className="text-muted-foreground mt-1 text-[11px]">
-                {flagKey} · {environmentName}
+                {flagKey} · project-wide
               </p>
             </div>
 
@@ -139,9 +138,9 @@ export function FlagDependencies({
               <div className="flex justify-center">
                 <GraphNode
                   flagKey={flagKey}
-                  meta={`This flag · ${environmentName}`}
+                  meta="This flag"
                   tone="self"
-                  chip={enabled ? "Enabled" : "Disabled"}
+                  chip={status === "archived" ? "Archived" : "Active"}
                 />
               </div>
 

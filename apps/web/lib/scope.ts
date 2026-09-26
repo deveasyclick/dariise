@@ -143,11 +143,13 @@ export const getScope = cache(async (): Promise<DashboardScope> => {
  * Returns `null` when the project does not exist in this workspace; the API
  * answers a cross-tenant read with 404, and this maps that to the same `null`.
  */
-export async function findProject(key: string): Promise<Project | null> {
-  try {
-    return await api.projects.get(key);
-  } catch (error) {
-    if (error instanceof api.ApiError && error.status === 404) return null;
-    throw error;
-  }
-}
+export const findProject = cache(
+  async (key: string): Promise<Project | null> => {
+    try {
+      return await api.projects.get(key);
+    } catch (error) {
+      if (error instanceof api.ApiError && error.status === 404) return null;
+      throw error;
+    }
+  },
+);

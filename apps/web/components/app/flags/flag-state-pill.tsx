@@ -1,3 +1,4 @@
+import type { FlagStatus } from "@dariise/contracts";
 import { Badge } from "@/components/ui/badge";
 
 export type FlagState =
@@ -5,7 +6,7 @@ export type FlagState =
   | { kind: "off" }
   | { kind: "percentage"; percentage: number };
 
-/** How one flag resolves, from the state the flag row itself carries. */
+/** How one flag resolves in one environment, from that environment's summary. */
 export function flagState(state: {
   enabled: boolean;
   rolloutPercentage: number;
@@ -14,6 +15,19 @@ export function flagState(state: {
   if (state.rolloutPercentage >= 100) return { kind: "on" };
 
   return { kind: "percentage", percentage: state.rolloutPercentage };
+}
+
+/**
+ * The flag's own status, which is project-wide and independent of any
+ * environment: archiving a flag retires it everywhere, while an environment can
+ * still serve it or not on its own.
+ */
+export function FlagStatusBadge({ status }: { status: FlagStatus }) {
+  return status === "archived" ? (
+    <Badge variant="outline">Archived</Badge>
+  ) : (
+    <Badge variant="ok">Active</Badge>
+  );
 }
 
 /**

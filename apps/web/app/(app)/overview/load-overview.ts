@@ -1,9 +1,6 @@
-import {
-  MAX_PAGE_SIZE,
-  type EnvironmentSummary,
-  type FlagSummary,
-} from "@dariise/contracts";
+import type { FlagSummary } from "@dariise/contracts";
 import { auditActionMeta } from "@/components/app/audit-log/audit-action-meta";
+import { listProjectFlags } from "@/components/app/flags/flag-queries";
 import type {
   ActiveRollout,
   FlagHealth,
@@ -25,41 +22,10 @@ export interface OverviewData {
   recentActivity: RecentActivity[];
 }
 
-async function listFlagsIn(
-  projectKey: string,
-  environmentKey: string,
-): Promise<FlagSummary[]> {
-  const flags: FlagSummary[] = [];
-  let cursor: string | undefined;
-
-  do {
-    const page = await api.flags.list(projectKey, {
-      environmentKey,
-      limit: MAX_PAGE_SIZE,
-      ...(cursor === undefined ? {} : { cursor }),
-    });
-
-    flags.push(...page.data);
-    cursor = page.nextCursor ?? undefined;
-  } while (cursor);
-
-  return flags;
-}
-
-interface EnvironmentFlags {
-  environment: EnvironmentSummary;
-  flags: FlagSummary[];
-}
-
-async function listProjectFlags(
-  projectKey: string,
-  environments: EnvironmentSummary[],
-): Promise<EnvironmentFlags[]> {
-  return Promise.all(
-    environments.map(async (environment) => ({
-      environment,
-      flags: await listFlagsIn(projectKey, environment.key),
-    })),
+/** How one flag stands in one environment, from the summary it carries. */
+function stateIn(flag: FlagSummary, environmentKey: string) {
+  return flag.environments.find(
+    (environment) => environment.environmentKey === environmentKey,
   );
 }
 
@@ -79,8 +45,8 @@ export async function loadOverview(now: Date): Promise<OverviewData | null> {
 
   if (!project) return null;
 
-  const [flagsByEnvironment, activityPage] = await Promise.all([
-    listProjectFlags(project.key, environments),
+  const [flags, activityPage] = await Promise.all([
+    listProjectFlags(project.key),
     api.audit.listForProject(project.key, {
       limit: ACTIVITY_LIMIT,
       from: new Date(
@@ -89,23 +55,23 @@ export async function loadOverview(now: Date): Promise<OverviewData | null> {
     }),
   ]);
 
-  const flags = flagsByEnvironment.flatMap((entry) => entry.flags);
   const selectedKey = environment?.key ?? null;
   const scopeNote = environment?.name ?? "No environment";
-  const selectedFlags =
-    selectedKey === null
-      ? []
-      : flags.filter((flag) => flag.environmentKey === selectedKey);
 
+  // A flag is one row, so these are counts of flags rather than of rows.
   const enabledCount =
     selectedKey === null
       ? null
-      : selectedFlags.filter((flag) => flag.enabled).length;
+      : flags.filter((flag) => stateIn(flag, selectedKey)?.enabled).length;
 
   const rolloutCount =
     selectedKey === null
       ? null
-      : selectedFlags.filter((flag) => isRollingOut(flag)).length;
+      : flags.filter((flag) => {
+          const state = stateIn(flag, selectedKey);
+
+          return state ? isRollingOut(state) : false;
+        }).length;
 
   const archivedCount = flags.filter(
     (flag) => flag.status === "archived",
@@ -134,30 +100,38 @@ export async function loadOverview(now: Date): Promise<OverviewData | null> {
       id: "archived",
       label: "Archived",
       value: formatInteger(archivedCount),
-      note: "All environments",
+      note: "Whole project",
     },
   ];
 
   const activeRollouts: ActiveRollout[] = flags
-    .filter((flag) => isRollingOut(flag))
-    .map((flag) => ({
-      flagKey: flag.key,
-      environment: flag.environmentName,
-      percentage: flag.rolloutPercentage,
-    }));
+    .flatMap((flag) =>
+      flag.environments
+        .filter((state) => isRollingOut(state))
+        .map((state) => ({
+          flagKey: flag.key,
+          environment: state.environmentName,
+          percentage: state.rolloutPercentage,
+        })),
+    )
+    .sort(
+      (a, b) =>
+        b.percentage - a.percentage || a.flagKey.localeCompare(b.flagKey),
+    );
 
-  activeRollouts.sort(
-    (a, b) =>
-      b.percentage - a.percentage || a.flagKey.localeCompare(b.flagKey),
-  );
+  const flagHealth: FlagHealth[] = environments.map((entry) => {
+    const enabled = flags.filter(
+      (flag) => stateIn(flag, entry.key)?.enabled,
+    ).length;
 
-  const flagHealth: FlagHealth[] = flagsByEnvironment.map(
-    ({ environment: entry, flags: environmentFlags }) => ({
+    return {
       environment: entry.name,
-      enabled: environmentFlags.filter((flag) => flag.enabled).length,
-      disabled: environmentFlags.filter((flag) => !flag.enabled).length,
-    }),
-  );
+      enabled,
+      // Every flag of the project has a configuration here, so the remainder is
+      // the count that is switched off.
+      disabled: flags.length - enabled,
+    };
+  });
 
   const flagKeyById = new Map(flags.map((flag) => [flag.id, flag.key]));
   const environmentNameById = new Map(
@@ -171,17 +145,24 @@ export async function loadOverview(now: Date): Promise<OverviewData | null> {
         ? null
         : (environmentNameById.get(entry.environmentId) ?? null);
 
+    // `target` is a raw id, so it only earns a title when it can be named. When
+    // it cannot, the action's own wording carries the row and the id stays out
+    // of the screen entirely.
+    const targetName =
+      entry.target === null
+        ? project.key
+        : (flagKeyById.get(entry.target) ??
+          environmentNameById.get(entry.target) ??
+          (entry.target === project.id ? project.key : null));
+
+    const action = environmentName ? `${verb} in ${environmentName}` : verb;
+    const actor = entry.actorName ?? entry.actor;
+
     return {
       id: entry.id,
       action: entry.action,
-      title:
-        entry.target === null
-          ? project.key
-          : (flagKeyById.get(entry.target) ?? entry.target),
-      description: [
-        environmentName ? `${verb} in ${environmentName}` : verb,
-        entry.actor,
-      ].join(" · "),
+      title: targetName ?? action,
+      description: targetName ? `${action} · ${actor}` : actor,
       ageLabel: formatRelativeTime(entry.createdAt, now),
     };
   });
