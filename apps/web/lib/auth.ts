@@ -371,7 +371,7 @@ export interface CreateWorkspaceFormInput {
 /**
  * Create the workspace.
  *
- * The workspace **is** the Better Auth organization (ADR-0003), so this calls the
+ * The workspace **is** the Better Auth organization, so this calls the
  * organization plugin's create endpoint and nothing else. The creator is added as
  * `owner` by the plugin.
  *

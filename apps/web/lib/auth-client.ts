@@ -12,7 +12,7 @@ export const authClient = createAuthClient({
     credentials: "include",
   },
   /**
-   * The workspace **is** the Better Auth organization (ADR-0003), so the client
+   * The workspace **is** the Better Auth organization, so the client
    * needs the matching plugin to reach `organization.create`. Without it the
    * method does not exist and TypeScript says so, which is how this was caught.
    *
