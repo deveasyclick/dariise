@@ -2,9 +2,11 @@
 
 > Feature management and progressive delivery for modern applications.
 
-Dariise is a developer-focused feature management platform for safely controlling application features without requiring a new deployment.
+Dariise is a developer-focused feature management platform for safely controlling
+application features without requiring a new deployment.
 
-It allows teams to create feature flags, manage them across environments, target specific users, gradually roll out features, and track configuration changes from a central dashboard.
+It lets teams create feature flags, manage them across environments, target specific users,
+gradually roll out features, and track configuration changes from a central dashboard.
 
 ---
 
@@ -13,41 +15,37 @@ It allows teams to create feature flags, manage them across environments, target
 - [Features](#features)
 - [How It Works](#how-it-works)
 - [Architecture](#architecture)
-- [Core Concepts](#core-concepts)
-- [Flag Evaluation](#flag-evaluation)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
-- [SDK](#sdk)
-- [Reliability](#reliability)
-- [Security](#security)
+- [Documentation](#documentation)
 - [Roadmap](#roadmap)
-- [Engineering Goals](#engineering-goals)
 - [License](#license)
 
 ---
 
 ## Features
 
-- Feature flag management
-- Multiple environments
-- Boolean feature flags
-- User-based targeting
-- Percentage-based rollouts
-- Reusable user segments
-- Feature flag evaluation API
-- Audit logs
-- API key management
-- SDK integration
-- Configuration caching with Redis
+- Feature flag management — create, configure, archive and promote flags
+- Multiple environments per project, with archive and restore
+- Environment-scoped flags: a flag key is unique within its environment
+- User-based targeting and per-user individual targets
+- Percentage-based rollouts with deterministic bucketing
+- Reusable, project-scoped user segments
+- Flag promotion between environments
+- Flag configuration history and dependency reads
+- Protected environments with change-request approvals
+- Audit log of every configuration change
+- Workspace and project role-based access control
+- API key management for environment credentials
+- Flag evaluation API
 - PostgreSQL-backed configuration
-- Real-time configuration updates
-- Environment-specific flag configuration
 
 ## How It Works
 
-Feature flags make it possible to separate **deploying code** from **releasing functionality**.
+Feature flags make it possible to separate **deploying code** from **releasing
+functionality**.
 
 Instead of:
 
@@ -67,11 +65,15 @@ Build → Deploy → Gradually release
                     └── 100%
 ```
 
-This makes it easier to release features safely, test changes with smaller groups of users, and quickly disable functionality without deploying new code.
+This makes it easier to release features safely, test changes with smaller groups of users,
+and quickly disable functionality without deploying new code.
 
 ---
 
 ## Architecture
+
+Dariise is a pnpm monorepo: a Next.js dashboard, a Hono API, and a shared contract package
+that both depend on.
 
 ```text
                          ┌──────────────────────┐
@@ -100,183 +102,14 @@ This makes it easier to release features safely, test changes with smaller group
                          └───────────┘ └────────┘
 ```
 
-Customer applications interact with Dariise through an SDK or evaluation API:
+PostgreSQL is the source of truth. Redis is planned as a configuration cache only, is never
+on the critical path, and is not wired up yet — see
+[`docs/architecture.md §8.1`](docs/architecture.md).
 
-```text
-┌─────────────────────┐
-│ Customer Application│
-└──────────┬──────────┘
-           │
-           ▼
-     ┌───────────┐
-     │ Dariise SDK │
-     └─────┬─────┘
-           │
-           ▼
-     ┌───────────┐
-     │  Dariise    │
-     │ Evaluation│
-     │   Engine  │
-     └───────────┘
-```
-
----
-
-## Core Concepts
-
-### Projects
-
-A project represents an application or product managed by a team.
-
-```text
-Dariise
-└── Projects
-    ├── Web App
-    ├── Mobile App
-    └── API
-```
-
-### Environments
-
-Each project can have multiple environments.
-
-```text
-Development
-Staging
-Production
-```
-
-A feature can have different configurations in each environment.
-
-For example:
-
-```text
-checkout-v2
-
-Development    ON
-Staging        ON
-Production     OFF
-```
-
-### Feature Flags
-
-A feature flag controls whether functionality is available to users.
-
-Example:
-
-```text
-checkout-v2
-```
-
-```json
-{
-  "enabled": true
-}
-```
-
-### Targeting
-
-Flags can be enabled for users based on attributes.
-
-Example:
-
-```text
-IF country == "NG"
-THEN enable checkout-v2
-```
-
-Or:
-
-```text
-IF plan == "enterprise"
-THEN enable checkout-v2
-```
-
-### Percentage Rollouts
-
-Features can be gradually released to users.
-
-```text
-checkout-v2
-
-10% → 25% → 50% → 100%
-```
-
-Users are deterministically assigned to rollout buckets so that the same user receives a consistent result.
-
-### Segments
-
-Segments allow reusable groups of users to be defined once and referenced by multiple feature flags.
-
-Example:
-
-```text
-Beta Users
-
-user.beta == true
-```
-
-A feature can then target:
-
-```text
-IF user belongs to "Beta Users"
-THEN enable
-```
-
----
-
-## Flag Evaluation
-
-The evaluation engine determines whether a feature should be enabled for a particular user.
-
-A simplified evaluation flow:
-
-```text
-Request
-  │
-  ▼
-Find flag
-  │
-  ▼
-Validate environment
-  │
-  ▼
-Evaluate targeting rules
-  │
-  ▼
-Evaluate segments
-  │
-  ▼
-Evaluate percentage rollout
-  │
-  ▼
-Return variation
-```
-
-Example:
-
-```python
-result = evaluator.evaluate(
-    flag="checkout-v2",
-    environment="production",
-    user={
-        "id": "user_123",
-        "country": "NG",
-        "plan": "pro",
-    },
-)
-```
-
-Response:
-
-```json
-{
-  "flag": "checkout-v2",
-  "enabled": true,
-  "variation": "on",
-  "reason": "targeting_rule"
-}
-```
+Each API domain follows `controller → service → repository`, with `app.ts` as the single
+composition root; database tables live outside the modules so the schema barrel can reach
+them all. The dashboard is an App Router application that reads and writes through one
+typed client over the shared contracts.
 
 ---
 
@@ -300,7 +133,7 @@ Response:
 ### Data
 
 - PostgreSQL — the source of truth
-- Redis — configuration cache only, never on the critical path
+- Redis — intended as a configuration cache only, never on the critical path
 
 ### Testing
 
@@ -320,85 +153,51 @@ Response:
 dariise/
 │
 ├── apps/
-│   ├── web/
+│   ├── web/                      # Next.js dashboard
 │   │   ├── app/
-│   │   │   ├── (auth)/         # sign in, sign up, reset, create workspace
-│   │   │   ├── (getting-started)/ # create project (last onboarding step)
-│   │   │   ├── (app)/          # dashboard: overview, flags, segments, environments,
-│   │   │   │                   # analytics, audit log
+│   │   │   ├── (auth)/           # sign in, sign up, reset, create workspace
+│   │   │   ├── (getting-started)/# create project (last onboarding step)
+│   │   │   ├── (app)/            # overview, projects, flags, segments,
+│   │   │   │                     # environments, api keys, sdks, analytics,
+│   │   │   │                     # audit log, settings, profile
 │   │   │   ├── layout.tsx
 │   │   │   ├── not-found.tsx
-│   │   │   └── globals.css     # design tokens
+│   │   │   └── globals.css       # design tokens
 │   │   ├── components/
-│   │   │   ├── app/            # sidebar, topbar, dashboard cards, flags table
-│   │   │   │   ├── flags/      # flag headers, tabs, create form, tab panels
-│   │   │   │   ├── projects/   # project headers, tabs, cards, actions menu
-│   │   │   │   ├── segments/   # segment headers, tabs, list, create form
-│   │   │   │   ├── environments/ # environment headers, cards, tabs, keys, coverage
-│   │   │   │   ├── api-keys/   # key table, badges, create form, note cards
-│   │   │   │   ├── analytics/  # metric cards, evaluation chart, latency, top flags
-│   │   │   │   ├── audit-log/  # timeline, change details, filter view
-│   │   │   │   ├── sdks/       # SDK picker, connection panel, resources card
-│   │   │   │   ├── settings/   # settings cards, section nav, profile, billing
-│   │   │   │   └── profile/    # personal profile, password, preferences cards
-│   │   │   ├── auth/           # auth shell, step path, shared fields, forms
-│   │   │   ├── ui/             # shadcn/ui primitives
-│   │   │   ├── account-menu.tsx # avatar dropdown in the topbar
-│   │   │   ├── copy-button.tsx # shared copy-to-clipboard button
-│   │   │   ├── health-badge.tsx # health pill shared by environments and projects
-│   │   │   ├── settings-card.tsx # card shared by settings and profile
-│   │   │   ├── theme-choice.tsx # shared Light/Dark/System control
+│   │   │   ├── app/              # sidebar, topbar, switchers, tables, cards
+│   │   │   │                     # + flags/, projects/, segments/,
+│   │   │   │                     #   environments/, api-keys/, analytics/,
+│   │   │   │                     #   audit-log/, sdks/, settings/, profile/
+│   │   │   ├── auth/             # auth shell, step path, shared fields, forms
+│   │   │   ├── ui/               # shadcn/ui primitives
 │   │   │   └── logo.tsx
-│   │   ├── lib/
-│   │   │   ├── analytics-data.ts # temporary analytics fixtures
-│   │   │   ├── api-key-data.ts # temporary API key fixtures, scopes and masking
-│   │   │   ├── api-key-stub.ts # temporary key issue stand-in + session store
-│   │   │   ├── api.ts          # typed Dariise API client
-│   │   │   ├── audit-log-data.ts # temporary audit events with derived labels
-│   │   │   ├── auth-stub.ts    # temporary stand-in until apps/api exists
-│   │   │   ├── billing-data.ts # temporary plan, usage and invoice fixtures
-│   │   │   ├── dashboard-data.ts   # temporary dashboard fixtures
-│   │   │   ├── environment-data.ts # temporary environment + flag coverage fixtures
-│   │   │   ├── environment-stub.ts # temporary environment create/settings stand-in
-│   │   │   ├── flag-detail-data.ts # temporary per-flag detail records
-│   │   │   ├── flag-stub.ts    # temporary flag create/publish stand-in
-│   │   │   ├── env.ts          # runtime configuration
-│   │   │   ├── format.ts       # relative time, date and number formatters
-│   │   │   ├── onboarding-data.ts # temporary data-region options for onboarding
-│   │   │   ├── profile-data.ts # temporary personal profile fixtures
-│   │   │   ├── profile-stub.ts # temporary profile/password/preference stand-in
-│   │   │   ├── project-data.ts # temporary projects, environments and flags
-│   │   │   ├── project-stub.ts # temporary project create stand-in
-│   │   │   ├── sdk-data.ts     # temporary SDK snippets and evaluation scopes
-│   │   │   ├── segment-data.ts # temporary segments + sample-audience evaluator
-│   │   │   ├── segment-stub.ts # temporary segment create/archive stand-in
-│   │   │   ├── settings-data.ts # temporary workspace, security and integration fixtures
-│   │   │   ├── types.ts        # domain types shared with the API
-│   │   │   ├── validation.ts   # dependency-free form validators
-│   │   │   └── workspace-stub.ts # temporary workspace write stand-in
+│   │   ├── lib/                  # api client, auth actions, scope, formatters,
+│   │   │                         # and the three fixture modules
+│   │   ├── shared/env.ts         # the app's only process.env reader
+│   │   ├── proxy.ts              # request gate for signed-in routes
+│   │   ├── next.config.ts        # loads .env before NEXT_PUBLIC_* is inlined
 │   │   └── public/
 │   │
-│   └── api/
+│   └── api/                      # Hono API
 │       ├── src/
-│       │   ├── modules/       # workspace, projects, project-members,
-│       │   │                  # environments, flags, segments, api-keys,
-│       │   │                  # audit-log, analytics, evaluation
-│       │   │   └── <module>/  # routes, validator, service, repository,
-│       │   │                  # mapper, errors, index
-│       │   ├── shared/        # config, db, cache, errors, logger, middleware
-│       │   ├── auth.ts        # Better Auth instance
-│       │   ├── app.ts         # Hono app composition
-│       │   └── server.ts      # process entry point
-│       │
-│       ├── drizzle/           # generated SQL migrations
-│       └── tests/
+│       │   ├── app.ts            # composition root, middleware, error boundary
+│       │   ├── server.ts         # process entry point and graceful shutdown
+│       │   ├── config/           # zod-validated environment
+│       │   ├── db/               # client, audit helper, schema/ (one file per table)
+│       │   ├── integrations/     # third-party adapters (brevo)
+│       │   ├── middleware/       # session resolution and workspace gates
+│       │   ├── modules/          # account, api-keys, audit-log, auth,
+│       │   │                     # change-requests, email, environments,
+│       │   │                     # evaluation, flags, project-access,
+│       │   │                     # project-members, projects, segments, workspace
+│       │   ├── shared/           # constants, http/errors, pagination, types
+│       │   └── test/             # harness + suites (modules/, shared/)
+│       └── drizzle.config.ts     # points at src/db/schema/index.ts
 │
 ├── packages/
-│   └── contracts/             # zod schemas + inferred types shared with apps/web
+│   └── contracts/                # zod schemas + inferred types shared with apps/web
 │
-├── docs/
-│   ├── backend-proposal.md
-│   └── adr/
+├── docs/                         # architecture and reference documentation
 │
 ├── docker-compose.yml
 ├── package.json
@@ -414,11 +213,12 @@ dariise/
 
 Make sure you have:
 
-- Node.js 24+
-- pnpm 10+
-- PostgreSQL 17+
-- Redis 8+
+- Node.js 20.9+ (the root `engines` requirement)
+- pnpm 12 (pinned by `packageManager`)
 - Docker
+
+PostgreSQL 17 and Redis 8 are provided by Docker Compose, so they do not need to be
+installed locally.
 
 ### Clone the repository
 
@@ -434,14 +234,19 @@ cd dariise
 docker compose up -d postgres redis
 ```
 
-### Backend
+PostgreSQL is published on host port **5442** and Redis on **6389**, not their defaults —
+this avoids colliding with an unrelated stack already using 5432/6379.
 
-`apps/api` is part of the same pnpm workspace, so its dependencies are installed
-from the repository root:
+### Install dependencies
+
+`apps/web`, `apps/api` and `packages/contracts` are workspaces of one pnpm project, so
+dependencies are installed once from the repository root:
 
 ```bash
 pnpm install
 ```
+
+### Backend
 
 Create your environment file:
 
@@ -449,43 +254,30 @@ Create your environment file:
 cp apps/api/.env.example apps/api/.env
 ```
 
-Run migrations:
+Fill in `BETTER_AUTH_SECRET` (at least 32 characters — `openssl rand -base64 32`) plus the
+Brevo values, then apply the schema and start the API:
 
 ```bash
-pnpm --filter api db:migrate
-```
-
-Start the API:
-
-```bash
+pnpm --filter api db:push
 pnpm --filter api dev
 ```
 
-The API will be available at:
+`db:push` applies the schema straight to a local database. No generated migrations are
+committed yet, so `db:migrate` currently has nothing to replay — the workflow is described
+in [`docs/development.md`](docs/development.md).
+
+The API is then available at:
 
 ```text
 http://localhost:4000
 ```
 
-The OpenAPI document is served at:
-
-```text
-http://localhost:4000/v1/openapi.json
-```
-
 ### Frontend
-
-The web dashboard lives in `apps/web` and is part of a pnpm workspace, so
-dependencies are installed once from the repository root:
-
-```bash
-pnpm install
-```
 
 Create your environment file:
 
 ```bash
-cp apps/web/.env.example apps/web/.env.local
+cp apps/web/.env.example apps/web/.env
 ```
 
 Start the dev server:
@@ -494,205 +286,153 @@ Start the dev server:
 pnpm dev
 ```
 
-The dashboard will be available at:
+The dashboard is available at:
 
 ```text
 http://localhost:3000
 ```
 
-Other workspace commands:
+### Workspace commands
 
-```bash
-pnpm dev          # run the dashboard and the API together
-pnpm dev:web      # dashboard only
-pnpm dev:api      # API only
-pnpm build        # production build of apps/web
-pnpm lint         # ESLint (apps/web)
-pnpm typecheck    # tsc --noEmit across contracts, api and web
-pnpm test         # API tests
-pnpm db:generate  # generate a Drizzle migration
-pnpm db:migrate   # apply migrations
-```
+Run from the repository root. Most commands fan out across the workspaces; the
+`--filter` escape hatch scopes one.
+
+| Command           | What it does                                                        |
+| ----------------- | ------------------------------------------------------------------- |
+| `pnpm dev`        | Run the dashboard and the API together                              |
+| `pnpm dev:web`    | Dashboard only                                                      |
+| `pnpm dev:api`    | API only                                                            |
+| `pnpm build`      | Production build of both apps                                       |
+| `pnpm start`      | Serve the built dashboard (`apps/web` only)                         |
+| `pnpm lint`       | Biome (API) and ESLint (dashboard)                                  |
+| `pnpm typecheck`  | `tsc --noEmit` across contracts, API and dashboard                  |
+| `pnpm test`       | API tests (`apps/web` has no test suite)                            |
+| `pnpm check`      | `typecheck` + `lint` + `test` — the gate a change must pass         |
+| `pnpm db:generate`| Generate a Drizzle migration from the schema barrel                 |
+| `pnpm db:push`    | Push the schema straight to a database (local use only)             |
+| `pnpm db:migrate` | Apply committed migrations — none are committed yet, so this fails today |
+
+Any of these can be scoped to one workspace with `pnpm --filter <web\|api> <script>`.
 
 ---
 
 ## Environment Variables
 
-Backend (`apps/api/.env`):
+Each app keeps its environment file beside it. The files are not committed;
+`apps/api/.env.example` and `apps/web/.env.example` are the templates to copy. Configuration
+is read through the app's config module — `apps/api/src/config/index.ts` or
+`apps/web/shared/env.ts` — never `process.env` directly.
 
-```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5442/dariise
+### `apps/api/.env`
 
-REDIS_URL=redis://localhost:6389
+| Variable             | Required | Default                 | Purpose                                                                |
+| -------------------- | -------- | ----------------------- | ---------------------------------------------------------------------- |
+| `DATABASE_URL`       | Yes      | —                       | PostgreSQL connection string                                           |
+| `BETTER_AUTH_SECRET` | Yes      | —                       | Session signing secret; at least 32 characters                         |
+| `BREVO_API_KEY`      | Yes      | —                       | Transactional email for verification and reset codes                   |
+| `EMAIL_FROM`         | Yes      | —                       | Sender address; must be verified in your Brevo account                  |
+| `BETTER_AUTH_URL`    | No       | `http://localhost:4000` | The origin the browser reaches the API on                              |
+| `CORS_ORIGINS`       | No       | `http://localhost:3000` | Comma-separated browser origins allowed to send credentials             |
+| `PORT`               | No       | `4000`                  | API listen port                                                        |
+| `NODE_ENV`           | No       | `development`           | `development`, `test` or `production`                                  |
+| `DATABASE_POOL_MAX`  | No       | `10`                    | Max connections this process opens; keep instances × this below the server's limit |
+| `REDIS_URL`          | No       | —                       | Configuration cache only; the API starts and serves with Redis unreachable |
+| `EMAIL_SENDER_NAME`  | No       | `Dariise`               | Sender name shown in the recipient's inbox                             |
+| `GITHUB_CLIENT_ID`   | No       | —                       | GitHub sign-in; needs both GitHub values or the provider is disabled  |
+| `GITHUB_CLIENT_SECRET`| No      | —                       | GitHub sign-in                                                         |
+| `GOOGLE_CLIENT_ID`   | No       | —                       | Google sign-in; needs both Google values or the provider is disabled  |
+| `GOOGLE_CLIENT_SECRET`| No      | —                       | Google sign-in                                                         |
 
-BETTER_AUTH_SECRET=your-secret-key
+Required values are validated at startup: a missing one fails immediately rather than on the
+first request that needs it. The registered redirect URIs for social sign-in are
+`http://localhost:4000/api/auth/callback/github` and `.../google`; GitHub needs the
+`user:email` scope.
 
-BETTER_AUTH_URL=http://localhost:4000
+### `apps/web/.env`
 
-CORS_ORIGINS=http://localhost:3000
-```
+| Variable              | Required | Default                 | Purpose                                                                 |
+| --------------------- | -------- | ----------------------- | ----------------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL` | Yes      | `http://localhost:4000` | Base URL of the API as reached from the browser. No trailing slash      |
+| `API_INTERNAL_URL`    | No       | Value of the above      | Server-only; used by Server Components so they skip the public origin    |
 
-Frontend (`apps/web/.env.local`):
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:4000
-
-API_INTERNAL_URL=http://localhost:4000
-```
-
-See `apps/web/.env.example`. Only `NEXT_PUBLIC_` variables are exposed to the
-browser. `API_INTERNAL_URL` is server-only and is used by Server Components, which
-call the API directly rather than through the browser.
-
----
-
-## SDK
-
-The Dariise SDK provides a simple interface for applications to evaluate feature flags.
-
-Example:
-
-```typescript
-const enabled = await dariise.isEnabled(
-  "checkout-v2",
-  {
-    userId: "user_123",
-    country: "NG",
-    plan: "pro"
-  }
-);
-
-if (enabled) {
-  // New checkout
-} else {
-  // Existing checkout
-}
-```
-
-The SDK is designed to eventually support:
-
-- Local configuration caching
-- Offline evaluation
-- Automatic configuration refresh
-- Fallback values
-- Low-latency evaluation
-- Environment isolation
+Only variables prefixed with `NEXT_PUBLIC_` are exposed to the browser.
 
 ---
 
-## Reliability
+## Documentation
 
-Feature flag infrastructure sits in the critical path of application behavior, so the evaluation system should remain reliable even when Dariise is temporarily unavailable.
+The durable reference lives in [`docs/`](docs/README.md).
 
-The SDK is designed around safe defaults:
+| Document | Covers |
+| --- | --- |
+| [`architecture.md`](docs/architecture.md) | The decision record: system shape, tenancy, authorization, evaluation, persistence, the wire contract, future commitments and open gaps |
+| [`domain-model.md`](docs/domain-model.md) | Entities, keys versus ids, lifecycle, tables and audit events |
+| [`authorization.md`](docs/authorization.md) | Roles, the operation matrix and tenant isolation |
+| [`flags.md`](docs/flags.md) | Flag anatomy, targeting, rollout, promotion, versions and dependencies |
+| [`change-requests.md`](docs/change-requests.md) | Protected environments and the approval workflow |
+| [`evaluation.md`](docs/evaluation.md) | Resolution order, reasons, operators, bucketing and `/v1/evaluate` |
+| [`api-conventions.md`](docs/api-conventions.md) | Contracts, routes, errors, pagination and versioning |
+| [`authentication.md`](docs/authentication.md) | Sessions, workspaces, email codes, OAuth and API keys |
+| [`testing.md`](docs/testing.md) | Test suite, database and expectations |
+| [`development.md`](docs/development.md) | Setup, configuration, migrations and operations |
 
-```text
-Application
-     │
-     ▼
-  Dariise SDK
-     │
-     ├── Cached configuration ──► Evaluate locally
-     │
-     └── Dariise unavailable
-                 │
-                 ▼
-           Fallback value
-```
+Every document ends with a `Status` section, so what is implemented, what is partial and what
+is not built is stated next to the subject rather than collected in one place.
 
-This prevents a feature management outage from becoming an application outage.
-
----
-
-## Security
-
-Dariise separates management credentials from application evaluation credentials.
-
-The platform will support:
-
-- Environment-scoped API keys
-- Role-based access control
-- API key rotation
-- Audit logging
-- Secure credential storage
-- Project isolation
-- Environment isolation
-
-Secrets should never be committed to source control.
+The dashboard also keeps its own document at
+[`apps/web/README.md`](apps/web/README.md).
 
 ---
 
 ## Roadmap
 
-### Phase 1 — Core
+Feature flag evaluation sits in the critical path of application behaviour, so the platform
+is built outward from a correct, auditable core. What exists today is recorded per subject
+in the `Status` section of each [document](#documentation); this is what remains.
 
-- [x] Project setup
-- [ ] Authentication — sign in, create account, reset password, create workspace and create project screens are built as one three-step onboarding flow; the API and session handling are not
-- [ ] Projects — the onboarding step and the dashboard's create-project screen both name a project, and the projects list plus each project's Environments, Flags and Members screens are built against fixtures; nothing is saved, renamed, archived or switched
-- [ ] Environments — list, create and detail screens (SDK keys, coverage, settings) are built against fixtures; SDK keys are masked sample values and nothing is wired to the API
-- [ ] Feature flag CRUD — create, detail, targeting, history and dependency screens are built against fixtures; writes are not persisted
-- [ ] Boolean flags — the create flow and configuration screens model Boolean flags; other types are selectable but not yet configurable
-- [ ] Dashboard — the overview screen (stat cards, active rollouts, flag health, recent activity, evaluation latency) and the feature flag, segment and environment screens are built against fixtures; not yet wired to the API
-- [ ] Audit logs — the audit log screen (filters, day-grouped timeline, change details) is built against fixtures; nothing is recorded or persisted yet
-- [ ] API keys — the list and create screens are built against fixtures, with scopes, expiration and a one-time reveal of the issued key; nothing is issued, stored or revoked
-- [ ] Settings — the workspace profile, security, integrations and billing screens are built against fixtures; nothing is saved, connected or charged, and the theme control is not wired to the tokens
-- [ ] Personal profile — the account, password, preference and notification screens plus the avatar menu are built against fixtures; signing out only returns to the access screens because there is no session
+### Feature management
 
-### Phase 2 — Targeting
-
-- [ ] User attributes
-- [ ] Targeting rules
-- [ ] Percentage rollouts
-- [ ] Segments — list, create and detail screens are built against fixtures, with member counts derived by a sample-audience evaluator; not wired to the API
-- [ ] Deterministic user bucketing
-
-### Phase 3 — SDK & Performance
-
-- [ ] JavaScript/TypeScript SDK — the SDKs & Integration screen documents install, initialize and evaluate snippets for eight SDKs against fixtures; no SDK package is published yet
-- [ ] Python SDK
-- [ ] Go SDK
-- [ ] Local caching
-- [ ] Redis caching
-- [ ] Configuration polling
-- [ ] Real-time updates
-- [ ] Fallback behavior
-
-### Phase 4 — Progressive Delivery
-
+- [ ] User attribute definitions
 - [ ] Scheduled rollouts
-- [ ] Rollout history
-- [ ] Feature dependencies
-- [ ] Approval workflows
-- [ ] Automatic rollback
+- [ ] Rollout history and automatic rollback
 - [ ] Change notifications
 
-### Phase 5 — Observability
+### SDKs and delivery
+
+- [ ] JavaScript/TypeScript SDK
+- [ ] Python SDK
+- [ ] Go SDK
+- [ ] Local configuration caching and offline evaluation
+- [ ] Fallback values and safe defaults
+- [ ] Configuration polling
+- [ ] Real-time updates
+
+### Caching and scale
+
+- [ ] Redis configuration cache — see [`architecture.md §8.1`](docs/architecture.md)
+- [ ] Analytics rollups — see [`architecture.md §8.2`](docs/architecture.md)
+
+### Observability
 
 - [ ] Flag evaluation metrics
 - [ ] Evaluation latency
 - [ ] Error tracking
-- [ ] Usage analytics — the analytics screen (evaluation volume, SDK latency, per-environment split, top flags) is built against fixtures; no metrics are collected yet
+- [ ] Usage analytics
 - [ ] OpenTelemetry integration
 
----
+### Platform
 
-## Engineering Goals
+- [ ] SDK authentication for `/v1/evaluate`
+- [ ] OpenAPI export
+- [ ] Rate limiting
+- [ ] Webhooks
+- [ ] Project archive / soft delete
 
-Dariise is being built with a focus on the engineering challenges behind feature management systems rather than simply providing a CRUD dashboard.
+### Dashboard surfaces without an endpoint
 
-Key areas include:
-
-- Low-latency flag evaluation
-- Deterministic percentage rollouts
-- Configuration consistency
-- Caching and invalidation
-- Safe fallback behavior
-- Environment isolation
-- API authentication
-- Configuration versioning
-- Auditability
-- Horizontal scalability
-- Reliable SDK behavior
+- [ ] Workspace integrations, billing and workspace theme
+- [ ] API key rename and rotation
+- [ ] Segment membership
 
 ---
 
