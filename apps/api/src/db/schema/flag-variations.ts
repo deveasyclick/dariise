@@ -9,8 +9,8 @@ import {
 
 import { flag } from "./flags.js";
 
-// Variations belong to the flag, and a flag belongs to one environment, so
-// these are that environment's values.
+// The values the flag can serve, shared by every environment. An environment
+// selects among them with its config's off/default variation keys.
 export const flagVariation = pgTable(
   "flag_variations",
   {

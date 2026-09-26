@@ -4,6 +4,7 @@ export { auditLog } from "./audit-log.js";
 export { environment } from "./environments.js";
 export { flagChangeRequest } from "./flag-change-requests.js";
 export { flagDependency } from "./flag-dependencies.js";
+export { flagEnvironmentConfig } from "./flag-environment-configs.js";
 export { flagIndividualTarget } from "./flag-individual-targets.js";
 export { flagVariation } from "./flag-variations.js";
 export { flagVersion } from "./flag-versions.js";

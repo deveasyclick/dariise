@@ -8,6 +8,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { environment } from "./environments.js";
 import { flag } from "./flags.js";
 import { project } from "./project.js";
 
@@ -22,6 +23,9 @@ export const flagVersion = pgTable(
     flagId: text("flag_id")
       .notNull()
       .references(() => flag.id, { onDelete: "cascade" }),
+    environmentId: text("environment_id")
+      .notNull()
+      .references(() => environment.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
     description: text("description"),
     author: text("author").notNull(),
@@ -31,8 +35,9 @@ export const flagVersion = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("flag_version_flag_version_idx").on(
+    uniqueIndex("flag_version_flag_environment_version_idx").on(
       table.flagId,
+      table.environmentId,
       table.version,
     ),
     index("flag_version_project_id_idx").on(table.projectId),

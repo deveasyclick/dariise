@@ -1,18 +1,20 @@
 import {
+  boolean,
   index,
   integer,
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 import { environment } from "./environments.js";
 import { flag } from "./flags.js";
 
-// Ordered within one flag's environment. Conditions are AND-ed; a referenced segment adds a
-// membership condition to this rule.
-export const targetingRule = pgTable(
-  "targeting_rules",
+// What one flag does in one environment. Every flag has exactly one of these per
+// environment of its project, written when either is created.
+export const flagEnvironmentConfig = pgTable(
+  "flag_environment_configs",
   {
     id: text("id").primaryKey(),
     flagId: text("flag_id")
@@ -21,12 +23,11 @@ export const targetingRule = pgTable(
     environmentId: text("environment_id")
       .notNull()
       .references(() => environment.id, { onDelete: "cascade" }),
-    priority: integer("priority").notNull().default(0),
-    description: text("description"),
-    variationKey: text("variation_key").notNull(),
-    segmentKeys: text("segment_keys").array().notNull().default([]),
-    rolloutPercentage: integer("rollout_percentage"),
-    bucketBy: text("bucket_by"),
+    enabled: boolean("enabled").notNull().default(false),
+    offVariationKey: text("off_variation_key").notNull().default("off"),
+    defaultVariationKey: text("default_variation_key").notNull().default("on"),
+    rolloutPercentage: integer("rollout_percentage").notNull().default(0),
+    bucketBy: text("bucket_by").notNull().default("userId"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -35,9 +36,10 @@ export const targetingRule = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index("targeting_rule_flag_environment_idx").on(
+    uniqueIndex("flag_environment_config_idx").on(
       table.flagId,
       table.environmentId,
     ),
+    index("flag_environment_config_environment_idx").on(table.environmentId),
   ],
 );
