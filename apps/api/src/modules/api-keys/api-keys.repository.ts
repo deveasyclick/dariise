@@ -1,9 +1,10 @@
-import { and, asc, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lt, or } from "drizzle-orm";
 
 import { db } from "../../db/client.js";
-import { apiKey, environment } from "../../db/schema/index.js";
+import { apiKey, environment, project } from "../../db/schema/index.js";
 import type { Transaction } from "../../shared/types/db.js";
 import type {
+  ApiKeyAuthRow,
   ApiKeyListFilter,
   ApiKeyRow,
   EnvironmentRef,
@@ -18,6 +19,7 @@ const keyColumns = {
   kind: apiKey.kind,
   name: apiKey.name,
   prefix: apiKey.prefix,
+  suffix: apiKey.suffix,
   scopes: apiKey.scopes,
   createdAt: apiKey.createdAt,
   lastUsedAt: apiKey.lastUsedAt,
@@ -32,6 +34,17 @@ export class ApiKeysRepository {
     filter: ApiKeyListFilter,
   ): Promise<ApiKeyRow[]> {
     const conditions = [eq(apiKey.projectId, projectId)];
+
+    if (filter.environmentId) {
+      // A key issued without an environment authenticates in every one, so it
+      // belongs to each environment's list as much as its own keys do.
+      const inEnvironment = or(
+        eq(apiKey.environmentId, filter.environmentId),
+        isNull(apiKey.environmentId),
+      );
+
+      if (inEnvironment) conditions.push(inEnvironment);
+    }
 
     if (!filter.includeRevoked) {
       conditions.push(isNull(apiKey.revokedAt));
@@ -48,6 +61,52 @@ export class ApiKeysRepository {
       .where(and(...conditions))
       .orderBy(asc(apiKey.prefix))
       .limit(filter.limit + 1);
+  }
+
+  /**
+   * A key by its non-secret prefix, with the project and environment it is
+   * scoped to. The prefix is unique, so at most one row can match.
+   */
+  async findForAuthByPrefix(prefix: string): Promise<ApiKeyAuthRow | null> {
+    const rows = await db
+      .select({
+        id: apiKey.id,
+        kind: apiKey.kind,
+        scopes: apiKey.scopes,
+        secretHash: apiKey.secretHash,
+        revokedAt: apiKey.revokedAt,
+        expiresAt: apiKey.expiresAt,
+        projectId: apiKey.projectId,
+        projectKey: project.key,
+        organizationId: project.organizationId,
+        environmentId: apiKey.environmentId,
+        environmentKey: environment.key,
+      })
+      .from(apiKey)
+      .innerJoin(project, eq(project.id, apiKey.projectId))
+      .leftJoin(environment, eq(environment.id, apiKey.environmentId))
+      .where(eq(apiKey.prefix, prefix))
+      .limit(1);
+
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Stamps a key as used, at most once per throttle window. An SDK evaluates on
+   * every request, and a write per read would make the read path a write path.
+   */
+  async touchLastUsed(id: string, throttleMs: number): Promise<void> {
+    const cutoff = new Date(Date.now() - throttleMs);
+
+    await db
+      .update(apiKey)
+      .set({ lastUsedAt: new Date() })
+      .where(
+        and(
+          eq(apiKey.id, id),
+          or(isNull(apiKey.lastUsedAt), lt(apiKey.lastUsedAt, cutoff)),
+        ),
+      );
   }
 
   async findById(projectId: string, id: string): Promise<ApiKeyRow | null> {
@@ -93,6 +152,31 @@ export class ApiKeysRepository {
 
   async insert(tx: Transaction, record: NewApiKeyRecord): Promise<void> {
     await tx.insert(apiKey).values(record);
+  }
+
+  /** An identity edit: the secret, its hash and the prefix are not touched. */
+  async updateName(
+    tx: Transaction,
+    id: string,
+    name: string,
+  ): Promise<void> {
+    await tx.update(apiKey).set({ name }).where(eq(apiKey.id, id));
+  }
+
+  /**
+   * Replaces the secret behind a key. The prefix stays, so the identifier the
+   * dashboard and the audit log quote keeps pointing at the same row.
+   */
+  async replaceSecret(
+    tx: Transaction,
+    id: string,
+    secretHash: string,
+    suffix: string,
+  ): Promise<void> {
+    await tx
+      .update(apiKey)
+      .set({ secretHash, suffix })
+      .where(eq(apiKey.id, id));
   }
 
   /** Sets `revokedAt` only when it is still null, so repeat calls are no-ops. */

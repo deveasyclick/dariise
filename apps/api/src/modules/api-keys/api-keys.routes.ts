@@ -19,6 +19,8 @@ export function createApiKeysRoutes({
 
   routes.get("/:projectKey/api-keys", (c) => controller.list(c));
   routes.post("/:projectKey/api-keys", (c) => controller.create(c));
+  routes.patch("/:projectKey/api-keys/:keyId", (c) => controller.rename(c));
+  routes.post("/:projectKey/api-keys/:keyId/rotate", (c) => controller.rotate(c));
   routes.delete("/:projectKey/api-keys/:keyId", (c) => controller.revoke(c));
 
   return routes;

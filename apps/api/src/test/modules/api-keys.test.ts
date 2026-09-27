@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import type { ApiKey, CreatedApiKey } from "@dariise/contracts";
+import { MANAGEMENT_API_KEY_SCOPES } from "@dariise/contracts";
 
 import {
   closeTestDatabase,
@@ -114,6 +115,90 @@ describe("api-keys module", () => {
     expect(body.data[0]?.prefix).toBe(created.prefix);
   });
 
+  it("assigns the scopes a kind implies when none are sent", async () => {
+    const underTest = await fixture();
+
+    const management = await issueKey(underTest, {
+      name: "Management",
+      scopes: undefined,
+    });
+    const sdk = await issueKey(underTest, {
+      name: "SDK",
+      kind: "server",
+      environmentKey: "development",
+      scopes: undefined,
+    });
+
+    expect(management.scopes).toEqual([...MANAGEMENT_API_KEY_SCOPES]);
+    expect(sdk.scopes).toEqual(["flags:read"]);
+  });
+
+  it("stores the secret's tail so the list can mask it", async () => {
+    const underTest = await fixture();
+    const created = await issueKey(underTest);
+
+    expect(created.suffix).toBe(created.secret.slice(-4));
+    expect(created.suffix).toHaveLength(4);
+  });
+
+  it("renames a key without touching its secret", async () => {
+    const underTest = await fixture();
+    const created = await issueKey(underTest);
+
+    const response = await app.request(
+      `/v1/projects/${underTest.projectKey}/api-keys/${created.id}`,
+      {
+        method: "PATCH",
+        headers: headers(underTest.session),
+        body: JSON.stringify({ name: "Renamed" }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const renamed = (await response.json()) as ApiKey;
+
+    expect(renamed.name).toBe("Renamed");
+    expect(renamed.prefix).toBe(created.prefix);
+    expect(renamed.suffix).toBe(created.suffix);
+
+    const { db } = await import("../../db/client.js");
+    const { auditLog } = await import("../../db/schema/index.js");
+    const actions = (await db.select().from(auditLog)).map((row) => row.action);
+
+    expect(actions).toContain("api_key.updated");
+  });
+
+  it("rotates a key onto a new secret, and refuses a revoked one", async () => {
+    const underTest = await fixture();
+    const created = await issueKey(underTest);
+
+    const path = `/v1/projects/${underTest.projectKey}/api-keys/${created.id}/rotate`;
+
+    const rotated = await app.request(path, {
+      method: "POST",
+      headers: { cookie: underTest.session.cookie },
+    });
+
+    expect(rotated.status).toBe(200);
+    const body = (await rotated.json()) as CreatedApiKey;
+
+    expect(body.secret).not.toBe(created.secret);
+    expect(body.prefix).toBe(created.prefix);
+    expect(body.suffix).toBe(body.secret.slice(-4));
+
+    const revoked = await app.request(
+      `/v1/projects/${underTest.projectKey}/api-keys/${created.id}`,
+      { method: "DELETE", headers: { cookie: underTest.session.cookie } },
+    );
+    expect(revoked.status).toBe(200);
+
+    const refused = await app.request(path, {
+      method: "POST",
+      headers: { cookie: underTest.session.cookie },
+    });
+    expect(refused.status).toBe(409);
+  });
+
   it("hides revoked keys by default and returns them on request", async () => {
     const underTest = await fixture();
     const created = await issueKey(underTest);
@@ -147,6 +232,51 @@ describe("api-keys module", () => {
       { headers: { cookie: underTest.session.cookie } },
     );
     await expect(explicitFalse.json()).resolves.toMatchObject({ data: [] });
+  });
+
+  it("lists one environment's keys together with the project-wide ones", async () => {
+    const underTest = await fixture();
+
+    await issueKey(underTest, { name: "Development SDK" });
+    await issueKey(underTest, {
+      name: "Production SDK",
+      environmentKey: "production",
+    });
+    // Issued without an environment, so it authenticates in both.
+    await issueKey(underTest, { name: "Everywhere", environmentKey: null });
+
+    const scoped = await app.request(
+      `/v1/projects/${underTest.projectKey}/api-keys?environmentKey=production`,
+      { headers: { cookie: underTest.session.cookie } },
+    );
+
+    expect(scoped.status).toBe(200);
+    const body = (await scoped.json()) as { data: ApiKey[] };
+
+    expect(body.data.map((key) => key.name).sort()).toEqual([
+      "Everywhere",
+      "Production SDK",
+    ]);
+
+    const unfiltered = await app.request(
+      `/v1/projects/${underTest.projectKey}/api-keys`,
+      { headers: { cookie: underTest.session.cookie } },
+    );
+    const all = (await unfiltered.json()) as { data: ApiKey[] };
+
+    expect(all.data).toHaveLength(3);
+  });
+
+  it("answers an unknown environment filter with 404", async () => {
+    const underTest = await fixture();
+    await issueKey(underTest);
+
+    const response = await app.request(
+      `/v1/projects/${underTest.projectKey}/api-keys?environmentKey=nope`,
+      { headers: { cookie: underTest.session.cookie } },
+    );
+
+    expect(response.status).toBe(404);
   });
 
   it("makes revocation idempotent without a second audit row", async () => {

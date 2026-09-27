@@ -9,8 +9,9 @@ import {
 import { environment } from "./environments.js";
 import { project } from "./project.js";
 
-// Only the hash of the secret is stored; `prefix` is the non-secret identifier
-// the dashboard lists. A null `environmentId` means the key works everywhere.
+// Only the hash of the secret is stored; `prefix` and `suffix` are the two
+// non-secret ends the dashboard lists as `ff_a1b2*****3d4e`. A null
+// `environmentId` means the key works everywhere.
 export const apiKey = pgTable(
   "api_keys",
   {
@@ -24,6 +25,7 @@ export const apiKey = pgTable(
     kind: text("kind").notNull().default("management"),
     name: text("name").notNull(),
     prefix: text("prefix").notNull(),
+    suffix: text("suffix").notNull(),
     secretHash: text("secret_hash").notNull(),
     scopes: text("scopes").array().notNull().default([]),
     expiresAt: timestamp("expires_at", { withTimezone: true }),

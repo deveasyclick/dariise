@@ -17,6 +17,7 @@ export function toApiKey(row: ApiKeyRow): ApiKey {
     name: row.name,
     scopes: row.scopes as ApiKeyScope[],
     prefix: row.prefix,
+    suffix: row.suffix,
     createdAt: row.createdAt.toISOString(),
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     expiresAt: row.expiresAt?.toISOString() ?? null,
@@ -24,7 +25,7 @@ export function toApiKey(row: ApiKeyRow): ApiKey {
   };
 }
 
-/** The only shape that ever carries the secret, and only in the create reply. */
+/** The only shape that ever carries the secret: create and rotate replies. */
 export function toCreatedApiKey(row: ApiKeyRow, secret: string): CreatedApiKey {
   return { ...toApiKey(row), secret };
 }

@@ -1,4 +1,8 @@
-import { apiKeyListQuerySchema, createApiKeySchema } from "@dariise/contracts";
+import {
+  apiKeyListQuerySchema,
+  createApiKeySchema,
+  updateApiKeySchema,
+} from "@dariise/contracts";
 import type { Context } from "hono";
 
 import { requireWorkspace } from "../../middleware/authorization.js";
@@ -38,6 +42,37 @@ export class ApiKeysController {
     );
 
     return c.json(created, 201);
+  }
+
+  async rename(c: Context<SessionEnv>): Promise<Response> {
+    const actor = await this.actor(c);
+    const parsed = updateApiKeySchema.safeParse(await this.body(c));
+
+    if (!parsed.success) {
+      throw ApiError.badRequest(this.firstIssue(parsed.error.issues));
+    }
+
+    return c.json(
+      await this.service.rename(
+        actor,
+        this.param(c, "projectKey"),
+        this.param(c, "keyId"),
+        parsed.data,
+      ),
+    );
+  }
+
+  /** The reply carries the new secret; it is the only one that ever does again. */
+  async rotate(c: Context<SessionEnv>): Promise<Response> {
+    const actor = await this.actor(c);
+
+    return c.json(
+      await this.service.rotate(
+        actor,
+        this.param(c, "projectKey"),
+        this.param(c, "keyId"),
+      ),
+    );
   }
 
   async revoke(c: Context<SessionEnv>): Promise<Response> {
