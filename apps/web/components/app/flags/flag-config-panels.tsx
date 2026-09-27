@@ -1,7 +1,5 @@
-import { AlertTriangleIcon } from "lucide-react";
 import type { FlagDetail } from "@dariise/contracts";
 import { SdkPreview, sdkSnippet } from "@/components/app/flags/sdk-preview";
-import { Button } from "@/components/ui/button";
 import { formatRelativeTime } from "@/lib/format";
 
 /**
@@ -63,30 +61,7 @@ export function FlagFallback({
   );
 }
 
-export function FlagArchiveAction() {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <p className="text-[12px] font-medium">Archive flag</p>
-        <p className="text-muted-foreground mt-0.5 text-[11px]">
-          Archiving removes the flag from all SDKs immediately.
-        </p>
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled
-        title="Archive — coming soon"
-        className="border-danger-ink/40 text-danger-ink gap-1.5 text-[11px]"
-      >
-        <AlertTriangleIcon aria-hidden="true" className="size-3.5" />
-        Archive Flag
-      </Button>
-    </div>
-  );
-}
-
-/** Static danger-zone shell; the action comes from `FlagArchiveAction`. */
+/** Static danger-zone shell; the action arrives as a child. */
 export function DangerZoneCard({ children }: { readonly children: React.ReactNode }) {
   return (
     <section className="border-danger-ink/30 bg-danger-ink/5 rounded-lg border p-4">

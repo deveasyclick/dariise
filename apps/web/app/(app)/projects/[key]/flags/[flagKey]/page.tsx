@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
+import { ArchiveFlagAction } from "@/components/app/flags/archive-flag-dialog";
 import { FlagApprovalPanel } from "@/components/app/flags/flag-approval";
 import { FlagConfiguration } from "@/components/app/flags/flag-configuration";
 import {
   DangerZoneCard,
-  FlagArchiveAction,
   FlagFallback,
   FlagMetadata,
 } from "@/components/app/flags/flag-config-panels";
@@ -83,12 +83,10 @@ export default async function FlagDetailPage(props: FlagPageProps) {
 
   const header = (
     <FlagDetailHeader
-      flagKey={flag.key}
-      name={flag.name}
-      description={flag.description ?? ""}
+      flag={flag}
+      projectKey={projectKey}
       environmentKey={environmentKey}
       environmentLabel={environmentName}
-      status={flag.status}
       enabled={config.enabled}
     />
   );
@@ -217,7 +215,7 @@ export default async function FlagDetailPage(props: FlagPageProps) {
         }
         dangerZone={
           <DangerZoneCard>
-            <FlagArchiveAction />
+            <ArchiveFlagAction projectKey={projectKey} flag={flag} />
           </DangerZoneCard>
         }
         protectedEnvironment={protectedEnvironment}

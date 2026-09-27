@@ -112,7 +112,7 @@ app/layout.tsx          # Root layout: fonts, metadata, globals.css
 app/globals.css         # Design tokens (see below)
 components/app/         # Sidebar, project switcher, topbar, nav config, dashboard cards, table
 components/app/projects/ # Project headers, tabs, cards, glyph map, create form
-components/app/flags/   # Flag headers, tabs, create form, tab panels
+components/app/flags/   # Flag headers, tabs, dialogs, create form, tab panels
 components/app/segments/# Segment headers, tabs, list, create form, tab panels
 components/app/environments/ # Environment headers, cards, tabs, keys, coverage
 components/app/api-keys/ # Key table, badges, create form and its note cards
@@ -298,18 +298,19 @@ The screens say so rather than inventing a figure:
 - The topbar's search and notifications are still presentational and marked as
   coming soon, as is the theme control — the design tokens ship dark values, but
   nothing switches them yet.
-- Interactive controls without an implementation — `Edit Flag`, `Auto segment`,
-  `Add user`, `Archive Flag`, `Edit` on a segment, `Edit environment`,
-  `Create key`, `Delete environment`, version diffing, `Export`, `Export CSV`,
-  `Revert this change`, `Rename key`, `Rotate key`, `Theme`, `Delete workspace`,
-  `Manage` (SSO), `Add` (email domains), `Configure` (IP allowlist), `Connect`,
-  `Open SDKs & Integration`, `Change plan`, `Update` (payment method), invoice
-  downloads and `Change photo` — are disabled with a title rather than pretending
-  to work. Creating flags, segments, environments, projects and API keys;
-  archiving flags and segments; revoking API keys; editing targeting rules and
-  individual targets; saving environment settings; searching and filtering every
-  list; the audit log's search, filters and row selection; saving the workspace
-  and personal profiles; changing the password; the security, preference and
-  notification controls; switching project and environment; signing out; and tab
-  navigation all work against the API.
+- Interactive controls without an implementation — `Auto segment`, `Add user`,
+  `Edit` on a segment, `Edit environment`, `Create key`, `Delete environment`,
+  version diffing, `Export`, `Export CSV`, `Revert this change`, `Rename key`,
+  `Rotate key`, `Theme`, `Delete workspace`, `Manage` (SSO), `Add` (email
+  domains), `Configure` (IP allowlist), `Connect`, `Open SDKs & Integration`,
+  `Change plan`, `Update` (payment method), invoice downloads and `Change photo`
+  — are disabled with a title rather than pretending to work. Creating flags,
+  segments, environments, projects and API keys; editing a flag's identity and
+  archiving it, from its row or its detail screen; opening a flag's version
+  history from its row; archiving segments; revoking API keys; editing targeting
+  rules and individual targets; saving environment settings; searching and
+  filtering every list; the audit log's search, filters and row selection;
+  saving the workspace and personal profiles; changing the password; the
+  security, preference and notification controls; switching project and
+  environment; signing out; and tab navigation all work against the API.
 

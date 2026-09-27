@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { CheckCheckIcon, ChevronLeftIcon, PencilIcon } from "lucide-react";
+import { CheckCheckIcon, ChevronLeftIcon } from "lucide-react";
 import { cn } from "cn";
-import type { FlagStatus } from "@dariise/contracts";
+import type { FlagDetail } from "@dariise/contracts";
+import { EditFlagButton } from "@/components/app/flags/edit-flag-dialog";
 import { FlagStatusBadge } from "@/components/app/flags/flag-state-pill";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 const eyebrowClass =
   "text-[10px] font-medium tracking-[0.16em] uppercase text-muted-foreground";
@@ -64,25 +64,20 @@ export function CreateFlagHeader({
 }
 
 interface FlagDetailHeaderProps {
-  readonly flagKey: string;
-  readonly name: string;
-  readonly description: string;
+  readonly flag: FlagDetail;
+  readonly projectKey: string;
   readonly environmentKey: string;
   readonly environmentLabel: string;
-  /** The flag's own status, which every environment shares. */
-  readonly status: FlagStatus;
   /** Whether the chosen environment serves the flag. */
   readonly enabled: boolean;
 }
 
 /** Identity and status strip shown above the tabs on the flag detail screen. */
 export function FlagDetailHeader({
-  flagKey,
-  name,
-  description,
+  flag,
+  projectKey,
   environmentKey,
   environmentLabel,
-  status,
   enabled,
 }: FlagDetailHeaderProps) {
   return (
@@ -103,13 +98,13 @@ export function FlagDetailHeader({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h1 className="font-mono text-lg font-semibold tracking-tight">
-              {flagKey}
+              {flag.key}
             </h1>
-            <Badge variant="secondary">{name}</Badge>
-            <FlagStatusBadge status={status} />
+            <Badge variant="secondary">{flag.name}</Badge>
+            <FlagStatusBadge status={flag.status} />
           </div>
           <p className="text-muted-foreground mt-0.5 text-[13px]">
-            {description}
+            {flag.description ?? ""}
           </p>
         </div>
 
@@ -134,15 +129,7 @@ export function FlagDetailHeader({
             />
             {enabled ? "Enabled" : "Disabled"}
           </span>
-          <Button
-            size="sm"
-            disabled
-            title="Edit flag — coming soon"
-            className="gap-1.5 text-[11px]"
-          >
-            <PencilIcon aria-hidden="true" className="size-3.5" />
-            Edit Flag
-          </Button>
+          <EditFlagButton projectKey={projectKey} flag={flag} />
         </div>
       </div>
     </div>

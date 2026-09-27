@@ -10,6 +10,9 @@ import {
 } from "lucide-react";
 import { cn } from "cn";
 import type { FlagSummary } from "@dariise/contracts";
+import { ArchiveFlagDialog } from "@/components/app/flags/archive-flag-dialog";
+import { EditFlagDialog } from "@/components/app/flags/edit-flag-dialog";
+import { flagTabHref } from "@/components/app/flags/flag-tabs";
 import { ProgressBar } from "@/components/app/progress-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -111,6 +114,8 @@ export function FlagsTable({
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [editing, setEditing] = useState<FlagSummary | null>(null);
+  const [archiving, setArchiving] = useState<FlagSummary | null>(null);
   const nowDate = useMemo(() => new Date(now), [now]);
   const scopeLabel = environmentName ?? "all environments";
 
@@ -212,6 +217,9 @@ export function FlagsTable({
               const subtitle = [flag.name, flag.owner, flag.description]
                 .filter((value): value is string => Boolean(value))
                 .join(" · ");
+              const historyHref = environmentKey
+                ? flagTabHref(projectKey, flag.key, environmentKey, "history")
+                : `/projects/${projectKey}/flags/${flag.key}`;
 
               return (
                 <TableRow key={flag.key}>
@@ -263,6 +271,9 @@ export function FlagsTable({
                         variant="ghost"
                         size="icon-sm"
                         aria-label={`Edit ${flag.key}`}
+                        onClick={() => {
+                          setEditing(flag);
+                        }}
                       >
                         <PencilIcon aria-hidden="true" />
                       </Button>
@@ -278,11 +289,25 @@ export function FlagsTable({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44">
                           <DropdownMenuLabel>{flag.key}</DropdownMenuLabel>
-                          <DropdownMenuItem disabled>Edit flag</DropdownMenuItem>
-                          <DropdownMenuItem disabled>
-                            View history
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setEditing(flag);
+                            }}
+                          >
+                            Edit flag
                           </DropdownMenuItem>
-                          <DropdownMenuItem disabled>Archive</DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href={historyHref}>View history</Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            disabled={flag.status === "archived"}
+                            onSelect={() => {
+                              setArchiving(flag);
+                            }}
+                          >
+                            Archive
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -293,6 +318,21 @@ export function FlagsTable({
           )}
         </TableBody>
       </Table>
+
+      <EditFlagDialog
+        projectKey={projectKey}
+        flag={editing}
+        onClose={() => {
+          setEditing(null);
+        }}
+      />
+      <ArchiveFlagDialog
+        projectKey={projectKey}
+        flag={archiving}
+        onClose={() => {
+          setArchiving(null);
+        }}
+      />
     </section>
   );
 }
