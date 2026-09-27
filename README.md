@@ -10,8 +10,42 @@ gradually roll out features, and track configuration changes from a central dash
 
 ---
 
+## How It Fits Together
+
+A project owns its environments, flags and segments. A flag belongs to the project and
+carries the variations that every environment selects among. What the flag does in one
+environment — whether it is enabled, its off and default variation, its rollout — is its
+configuration, one row per flag and environment, and the targeting rules and individual
+targets hang off that. Targeting reaches the project's segments by key.
+
+```text
+                            PROJECT
+                               │
+         ┌─────────────────────┼───────────────────────────┐
+         │                     │                           │
+   ENVIRONMENTS              FLAGS                     SEGMENTS
+                               │                           │
+                   ┌───────────┴─────────────┐    Segment Conditions
+                   ▼                         ▼
+              Variations            FLAG CONFIGURATION
+     (shared by every environment) (one per environment)
+                                             │
+                                     ┌───────┴───────┐
+                                     ▼               ▼
+                                 Targeting        Targets
+                                     │
+                                     └──────── references ───────► SEGMENTS
+```
+
+The full tree, all of its tables and the per-entity lifecycle are in
+[`docs/domain-model.md`](docs/domain-model.md); a flag's anatomy is
+[`docs/flags.md`](docs/flags.md).
+
+---
+
 ## Overview
 
+- [How It Fits Together](#how-it-fits-together)
 - [Features](#features)
 - [How It Works](#how-it-works)
 - [Architecture](#architecture)
@@ -378,8 +412,9 @@ The durable reference lives in [`docs/`](docs/README.md).
 Every document ends with a `Status` section, so what is implemented, what is partial and what
 is not built is stated next to the subject rather than collected in one place.
 
-The dashboard also keeps its own document at
-[`apps/web/README.md`](apps/web/README.md).
+Each app also keeps its own document: [`apps/api/README.md`](apps/api/README.md) for
+the API's modules, layering and test suite, and [`apps/web/README.md`](apps/web/README.md)
+for the dashboard's routes, components and design tokens.
 
 ---
 
