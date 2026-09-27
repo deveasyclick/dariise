@@ -8,11 +8,12 @@ export const environmentKeySchema = resourceKeySchema;
 
 /**
  * The environments every new project starts with, in creation order. The first
- * is the project's default; every entry is created unprotected.
+ * is the project's default; every entry is created unprotected, in its own
+ * colour from the dashboard's palette.
  */
 export const STARTER_ENVIRONMENTS = [
-  { key: "development", name: "Development" },
-  { key: "production", name: "Production" },
+  { key: "development", name: "Development", color: "cyan" },
+  { key: "production", name: "Production", color: "purple" },
 ] as const;
 
 export const environmentSummarySchema = z.object({

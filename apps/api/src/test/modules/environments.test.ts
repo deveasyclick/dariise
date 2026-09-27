@@ -128,12 +128,14 @@ describe("environments module", () => {
       {
         key: "development",
         name: "Development",
+        color: "cyan",
         isDefault: true,
         isProtected: false,
       },
       {
         key: "production",
         name: "Production",
+        color: "purple",
         isDefault: false,
         isProtected: false,
       },

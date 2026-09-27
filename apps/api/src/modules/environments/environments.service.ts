@@ -347,8 +347,6 @@ export class EnvironmentsService {
     return this.loadDetail(project.id, environmentKey, origin);
   }
 
-  /**
-   */
   async createStarterEnvironments(
     tx: Transaction,
     projectId: string,
@@ -359,7 +357,7 @@ export class EnvironmentsService {
         projectId,
         key: starter.key,
         name: starter.name,
-        color: null,
+        color: starter.color,
         isDefault: index === 0,
         isProtected: false,
       });

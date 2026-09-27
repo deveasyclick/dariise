@@ -9,6 +9,8 @@ import {
   PanelsTopLeftIcon,
 } from "lucide-react";
 import { STARTER_ENVIRONMENTS } from "@dariise/contracts";
+import { cn } from "cn";
+import { environmentColorSwatch } from "@/components/app/environments/environment-colors";
 import { AuthCard } from "@/components/auth/auth-card";
 import { OnboardingSteps } from "@/components/auth/onboarding-steps";
 import { Field, FieldError } from "@/components/auth/field";
@@ -136,18 +138,21 @@ function ProjectSummaryCard({ projectName }: ProjectSummaryCardProps) {
         <span className="truncate text-[13px] font-medium">{projectName}</span>
       </div>
 
-      {starterEnvironmentNames.map((environmentName, index) => (
-        <div key={environmentName} className="mt-2 flex items-center gap-2.5">
+      {STARTER_ENVIRONMENTS.map((environment, index) => (
+        <div key={environment.key} className="mt-2 flex items-center gap-2.5">
           <CornerDownRightIcon
             aria-hidden="true"
             className="text-muted-foreground size-3.5 shrink-0"
           />
           <span
             aria-hidden="true"
-            className="bg-success size-1.5 shrink-0 rounded-full"
+            className={cn(
+              "size-1.5 shrink-0 rounded-full",
+              environmentColorSwatch[environment.color],
+            )}
           />
           <span className="truncate text-[13px] font-medium">
-            {environmentName}
+            {environment.name}
           </span>
           <span className="text-muted-foreground shrink-0 text-[11px]">
             {index === 0 ? "default" : "environment"}
