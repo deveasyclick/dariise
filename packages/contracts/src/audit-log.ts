@@ -26,6 +26,7 @@ export const AUDIT_ACTIONS = [
   "segment.updated",
   "segment.archived",
   "api_key.created",
+  "api_key.updated",
   "api_key.rotated",
   "api_key.revoked",
   "project_member.added",
