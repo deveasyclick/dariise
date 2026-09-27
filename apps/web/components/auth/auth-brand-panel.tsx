@@ -36,7 +36,7 @@ interface AuthBrandPanelProps {
    * Which copy the panel shows. The last onboarding step welcomes the user to
    * the product instead of pitching it; every other screen keeps the pitch.
    */
-  variant?: AuthPanelVariant;
+  readonly variant?: AuthPanelVariant;
 }
 
 /**

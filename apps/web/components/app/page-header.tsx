@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 import { cn } from "cn";
 
 interface PageHeaderProps {
-  title: string;
-  description?: string;
-  children?: ReactNode;
-  className?: string;
+  readonly title: string;
+  readonly description?: string;
+  readonly children?: ReactNode;
+  readonly className?: string;
 }
 
 /** Standard page title block used by every dashboard screen. */
@@ -36,11 +36,11 @@ export function PageHeader({
 }
 
 interface SectionCardProps {
-  title: string;
-  action?: ReactNode;
-  className?: string;
-  bodyClassName?: string;
-  children: ReactNode;
+  readonly title: string;
+  readonly action?: ReactNode;
+  readonly className?: string;
+  readonly bodyClassName?: string;
+  readonly children: ReactNode;
 }
 
 /** Link style shared by the "View all" / "Details" actions on section cards. */

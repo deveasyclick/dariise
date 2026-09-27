@@ -29,7 +29,7 @@ export interface RecentActivity {
 export function ActiveRolloutsCard({
   rollouts,
 }: {
-  rollouts: ActiveRollout[];
+  readonly rollouts: ActiveRollout[];
 }) {
   return (
     <SectionCard
@@ -76,7 +76,7 @@ export function ActiveRolloutsCard({
   );
 }
 
-export function FlagHealthCard({ health }: { health: FlagHealth[] }) {
+export function FlagHealthCard({ health }: { readonly health: FlagHealth[] }) {
   return (
     <SectionCard
       title="Flag Health"
@@ -124,7 +124,7 @@ export function FlagHealthCard({ health }: { health: FlagHealth[] }) {
 export function RecentActivityCard({
   activity,
 }: {
-  activity: RecentActivity[];
+  readonly activity: RecentActivity[];
 }) {
   return (
     <SectionCard

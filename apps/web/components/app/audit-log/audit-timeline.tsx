@@ -6,9 +6,9 @@ import type {
 } from "@/components/app/audit-log/audit-log-types";
 
 interface AuditTimelineProps {
-  groups: AuditEventGroup[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  readonly groups: AuditEventGroup[];
+  readonly selectedId: string | null;
+  readonly onSelect: (id: string) => void;
 }
 
 function AuditRow({
@@ -16,9 +16,9 @@ function AuditRow({
   selected,
   onSelect,
 }: {
-  event: AuditEventView;
-  selected: boolean;
-  onSelect: (id: string) => void;
+  readonly event: AuditEventView;
+  readonly selected: boolean;
+  readonly onSelect: (id: string) => void;
 }) {
   const meta = auditActionMeta[event.action];
   const Icon = meta.icon;

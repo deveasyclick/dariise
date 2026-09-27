@@ -23,8 +23,8 @@ function PreviewRow({
   user,
   conditions,
 }: {
-  user: SampleUser;
-  conditions: TargetingCondition[];
+  readonly user: SampleUser;
+  readonly conditions: TargetingCondition[];
 }) {
   return (
     <li className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
@@ -51,7 +51,7 @@ function PreviewRow({
 export function SegmentLivePreview({
   conditions,
 }: {
-  conditions: TargetingCondition[];
+  readonly conditions: TargetingCondition[];
 }) {
   const members = matchingSampleUsers(conditions, PREVIEW_LIMIT);
   const matched = countMatchingSampleUsers(conditions);

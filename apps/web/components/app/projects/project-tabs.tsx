@@ -17,7 +17,7 @@ const tabs = [
  * addressable route that can be opened directly or bookmarked. Environments is
  * the bare route, matching the design's default tab.
  */
-export function ProjectTabs({ projectKey }: { projectKey: string }) {
+export function ProjectTabs({ projectKey }: { readonly projectKey: string }) {
   const pathname = usePathname();
   const base = `/projects/${projectKey}`;
 

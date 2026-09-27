@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { SettingsCard } from "@/components/app/settings-card";
 import { Badge } from "@/components/ui/badge";
 
-function Unavailable({ reason }: { reason: string }) {
+function Unavailable({ reason }: { readonly reason: string }) {
   return (
     <span className="text-muted-foreground" title={reason}>
       Not available
@@ -14,8 +14,8 @@ export function ProfileAccountCard({
   role,
   workspaceName,
 }: {
-  role: string | null;
-  workspaceName: string | null;
+  readonly role: string | null;
+  readonly workspaceName: string | null;
 }) {
   const rows: Array<{ label: string; value: ReactNode }> = [
     {

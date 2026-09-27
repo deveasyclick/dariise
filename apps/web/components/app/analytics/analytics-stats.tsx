@@ -41,7 +41,7 @@ function formatValue(stat: AnalyticsStat): string {
   }
 }
 
-function StatMeta({ stat }: { stat: AnalyticsStat }) {
+function StatMeta({ stat }: { readonly stat: AnalyticsStat }) {
   const { meta } = stat;
 
   if (meta.kind === "note") {
@@ -84,7 +84,7 @@ function StatMeta({ stat }: { stat: AnalyticsStat }) {
  * row above the value, and the caption underneath, so the two cards share a
  * palette but not a layout.
  */
-export function AnalyticsStatCard({ stat }: { stat: AnalyticsStat }) {
+export function AnalyticsStatCard({ stat }: { readonly stat: AnalyticsStat }) {
   const presentation = statPresentation[stat.id];
   const Icon = presentation.icon;
 

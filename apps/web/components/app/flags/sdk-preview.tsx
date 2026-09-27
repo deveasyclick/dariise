@@ -3,11 +3,11 @@ import { cn } from "cn";
 
 interface SdkPreviewProps {
   /** Code lines, rendered one per row so indentation is preserved. */
-  lines: string[];
+  readonly lines: string[];
   /** Optional label for the code block header, e.g. a language. */
-  language?: string;
-  title?: string;
-  className?: string;
+  readonly language?: string;
+  readonly title?: string;
+  readonly className?: string;
 }
 
 /**

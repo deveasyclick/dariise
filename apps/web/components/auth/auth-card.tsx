@@ -2,14 +2,14 @@ import type { ReactNode } from "react";
 import { cn } from "cn";
 
 interface AuthCardProps {
-  title: string;
-  description?: ReactNode;
+  readonly title: string;
+  readonly description?: ReactNode;
   /** Rendered above the card, e.g. a "Back to sign in" link. */
-  backLink?: ReactNode;
+  readonly backLink?: ReactNode;
   /** Rendered at the top of the card, e.g. the onboarding step path. */
-  steps?: ReactNode;
-  className?: string;
-  children: ReactNode;
+  readonly steps?: ReactNode;
+  readonly className?: string;
+  readonly children: ReactNode;
 }
 
 /**

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import type { ChromeUser } from "@/lib/scope";
 
 interface TopbarProps {
-  user: ChromeUser;
+  readonly user: ChromeUser;
 }
 
 /**

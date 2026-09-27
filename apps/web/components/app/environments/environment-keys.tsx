@@ -33,9 +33,9 @@ export function MaskedKeyChip({
   label,
   className,
 }: {
-  value: string | null;
-  label: string;
-  className?: string;
+  readonly value: string | null;
+  readonly label: string;
+  readonly className?: string;
 }) {
   return (
     <div
@@ -63,10 +63,10 @@ export function SdkKeysCard({
   maskedKey,
   truncated,
 }: {
-  keys: ApiKey[];
+  readonly keys: ApiKey[];
   /** `connection.maskedKey` — shown when no key row targets this environment. */
-  maskedKey: string | null;
-  truncated: boolean;
+  readonly maskedKey: string | null;
+  readonly truncated: boolean;
 }) {
   return (
     <section className="bg-card rounded-lg border">
@@ -137,7 +137,7 @@ interface EndpointRow {
 export function EndpointsCard({
   connection,
 }: {
-  connection: EnvironmentConnection;
+  readonly connection: EnvironmentConnection;
 }) {
   const endpoints: EndpointRow[] = [
     {

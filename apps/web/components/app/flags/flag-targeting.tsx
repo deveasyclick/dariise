@@ -77,17 +77,17 @@ export function FlagTargeting({
   approval,
   protectedEnvironment,
 }: {
-  projectKey: string;
-  flagKey: string;
-  flag: FlagDetail;
+  readonly projectKey: string;
+  readonly flagKey: string;
+  readonly flag: FlagDetail;
   /** The flag's configuration in the environment this screen is scoped to. */
-  config: FlagEnvironmentConfig;
-  rules: TargetingRule[];
-  targets: FlagIndividualTarget[];
-  updatedLabel: string;
+  readonly config: FlagEnvironmentConfig;
+  readonly rules: TargetingRule[];
+  readonly targets: FlagIndividualTarget[];
+  readonly updatedLabel: string;
   /** Approval state for this flag in this environment. */
-  approval: React.ReactNode;
-  protectedEnvironment: boolean;
+  readonly approval: React.ReactNode;
+  readonly protectedEnvironment: boolean;
 }) {
   const [rules, setRules] = useState(initialRules);
   const [targets, setTargets] = useState(initialTargets);

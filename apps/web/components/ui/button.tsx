@@ -48,7 +48,7 @@ function Button({
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
+    readonly asChild?: boolean
   }) {
   const Comp = asChild ? Slot.Root : "button"
 

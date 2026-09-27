@@ -15,7 +15,7 @@ import { resolveEnvironmentColor } from "@/lib/environment-color";
  * A Server Component: the only interactive piece is the actions menu, which is
  * imported as a Client Component.
  */
-export function ProjectHeader({ project }: { project: Project }) {
+export function ProjectHeader({ project }: { readonly project: Project }) {
   const Glyph = projectGlyphs[resolveEnvironmentColor(project.color)];
 
   return (

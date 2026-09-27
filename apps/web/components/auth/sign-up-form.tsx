@@ -38,9 +38,9 @@ interface SignUpErrors {
 }
 
 interface SignUpFormProps {
-  enabledProviders: OAuthProvider[];
+  readonly enabledProviders: OAuthProvider[];
   /** An error handed back by the OAuth callback, if any. */
-  initialError?: string;
+  readonly initialError?: string;
 }
 
 export function SignUpForm({

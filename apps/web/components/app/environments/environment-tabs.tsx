@@ -16,7 +16,7 @@ const tabs = [
  * addressable route that can be opened directly or bookmarked. SDK keys is the
  * bare route, matching the design's default tab.
  */
-export function EnvironmentTabs({ environmentKey }: { environmentKey: string }) {
+export function EnvironmentTabs({ environmentKey }: { readonly environmentKey: string }) {
   const pathname = usePathname();
   const base = `/environments/${environmentKey}`;
 

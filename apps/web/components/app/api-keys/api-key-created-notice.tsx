@@ -12,8 +12,8 @@ export function ApiKeyCreatedNotice({
   name,
   secret,
 }: {
-  name: string;
-  secret: string;
+  readonly name: string;
+  readonly secret: string;
 }) {
   return (
     <section

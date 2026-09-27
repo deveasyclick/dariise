@@ -119,7 +119,7 @@ export function CreateProjectForm() {
 }
 
 interface ProjectSummaryCardProps {
-  projectName: string;
+  readonly projectName: string;
 }
 
 function ProjectSummaryCard({ projectName }: ProjectSummaryCardProps) {

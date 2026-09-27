@@ -30,7 +30,7 @@ import type { EnvironmentSummary } from "@dariise/contracts";
 export function EnvironmentMenu({
   environment,
 }: {
-  environment: Pick<EnvironmentSummary, "key" | "name" | "archivedAt">;
+  readonly environment: Pick<EnvironmentSummary, "key" | "name" | "archivedAt">;
 }) {
   const settings = `/environments/${environment.key}/settings`;
   const archived = environment.archivedAt !== null;

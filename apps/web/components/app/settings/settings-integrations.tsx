@@ -34,7 +34,7 @@ const toneClass: Record<IntegrationTone, string> = {
   slate: "bg-muted text-slate-ink",
 };
 
-export function SettingsIntegrations({ apps }: { apps: IntegrationApp[] }) {
+export function SettingsIntegrations({ apps }: { readonly apps: IntegrationApp[] }) {
   return (
     <div>
       <SettingsCard

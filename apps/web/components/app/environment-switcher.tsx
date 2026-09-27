@@ -24,9 +24,9 @@ import { selectEnvironment } from "@/lib/scope-actions";
 
 interface EnvironmentSwitcherProps {
   /** Every environment in the current project. */
-  environments: EnvironmentSummary[];
+  readonly environments: EnvironmentSummary[];
   /** The environment the dashboard is scoped to, when one resolved. */
-  environment: EnvironmentSummary | null;
+  readonly environment: EnvironmentSummary | null;
 }
 
 /**

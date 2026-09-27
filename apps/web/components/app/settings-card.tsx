@@ -2,15 +2,15 @@ import type { ReactNode } from "react";
 import { cn } from "cn";
 
 interface SettingsCardProps {
-  title: string;
+  readonly title: string;
   /** One line under the title explaining what the card controls. */
-  description?: string;
+  readonly description?: string;
   /** Right-hand side of the title row, e.g. a status pill or a saved hint. */
-  action?: ReactNode;
+  readonly action?: ReactNode;
   /** Bottom row, separated by a rule — e.g. a save bar. */
-  footer?: ReactNode;
-  className?: string;
-  children: ReactNode;
+  readonly footer?: ReactNode;
+  readonly className?: string;
+  readonly children: ReactNode;
 }
 
 /**
@@ -54,8 +54,8 @@ export function SettingsRowLabel({
   label,
   description,
 }: {
-  label: string;
-  description: string;
+  readonly label: string;
+  readonly description: string;
 }) {
   return (
     <div className="min-w-0">

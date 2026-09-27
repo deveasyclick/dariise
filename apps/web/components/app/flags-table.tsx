@@ -98,16 +98,16 @@ export function FlagsTable({
   environmentName,
   now,
 }: {
-  projectKey: string;
-  flags: FlagSummary[];
+  readonly projectKey: string;
+  readonly flags: FlagSummary[];
   /**
    * The environment the list is narrowed to; each row carries the state of all
    * of them, so this is what the status and rollout columns are read from.
    */
-  environmentKey: string | null;
-  environmentName: string | null;
+  readonly environmentKey: string | null;
+  readonly environmentName: string | null;
   /** Passed in so relative labels stay stable across hydration. */
-  now: string;
+  readonly now: string;
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");

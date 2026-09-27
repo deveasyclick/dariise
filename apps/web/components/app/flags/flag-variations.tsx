@@ -61,13 +61,13 @@ export function FlagVariations({
   variations: initialVariations,
   protectedEnvironment,
 }: {
-  projectKey: string;
-  flagKey: string;
+  readonly projectKey: string;
+  readonly flagKey: string;
   /** The flag's declared type; every value has to be one of these. */
-  type: FlagType;
-  variations: FlagVariation[];
+  readonly type: FlagType;
+  readonly variations: FlagVariation[];
   /** A protected environment has to approve its own configuration, not the values. */
-  protectedEnvironment: boolean;
+  readonly protectedEnvironment: boolean;
 }) {
   const [rows, setRows] = useState<VariationRow[]>(() =>
     toRows(initialVariations),

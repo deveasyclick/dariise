@@ -46,9 +46,9 @@ function RowMenu({
   pending,
   onRevoke,
 }: {
-  apiKey: ApiKeyView;
-  pending: boolean;
-  onRevoke: () => void;
+  readonly apiKey: ApiKeyView;
+  readonly pending: boolean;
+  readonly onRevoke: () => void;
 }) {
   return (
     <DropdownMenu>
@@ -103,11 +103,11 @@ export function ApiKeyTable({
   now,
   truncated,
 }: {
-  projectKey: string;
-  keys: ApiKeyView[];
-  environments: EnvironmentOption[];
-  now: string;
-  truncated: boolean;
+  readonly projectKey: string;
+  readonly keys: ApiKeyView[];
+  readonly environments: EnvironmentOption[];
+  readonly now: string;
+  readonly truncated: boolean;
 }) {
   const router = useRouter();
   const { created, setCreated } = useCreatedApiKey();

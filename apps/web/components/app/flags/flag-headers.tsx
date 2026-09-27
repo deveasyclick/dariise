@@ -11,9 +11,9 @@ const eyebrowClass =
 
 interface CreateFlagHeaderProps {
   /** Steps shown as a progress path, e.g. ["Details", "Preview"]. */
-  steps: string[];
+  readonly steps: string[];
   /** Zero-based index of the step currently in view. */
-  currentStep: number;
+  readonly currentStep: number;
 }
 
 /** Tabs of the create flag form, also acting as its step indicator. */
@@ -64,15 +64,15 @@ export function CreateFlagHeader({
 }
 
 interface FlagDetailHeaderProps {
-  flagKey: string;
-  name: string;
-  description: string;
-  environmentKey: string;
-  environmentLabel: string;
+  readonly flagKey: string;
+  readonly name: string;
+  readonly description: string;
+  readonly environmentKey: string;
+  readonly environmentLabel: string;
   /** The flag's own status, which every environment shares. */
-  status: FlagStatus;
+  readonly status: FlagStatus;
   /** Whether the chosen environment serves the flag. */
-  enabled: boolean;
+  readonly enabled: boolean;
 }
 
 /** Identity and status strip shown above the tabs on the flag detail screen. */

@@ -26,12 +26,12 @@ export function FlagHistory({
   rolloutPercentage,
   now,
 }: {
-  flagKey: string;
-  versions: FlagVersion[];
-  environmentName: string;
-  variationCount: number;
-  rolloutPercentage: number;
-  now: Date;
+  readonly flagKey: string;
+  readonly versions: FlagVersion[];
+  readonly environmentName: string;
+  readonly variationCount: number;
+  readonly rolloutPercentage: number;
+  readonly now: Date;
 }) {
   const current = versions[0];
   const previous = versions[1];

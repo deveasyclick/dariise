@@ -12,10 +12,10 @@ import { ApiError, environments } from "@/lib/api";
 import { isRequired } from "@/lib/validation";
 
 interface EnvironmentDetailsFormProps {
-  projectKey: string;
-  environmentKey: string;
-  name: string;
-  description: string | null;
+  readonly projectKey: string;
+  readonly environmentKey: string;
+  readonly name: string;
+  readonly description: string | null;
 }
 
 /**

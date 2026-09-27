@@ -8,7 +8,7 @@ import type { AuditEventView } from "@/components/app/audit-log/audit-log-types"
  * Read-only, so it stays a Server Component boundary-free child of the view; the
  * revert action is disabled and marked as such rather than pretending to work.
  */
-export function ChangeDetailsPanel({ event }: { event: AuditEventView | null }) {
+export function ChangeDetailsPanel({ event }: { readonly event: AuditEventView | null }) {
   if (event === null) {
     return (
       <section className="bg-card self-start rounded-lg border lg:sticky lg:top-0">

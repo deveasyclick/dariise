@@ -50,8 +50,8 @@ export function EvaluationsByEnvironmentCard({
   total,
   rows,
 }: {
-  total: number;
-  rows: EnvironmentShare[];
+  readonly total: number;
+  readonly rows: EnvironmentShare[];
 }) {
   const percentages = sharePercentages(rows.map((row) => row.value));
 

@@ -79,8 +79,8 @@ export function CreateEnvironmentForm({
   projectKey,
   environments,
 }: {
-  projectKey: string;
-  environments: EnvironmentSummary[];
+  readonly projectKey: string;
+  readonly environments: EnvironmentSummary[];
 }) {
   const defaultSource =
     environments.find((environment) => environment.isDefault)?.key ??

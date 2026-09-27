@@ -57,8 +57,8 @@ export function CreateApiKeyForm({
   projectKey,
   environments,
 }: {
-  projectKey: string;
-  environments: EnvironmentSummary[];
+  readonly projectKey: string;
+  readonly environments: EnvironmentSummary[];
 }) {
   const router = useRouter();
   const { setCreated } = useCreatedApiKey();

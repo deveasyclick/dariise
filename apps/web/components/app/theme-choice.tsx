@@ -13,7 +13,7 @@ import {
  * by the workspace Appearance card and the personal Preferences card so the two
  * cannot drift.
  */
-export function ThemeChoice({ theme }: { theme: WorkspaceTheme }) {
+export function ThemeChoice({ theme }: { readonly theme: WorkspaceTheme }) {
   return (
     <div
       role="radiogroup"

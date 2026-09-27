@@ -92,7 +92,7 @@ function useSavedHint() {
   return { saved, acknowledge, reset };
 }
 
-function SavedHint({ saved }: { saved: boolean }) {
+function SavedHint({ saved }: { readonly saved: boolean }) {
   if (!saved) return null;
 
   return (
@@ -107,8 +107,8 @@ export function ProfilePreferences({
   environments,
   defaultEnvironmentKey,
 }: {
-  environments: EnvironmentSummary[];
-  defaultEnvironmentKey: string | null;
+  readonly environments: EnvironmentSummary[];
+  readonly defaultEnvironmentKey: string | null;
 }) {
   const [current, setCurrent] = useState<{
     theme: Theme;

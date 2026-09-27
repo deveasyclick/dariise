@@ -31,7 +31,7 @@ const statPresentation: Record<
   archived: { icon: ArchiveIcon, tone: "bg-muted text-muted-foreground" },
 };
 
-export function StatCard({ stat }: { stat: HeroStat }) {
+export function StatCard({ stat }: { readonly stat: HeroStat }) {
   const { icon: Icon, tone } = statPresentation[stat.id];
 
   return (

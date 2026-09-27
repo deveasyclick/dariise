@@ -68,8 +68,8 @@ export function SettingsProfileForm({
   profile,
   environments,
 }: {
-  profile: WorkspaceProfile;
-  environments: EnvironmentSummary[];
+  readonly profile: WorkspaceProfile;
+  readonly environments: EnvironmentSummary[];
 }) {
   const [draft, setDraft] = useState<ProfileDraft>(() =>
     toDraft(profile, environments),

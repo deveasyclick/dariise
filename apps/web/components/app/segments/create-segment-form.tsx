@@ -90,7 +90,7 @@ function withAttribute(rule: RuleDraft, attribute: string): RuleDraft {
   };
 }
 
-export function CreateSegmentForm({ projectKey }: { projectKey: string }) {
+export function CreateSegmentForm({ projectKey }: { readonly projectKey: string }) {
   const ruleIdRef = useRef(1);
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");

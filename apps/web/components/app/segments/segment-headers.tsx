@@ -11,9 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 interface CreateSegmentHeaderProps {
-  steps: string[];
+  readonly steps: string[];
   /** Zero-based index of the step currently in view. */
-  currentStep: number;
+  readonly currentStep: number;
 }
 
 /** Step indicator for the create segment form. */
@@ -67,10 +67,10 @@ export function CreateSegmentHeader({
 }
 
 interface SegmentDetailHeaderProps {
-  segmentKey: string;
-  name: string;
-  description: string | null;
-  archived: boolean;
+  readonly segmentKey: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly archived: boolean;
 }
 
 /** Identity and status strip above the segment detail tabs. */

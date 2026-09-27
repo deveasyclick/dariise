@@ -18,9 +18,9 @@ import { resolveEnvironmentColor } from "@/lib/environment-color";
 import { selectProject } from "@/lib/scope-actions";
 
 interface ProjectSwitcherProps {
-  project: Project;
+  readonly project: Project;
   /** Every project in the workspace, in the order the menu lists them. */
-  projects: Project[];
+  readonly projects: Project[];
 }
 
 /**

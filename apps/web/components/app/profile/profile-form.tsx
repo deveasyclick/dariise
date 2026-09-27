@@ -29,8 +29,8 @@ export function ProfileForm({
   user,
   initials,
 }: {
-  user: SessionUser;
-  initials: string;
+  readonly user: SessionUser;
+  readonly initials: string;
 }) {
   const initial: ProfileDraft = { name: user.name, email: user.email };
 

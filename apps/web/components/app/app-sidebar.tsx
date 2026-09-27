@@ -18,15 +18,15 @@ import type { EnvironmentSummary, Project } from "@dariise/contracts";
 import type { ChromeUser } from "@/lib/scope";
 
 interface SidebarProps {
-  user: ChromeUser;
+  readonly user: ChromeUser;
   /** The project the dashboard is scoped to. */
-  project: Project;
+  readonly project: Project;
   /** Every project in the workspace, for the switcher menu. */
-  projects: Project[];
+  readonly projects: Project[];
   /** Every environment in the current project. */
-  environments: EnvironmentSummary[];
+  readonly environments: EnvironmentSummary[];
   /** The environment the dashboard is scoped to. */
-  environment: EnvironmentSummary | null;
+  readonly environment: EnvironmentSummary | null;
 }
 
 /** The shared nav list. Rendered by both the sidebar and the mobile drawer. */
@@ -88,7 +88,7 @@ function NavList() {
   );
 }
 
-function UserChip({ user }: { user: ChromeUser }) {
+function UserChip({ user }: { readonly user: ChromeUser }) {
   return (
     <div className="border-nav-line flex items-center gap-2.5 border-t pt-3">
       <span className="bg-nav-active flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white">

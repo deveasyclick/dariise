@@ -12,7 +12,7 @@ import { formatRelativeTime } from "@/lib/format";
  * children.
  */
 
-export function FlagMetadata({ flag, now }: { flag: FlagDetail; now: Date }) {
+export function FlagMetadata({ flag, now }: { readonly flag: FlagDetail; readonly now: Date }) {
   const rows: Array<[string, React.ReactNode]> = [
     ["Key", <span key="key" className="font-mono">{flag.key}</span>],
     ["Type", flag.type.charAt(0).toUpperCase() + flag.type.slice(1)],
@@ -43,8 +43,8 @@ export function FlagFallback({
   flagKey,
   fallback,
 }: {
-  flagKey: string;
-  fallback: string;
+  readonly flagKey: string;
+  readonly fallback: string;
 }) {
   return (
     <section className="bg-card rounded-lg border p-4">
@@ -87,7 +87,7 @@ export function FlagArchiveAction() {
 }
 
 /** Static danger-zone shell; the action comes from `FlagArchiveAction`. */
-export function DangerZoneCard({ children }: { children: React.ReactNode }) {
+export function DangerZoneCard({ children }: { readonly children: React.ReactNode }) {
   return (
     <section className="border-danger-ink/30 bg-danger-ink/5 rounded-lg border p-4">
       <h2 className="text-danger-ink text-[13px] font-medium">Danger zone</h2>

@@ -13,7 +13,7 @@ const PEAK_HEIGHT = 88;
 export function EvaluationsOverTimeCard({
   series,
 }: {
-  series: EvaluationSeries;
+  readonly series: EvaluationSeries;
 }) {
   const peak = Math.max(...series.points.map((point) => point.total), 1);
 

@@ -10,7 +10,7 @@ const steps = [
 
 export type OnboardingStep = (typeof steps)[number]["key"];
 
-export function OnboardingSteps({ current }: { current: OnboardingStep }) {
+export function OnboardingSteps({ current }: { readonly current: OnboardingStep }) {
   const currentIndex = steps.findIndex((step) => step.key === current);
 
   return (

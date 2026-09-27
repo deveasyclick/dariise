@@ -22,7 +22,7 @@ export function flagState(state: {
  * environment: archiving a flag retires it everywhere, while an environment can
  * still serve it or not on its own.
  */
-export function FlagStatusBadge({ status }: { status: FlagStatus }) {
+export function FlagStatusBadge({ status }: { readonly status: FlagStatus }) {
   return status === "archived" ? (
     <Badge variant="outline">Archived</Badge>
   ) : (
@@ -40,12 +40,12 @@ export function FlagStatePill({
   state,
   label = "short",
 }: {
-  state: FlagState;
+  readonly state: FlagState;
   /**
    * `short` (the default) suits dense tables — `ON` / `OFF`. `long` spells the
    * state out (`Enabled` / `Disabled`) where there is room for it.
    */
-  label?: "short" | "long";
+  readonly label?: "short" | "long";
 }) {
   if (state.kind === "on") {
     return (

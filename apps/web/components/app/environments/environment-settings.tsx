@@ -21,10 +21,10 @@ export function EnvironmentSettingsCard({
   environment,
   disabled = false,
 }: {
-  projectKey: string;
-  environment: Pick<EnvironmentDetail, "key" | "name" | "isProtected">;
+  readonly projectKey: string;
+  readonly environment: Pick<EnvironmentDetail, "key" | "name" | "isProtected">;
   /** An archived environment is read-only until it is restored. */
-  disabled?: boolean;
+  readonly disabled?: boolean;
 }) {
   const [isProtected, setIsProtected] = useState(environment.isProtected);
   const [baseline, setBaseline] = useState(environment.isProtected);

@@ -8,10 +8,10 @@ function GraphNode({
   tone,
   chip,
 }: {
-  flagKey: string;
-  meta: string;
-  tone: "upstream" | "self" | "downstream";
-  chip?: string;
+  readonly flagKey: string;
+  readonly meta: string;
+  readonly tone: "upstream" | "self" | "downstream";
+  readonly chip?: string;
 }) {
   return (
     <div
@@ -38,7 +38,7 @@ function GraphNode({
   );
 }
 
-function GraphLabel({ children }: { children: React.ReactNode }) {
+function GraphLabel({ children }: { readonly children: React.ReactNode }) {
   return (
     <p className="text-muted-foreground text-center text-[10px] tracking-[0.14em] uppercase">
       {children}
@@ -73,10 +73,10 @@ export function FlagDependencies({
   flagKey,
   status,
 }: {
-  graph: FlagDependencyGraph;
-  flagKey: string;
+  readonly graph: FlagDependencyGraph;
+  readonly flagKey: string;
   /** The flag's own status; the graph is project-wide, not per environment. */
-  status: FlagStatus;
+  readonly status: FlagStatus;
 }) {
   const hasAny = graph.upstream.length > 0 || graph.downstream.length > 0;
 

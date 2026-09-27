@@ -27,8 +27,8 @@ export function SegmentGlyph({
   segmentKey,
   className,
 }: {
-  segmentKey: string;
-  className?: string;
+  readonly segmentKey: string;
+  readonly className?: string;
 }) {
   return (
     <span

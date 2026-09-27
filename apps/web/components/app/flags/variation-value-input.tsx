@@ -26,11 +26,11 @@ export function VariationValueInput({
   disabled = false,
   onChange,
 }: {
-  id: string;
-  type: FlagType;
-  value: FlagVariationValue;
-  disabled?: boolean;
-  onChange: (value: FlagVariationValue) => void;
+  readonly id: string;
+  readonly type: FlagType;
+  readonly value: FlagVariationValue;
+  readonly disabled?: boolean;
+  readonly onChange: (value: FlagVariationValue) => void;
 }) {
   if (type === "boolean") {
     return (

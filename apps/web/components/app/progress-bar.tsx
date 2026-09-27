@@ -2,10 +2,10 @@ import { cn } from "cn";
 
 interface ProgressBarProps {
   /** Whole percentage, 0-100. */
-  value: number;
+  readonly value: number;
   /** Tailwind background class for the filled portion. */
-  className?: string;
-  label?: string;
+  readonly className?: string;
+  readonly label?: string;
 }
 
 /** Thin track used by rollout rows, flag health and the flags table. */

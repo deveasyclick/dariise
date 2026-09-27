@@ -8,10 +8,10 @@ export function SegmentSummaryCard({
   updatedAt,
   now,
 }: {
-  conditions: TargetingCondition[];
-  flags: SegmentFlag[];
-  updatedAt: string;
-  now: Date;
+  readonly conditions: TargetingCondition[];
+  readonly flags: SegmentFlag[];
+  readonly updatedAt: string;
+  readonly now: Date;
 }) {
   const cells: Array<[string, string | number]> = [
     ["Conditions", conditions.length],

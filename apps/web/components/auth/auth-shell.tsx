@@ -6,8 +6,8 @@ import {
 
 interface AuthShellProps {
   /** Copy the brand panel shows; see `AuthBrandPanel`. */
-  variant?: AuthPanelVariant;
-  children: ReactNode;
+  readonly variant?: AuthPanelVariant;
+  readonly children: ReactNode;
 }
 
 /**

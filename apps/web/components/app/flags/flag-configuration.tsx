@@ -43,17 +43,17 @@ export function FlagConfiguration({
   approval,
   protectedEnvironment,
 }: {
-  projectKey: string;
-  flagKey: string;
-  flag: FlagDetail;
+  readonly projectKey: string;
+  readonly flagKey: string;
+  readonly flag: FlagDetail;
   /** The flag's configuration in the environment this screen is scoped to. */
-  config: FlagEnvironmentConfig;
-  updatedLabel: string;
-  metadata: React.ReactNode;
-  dangerZone: React.ReactNode;
+  readonly config: FlagEnvironmentConfig;
+  readonly updatedLabel: string;
+  readonly metadata: React.ReactNode;
+  readonly dangerZone: React.ReactNode;
   /** Approval state for this flag in this environment. */
-  approval: React.ReactNode;
-  protectedEnvironment: boolean;
+  readonly approval: React.ReactNode;
+  readonly protectedEnvironment: boolean;
 }) {
   const [enabled, setEnabled] = useState(config.enabled);
   const [offVariation, setOffVariation] = useState(config.offVariation);

@@ -35,7 +35,7 @@ function retentionChoices(current: number): Array<{ value: number; label: string
 export function SettingsSecurity({
   settings,
 }: {
-  settings: WorkspaceSecuritySettings;
+  readonly settings: WorkspaceSecuritySettings;
 }) {
   const [current, setCurrent] = useState<WorkspaceSecuritySettings>(settings);
   const [saved, setSaved] = useState(false);

@@ -33,7 +33,7 @@ const flagStatusPresentation: Record<
 export function FlagEnvironmentBadge({
   environmentKey,
 }: {
-  environmentKey: string;
+  readonly environmentKey: string;
 }) {
   return (
     <span className="bg-muted text-muted-foreground inline-flex rounded-md px-2 py-0.5 text-[10px] capitalize">
@@ -42,7 +42,7 @@ export function FlagEnvironmentBadge({
   );
 }
 
-export function FlagStatusBadge({ flag }: { flag: SegmentFlag }) {
+export function FlagStatusBadge({ flag }: { readonly flag: SegmentFlag }) {
   const presentation = flagStatusPresentation[flag.status];
 
   return (
@@ -57,7 +57,7 @@ export function FlagStatusBadge({ flag }: { flag: SegmentFlag }) {
 export function SegmentRuleTable({
   conditions,
 }: {
-  conditions: TargetingCondition[];
+  readonly conditions: TargetingCondition[];
 }) {
   return (
     <section className="bg-card rounded-lg border p-4">
@@ -103,7 +103,7 @@ export function SegmentRuleTable({
 }
 
 /** Definition tab — the flags that reference this segment. */
-export function SegmentUsedByFlags({ flags }: { flags: SegmentFlag[] }) {
+export function SegmentUsedByFlags({ flags }: { readonly flags: SegmentFlag[] }) {
   return (
     <section className="bg-card rounded-lg border p-4">
       <div className="flex items-center justify-between gap-3">
@@ -150,7 +150,7 @@ export function SegmentUsedByFlags({ flags }: { flags: SegmentFlag[] }) {
 export function SegmentMembers({
   conditions,
 }: {
-  conditions: TargetingCondition[];
+  readonly conditions: TargetingCondition[];
 }) {
   const members = matchingSampleUsers(conditions);
 
@@ -218,7 +218,7 @@ export function SegmentMembers({
 }
 
 /** Flags tab — every flag and environment that references this segment. */
-export function SegmentFlags({ flags }: { flags: SegmentFlag[] }) {
+export function SegmentFlags({ flags }: { readonly flags: SegmentFlag[] }) {
   return (
     <section className="bg-card rounded-lg border">
       <header className="border-b px-4 py-3">

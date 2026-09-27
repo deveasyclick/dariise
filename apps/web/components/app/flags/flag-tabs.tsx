@@ -54,10 +54,10 @@ export function FlagTabs({
   environmentKey,
   active,
 }: {
-  projectKey: string;
-  flagKey: string;
-  environmentKey: string;
-  active: FlagTab;
+  readonly projectKey: string;
+  readonly flagKey: string;
+  readonly environmentKey: string;
+  readonly active: FlagTab;
 }) {
   return (
     <nav aria-label="Flag sections" className="mb-4 flex gap-1 border-b">

@@ -16,12 +16,12 @@ import { ApiError, changeRequests } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/format";
 
 interface FlagApprovalPanelProps {
-  projectKey: string;
-  flagKey: string;
+  readonly projectKey: string;
+  readonly flagKey: string;
   /** The pending proposal for this flag and environment, if there is one. */
-  request: FlagChangeRequest | null;
+  readonly request: FlagChangeRequest | null;
   /** Whether this environment refuses direct publishes. */
-  protectedEnvironment: boolean;
+  readonly protectedEnvironment: boolean;
 }
 
 /**

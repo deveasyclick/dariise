@@ -10,8 +10,8 @@ export function KeyGlyph({
   color,
   className,
 }: {
-  color: EnvironmentColor | null;
-  className?: string;
+  readonly color: EnvironmentColor | null;
+  readonly className?: string;
 }) {
   return (
     <span
@@ -32,8 +32,8 @@ export function EnvironmentPill({
   name,
   color,
 }: {
-  name: string;
-  color: EnvironmentColor | null;
+  readonly name: string;
+  readonly color: EnvironmentColor | null;
 }) {
   return (
     <Badge
@@ -58,7 +58,7 @@ export function EnvironmentPill({
  * Write scopes are tinted so a key that can change configuration is
  * distinguishable at a glance from a read-only one.
  */
-export function ScopePills({ scopes }: { scopes: ApiKeyScope[] }) {
+export function ScopePills({ scopes }: { readonly scopes: ApiKeyScope[] }) {
   return (
     <span className="flex flex-wrap items-center gap-1">
       {scopes.map((scope) => (

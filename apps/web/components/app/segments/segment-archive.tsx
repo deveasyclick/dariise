@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { ApiError, segments } from "@/lib/api";
 
 interface SegmentArchiveProps {
-  projectKey: string;
-  segmentKey: string;
-  archived: boolean;
+  readonly projectKey: string;
+  readonly segmentKey: string;
+  readonly archived: boolean;
 }
 
 /**

@@ -77,8 +77,8 @@ function PreviewRow({
   label,
   children,
 }: {
-  label: string;
-  children: React.ReactNode;
+  readonly label: string;
+  readonly children: React.ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2">
@@ -93,10 +93,10 @@ export function CreateFlagForm({
   environmentKey,
   environmentName,
 }: {
-  projectKey: string;
+  readonly projectKey: string;
   /** The one environment the flag is created into. */
-  environmentKey: string;
-  environmentName: string;
+  readonly environmentKey: string;
+  readonly environmentName: string;
 }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");

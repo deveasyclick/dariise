@@ -38,11 +38,11 @@ const headerClass =
 const cellClass = "px-3 py-2.5 text-[12px]";
 
 interface SegmentListProps {
-  segments: SegmentSummary[];
-  search: string;
-  nextCursor: string | null;
+  readonly segments: SegmentSummary[];
+  readonly search: string;
+  readonly nextCursor: string | null;
   /** Passed in so relative labels stay stable across hydration. */
-  now: string;
+  readonly now: string;
 }
 
 export function SegmentList({

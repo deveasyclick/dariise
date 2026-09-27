@@ -17,7 +17,7 @@ import {
  * Server Component cannot hand over. Every item is disabled with a title rather
  * than pretending to work — nothing here is wired to the API yet.
  */
-export function ProjectMenu({ name }: { name: string }) {
+export function ProjectMenu({ name }: { readonly name: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

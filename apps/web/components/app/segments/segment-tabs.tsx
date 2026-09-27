@@ -16,7 +16,7 @@ const tabs = [
  * Links rather than local state, so each tab is a real addressable route.
  * Definition is the bare route, matching the design's default tab.
  */
-export function SegmentTabs({ segmentKey }: { segmentKey: string }) {
+export function SegmentTabs({ segmentKey }: { readonly segmentKey: string }) {
   const pathname = usePathname();
   const base = `/segments/${segmentKey}`;
 

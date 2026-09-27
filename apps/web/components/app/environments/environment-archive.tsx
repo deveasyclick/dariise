@@ -12,10 +12,10 @@ import { Button } from "@/components/ui/button";
 import { ApiError, environments } from "@/lib/api";
 
 interface EnvironmentArchiveProps {
-  projectKey: string;
-  environmentKey: string;
-  environmentName: string;
-  archived: boolean;
+  readonly projectKey: string;
+  readonly environmentKey: string;
+  readonly environmentName: string;
+  readonly archived: boolean;
 }
 
 /**

@@ -7,13 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 interface FieldProps extends Omit<React.ComponentProps<"input">, "id"> {
-  id: string;
-  label: string;
+  readonly id: string;
+  readonly label: string;
   /** Rendered on the right-hand side of the label row, e.g. a link. */
-  labelSuffix?: ReactNode;
+  readonly labelSuffix?: ReactNode;
   /** Explanatory copy shown under the control, e.g. how the value is used. */
-  hint?: ReactNode;
-  error?: string | null;
+  readonly hint?: ReactNode;
+  readonly error?: string | null;
 }
 
 /**
@@ -53,12 +53,12 @@ export function Field({
 }
 
 interface PrefixedFieldProps extends Omit<React.ComponentProps<"input">, "id"> {
-  id: string;
-  label: string;
+  readonly id: string;
+  readonly label: string;
   /** Static text shown inside the field, before the value, e.g. `acme.dev/`. */
-  prefix: string;
-  hint?: ReactNode;
-  error?: string | null;
+  readonly prefix: string;
+  readonly hint?: ReactNode;
+  readonly error?: string | null;
 }
 
 /**
@@ -107,13 +107,13 @@ export function PrefixedField({
 }
 
 /** Explanatory copy shown under a control. */
-export function FieldHint({ children }: { children: ReactNode }) {
+export function FieldHint({ children }: { readonly children: ReactNode }) {
   return <p className="text-muted-foreground text-xs leading-5">{children}</p>;
 }
 
 interface FieldErrorProps {
-  id?: string;
-  children: ReactNode;
+  readonly id?: string;
+  readonly children: ReactNode;
 }
 
 export function FieldError({ id, children }: FieldErrorProps) {
@@ -131,10 +131,10 @@ export function FieldError({ id, children }: FieldErrorProps) {
 
 interface FieldRowProps {
   /** The control itself, e.g. a `Checkbox`. */
-  control: ReactNode;
-  htmlFor: string;
-  children: ReactNode;
-  className?: string;
+  readonly control: ReactNode;
+  readonly htmlFor: string;
+  readonly children: ReactNode;
+  readonly className?: string;
 }
 
 export function FieldRow({
@@ -160,10 +160,10 @@ export function FieldRow({
 
 interface PasswordFieldProps
   extends Omit<React.ComponentProps<"input">, "id" | "type"> {
-  id: string;
-  label: string;
-  labelSuffix?: ReactNode;
-  error?: string | null;
+  readonly id: string;
+  readonly label: string;
+  readonly labelSuffix?: ReactNode;
+  readonly error?: string | null;
 }
 
 /**

@@ -11,7 +11,7 @@ import { formatCompactNumber } from "@/lib/format";
  * the ranking reads at a glance. The keys themselves are text, as in the design;
  * the whole list is one link away.
  */
-export function TopFlagsCard({ flags }: { flags: TopFlag[] }) {
+export function TopFlagsCard({ flags }: { readonly flags: TopFlag[] }) {
   const peak = Math.max(...flags.map((flag) => flag.value), 1);
 
   return (

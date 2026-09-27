@@ -42,9 +42,9 @@ export function EnvironmentBadges({
   isProtected,
   isArchived,
 }: {
-  isDefault: boolean;
-  isProtected: boolean;
-  isArchived: boolean;
+  readonly isDefault: boolean;
+  readonly isProtected: boolean;
+  readonly isArchived: boolean;
 }) {
   if (!isDefault && !isProtected && !isArchived) return null;
 
@@ -77,8 +77,8 @@ function CountTiles({
   counts,
   dense = false,
 }: {
-  counts: EnvironmentFlagCounts;
-  dense?: boolean;
+  readonly counts: EnvironmentFlagCounts;
+  readonly dense?: boolean;
 }) {
   const tiles: Array<{ label: string; value: string; tone: string }> = [
     { label: "On", value: countLabel(counts.on), tone: "bg-ok-ink/10 text-ok-ink" },
@@ -128,7 +128,7 @@ export interface EnvironmentCardData {
 }
 
 /** One environment as summarised on the Environments list. */
-export function EnvironmentCard({ data }: { data: EnvironmentCardData }) {
+export function EnvironmentCard({ data }: { readonly data: EnvironmentCardData }) {
   const { environment, connection, counts } = data;
 
   return (
@@ -180,7 +180,7 @@ export function EnvironmentCard({ data }: { data: EnvironmentCardData }) {
 export function EnvironmentGrid({
   environments,
 }: {
-  environments: EnvironmentCardData[];
+  readonly environments: EnvironmentCardData[];
 }) {
   if (environments.length === 0) {
     return (
@@ -204,7 +204,7 @@ export function EnvironmentGrid({
 }
 
 /** Explains an archived environment on the tabs that cannot restore it. */
-export function ArchivedEnvironmentNotice({ name }: { name: string }) {
+export function ArchivedEnvironmentNotice({ name }: { readonly name: string }) {
   return (
     <aside className="bg-muted text-muted-foreground mb-4 rounded-lg border p-3 text-[12px]">
       {name} is archived. Its SDK keys are revoked and it no longer appears in
@@ -217,7 +217,7 @@ export function ArchivedEnvironmentNotice({ name }: { name: string }) {
 export function EnvironmentMetadataCard({
   environment,
 }: {
-  environment: EnvironmentDetail;
+  readonly environment: EnvironmentDetail;
 }) {
   const color = resolveEnvironmentColor(environment.color);
   const colorLabel =

@@ -24,7 +24,7 @@ function percentOf(value: number, limit: number): number {
   return limit > 0 ? (value / limit) * 100 : 0;
 }
 
-export function SettingsBilling({ summary }: { summary: BillingSummary }) {
+export function SettingsBilling({ summary }: { readonly summary: BillingSummary }) {
   const { plan, usage, payment, invoices } = summary;
   const seatsUsed = `${plan.seats.used} of ${plan.seats.total} used`;
 

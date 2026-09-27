@@ -103,9 +103,9 @@ function ProjectStatTile({
   label,
   tone,
 }: {
-  value: ReactNode;
-  label: string;
-  tone: string;
+  readonly value: ReactNode;
+  readonly label: string;
+  readonly tone: string;
 }) {
   return (
     <div className={cn("rounded-md px-2.5 py-1.5 text-center", tone)}>
@@ -116,7 +116,7 @@ function ProjectStatTile({
 }
 
 /** One project as summarised on the Projects list. */
-export function ProjectCard({ data }: { data: ProjectCardData }) {
+export function ProjectCard({ data }: { readonly data: ProjectCardData }) {
   const { project, environments, flagCount, apiKeyCount } = data;
   const Glyph = projectGlyphs[resolveEnvironmentColor(project.color)];
 
@@ -174,7 +174,7 @@ export function ProjectCard({ data }: { data: ProjectCardData }) {
 }
 
 /** The project cards, with the empty state the design does not cover. */
-export function ProjectGrid({ projects }: { projects: ProjectCardData[] }) {
+export function ProjectGrid({ projects }: { readonly projects: ProjectCardData[] }) {
   if (projects.length === 0) {
     return (
       <section className="bg-card text-muted-foreground rounded-lg border border-dashed p-6 text-[13px]">
@@ -201,9 +201,9 @@ export function ProjectsOverviewCard({
   projects,
   now,
 }: {
-  projects: ProjectCardData[];
+  readonly projects: ProjectCardData[];
   /** The moment "last changed" is measured against; one per render. */
-  now: Date;
+  readonly now: Date;
 }) {
   return (
     <SectionCard
@@ -304,9 +304,9 @@ export function ProjectEnvironmentsCard({
   environments,
   enabledByEnvironment,
 }: {
-  environments: EnvironmentSummary[];
+  readonly environments: EnvironmentSummary[];
   /** Enabled flag count per environment key. */
-  enabledByEnvironment: Record<string, CappedCount>;
+  readonly enabledByEnvironment: Record<string, CappedCount>;
 }) {
   return (
     <SectionCard
@@ -380,17 +380,17 @@ function enabledCount(
 }
 
 interface ProjectFlagsCardProps {
-  projectKey: string;
-  flags: FlagSummary[];
+  readonly projectKey: string;
+  readonly flags: FlagSummary[];
   /** Cap the list and add a "View all" link, as the design does on Overview. */
-  limit?: number;
+  readonly limit?: number;
   /**
    * The environment each row's state is read from. Omit to show the flag's own
    * status only, which is what the card falls back to.
    */
-  environmentKey?: string | null;
+  readonly environmentKey?: string | null;
   /** Named beside each row so the state is never read as project-wide. */
-  environmentName?: string | null;
+  readonly environmentName?: string | null;
 }
 
 /**
@@ -488,10 +488,10 @@ export function ProjectSummaryCard({
   segmentCount,
   apiKeyCount,
 }: {
-  project: Project;
-  flagCount: CappedCount;
-  segmentCount: CappedCount;
-  apiKeyCount: CappedCount;
+  readonly project: Project;
+  readonly flagCount: CappedCount;
+  readonly segmentCount: CappedCount;
+  readonly apiKeyCount: CappedCount;
 }) {
   const tiles = [
     { label: "Environments", value: String(project.environmentCount) },
@@ -529,10 +529,10 @@ export function DefaultEnvironmentCard({
   enabledByEnvironment,
   defaultEnvironmentKey,
 }: {
-  environments: EnvironmentSummary[];
+  readonly environments: EnvironmentSummary[];
   /** Enabled flag count per environment key. */
-  enabledByEnvironment: Record<string, CappedCount>;
-  defaultEnvironmentKey: string | null;
+  readonly enabledByEnvironment: Record<string, CappedCount>;
+  readonly defaultEnvironmentKey: string | null;
 }) {
   const ordered = [...environments].sort(
     (a, b) => Number(b.isDefault) - Number(a.isDefault),
@@ -622,7 +622,7 @@ const roleLabels: Record<ProjectMember["role"], string> = {
 };
 
 /** The project's team, as the members endpoint returns it. */
-export function ProjectMembersCard({ members }: { members: ProjectMember[] }) {
+export function ProjectMembersCard({ members }: { readonly members: ProjectMember[] }) {
   return (
     <SectionCard
       title="Members"

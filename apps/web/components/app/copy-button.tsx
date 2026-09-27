@@ -25,14 +25,14 @@ export async function writeToClipboard(value: string): Promise<boolean> {
 }
 
 interface CopyButtonProps {
-  value: string;
+  readonly value: string;
   /** Noun used in the accessible label, e.g. `Production SDK key`. */
-  label: string;
+  readonly label: string;
   /** Render a labelled button instead of the icon-only default. */
-  labelled?: boolean;
+  readonly labelled?: boolean;
   /** Button variant used when `labelled`, e.g. `ghost` for a code block. */
-  variant?: React.ComponentProps<typeof Button>["variant"];
-  className?: string;
+  readonly variant?: React.ComponentProps<typeof Button>["variant"];
+  readonly className?: string;
 }
 
 /**

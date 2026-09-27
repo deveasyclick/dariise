@@ -17,9 +17,9 @@ import { resolveEnvironmentColor } from "@/lib/environment-color";
 
 interface CreateEnvironmentHeaderProps {
   /** Steps shown as a progress path, e.g. ["Details", "Flags", "Review"]. */
-  steps: string[];
+  readonly steps: string[];
   /** Zero-based index of the step currently in view. */
-  currentStep: number;
+  readonly currentStep: number;
 }
 
 /** Title block and step path of the create screen. */
@@ -86,7 +86,7 @@ export function CreateEnvironmentHeader({
 export function EnvironmentDetailHeader({
   environment,
 }: {
-  environment: EnvironmentDetail;
+  readonly environment: EnvironmentDetail;
 }) {
   return (
     <div className="bg-card mb-4 rounded-lg border p-4">
