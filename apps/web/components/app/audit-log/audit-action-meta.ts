@@ -176,6 +176,12 @@ export const auditActionMeta: Record<AuditAction, AuditActionMeta> = {
     verb: "created API key",
     targetLabel: "API key",
   },
+  "api_key.updated": {
+    icon: KeyRoundIcon,
+    tone: "bg-muted text-slate-ink",
+    verb: "renamed API key",
+    targetLabel: "API key",
+  },
   "api_key.rotated": {
     icon: KeyRoundIcon,
     tone: "bg-muted text-slate-ink",

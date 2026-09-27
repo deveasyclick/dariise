@@ -39,6 +39,7 @@ import type {
   SegmentSummary,
   SessionUser,
   TargetingRule,
+  UpdateApiKeyInput,
   UpdateEnvironmentInput,
   UpdateEnvironmentSettingsInput,
   UpdateFlagConfigInput,
@@ -714,8 +715,8 @@ export const apiKeys = {
     }),
 
   /**
-   * Issue a key. This is the only response that carries `secret`; the dashboard
-   * shows it once and never asks for it again.
+   * Issue a key. This is one of the two responses that carries `secret`; the
+   * dashboard shows it once and never asks for it again.
    */
   create: (
     projectKey: string,
@@ -726,6 +727,30 @@ export const apiKeys = {
       ...options,
       body: input,
     }),
+
+  /** Identity only: the prefix, the secret and its hash are not touched. */
+  update: (
+    projectKey: string,
+    keyId: string,
+    input: UpdateApiKeyInput,
+    options?: RequestOptions,
+  ) =>
+    request<ApiKey>(
+      "PATCH",
+      `/v1/projects/${projectKey}/api-keys/${keyId}`,
+      { ...options, body: input },
+    ),
+
+  /**
+   * Replace a key's secret, keeping its row and prefix. The reply carries the
+   * new secret, which is the last time it can be read.
+   */
+  rotate: (projectKey: string, keyId: string, options?: RequestOptions) =>
+    request<CreatedApiKey>(
+      "POST",
+      `/v1/projects/${projectKey}/api-keys/${keyId}/rotate`,
+      options,
+    ),
 
   revoke: (projectKey: string, keyId: string, options?: RequestOptions) =>
     request<ApiKey>(

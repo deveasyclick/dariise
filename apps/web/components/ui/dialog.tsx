@@ -64,7 +64,7 @@ function DialogContent({
         {children}
         <DialogPrimitive.Close
           aria-label="Close"
-          className="text-muted-foreground hover:text-foreground absolute top-3 right-3 rounded-md p-1 transition-colors"
+          className="text-muted-foreground hover:text-foreground absolute top-3 right-3 cursor-pointer rounded-md p-1 transition-colors"
         >
           <XIcon aria-hidden="true" className="size-3.5" />
         </DialogPrimitive.Close>

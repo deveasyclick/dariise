@@ -1,26 +1,20 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { KeyRoundIcon, LoaderCircleIcon } from "lucide-react";
 import {
   createApiKeySchema,
   toFieldErrors,
-  type ApiKeyScope,
   type CreateApiKeyInput,
-  type EnvironmentSummary,
+  type CreatedApiKey,
   type FieldErrors,
 } from "@dariise/contracts";
 import {
   KeyShownOnceCard,
   SecurityBestPracticesCard,
 } from "@/components/app/api-keys/api-key-notes";
-import { useCreatedApiKey } from "@/components/app/api-keys/api-keys-provider";
-import { API_KEY_SCOPE_OPTIONS } from "@/components/app/api-keys/api-key-scopes";
 import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -31,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { ApiError, apiKeys } from "@/lib/api";
 
-type CreateApiKeyField = "name" | "environmentKey" | "scopes" | "expiresInDays";
+type CreateApiKeyField = "name" | "expiresInDays";
 
 type CreateApiKeyErrors = FieldErrors<CreateApiKeyField>;
 
@@ -48,28 +42,31 @@ const expirations: Array<{
   { value: "1y", label: "1 year", days: 365 },
 ];
 
-/** DOM id for a permission row, e.g. `api-key-scope-flags-read`. */
-function scopeFieldId(scope: ApiKeyScope): string {
-  return `api-key-scope-${scope.replace(":", "-")}`;
-}
-
+/**
+ * Issues a key into the environment the dashboard is scoped to.
+ *
+ * Neither the environment nor the scopes are fields. The chrome already names
+ * the environment, and the scopes follow from the kind — a management key is the
+ * credential for driving the API, so the server records every management scope
+ * rather than asking somebody to tick boxes that cannot narrow it yet.
+ *
+ * It is rendered inside a dialog, so it owns no navigation: the caller closes
+ * the dialog in `onCreated` and the list picks the key up from the provider.
+ */
 export function CreateApiKeyForm({
   projectKey,
-  environments,
+  environmentKey,
+  onCreated,
+  onCancel,
 }: {
   readonly projectKey: string;
-  readonly environments: EnvironmentSummary[];
+  /** The environment the dashboard is scoped to; the key is issued into it. */
+  readonly environmentKey: string;
+  /** Handed the created key so its dialog can show the secret. */
+  readonly onCreated: (created: CreatedApiKey) => void;
+  readonly onCancel: () => void;
 }) {
-  const router = useRouter();
-  const { setCreated } = useCreatedApiKey();
-  const defaultEnvironment =
-    environments.find((environment) => environment.isDefault)?.key ??
-    environments[0]?.key ??
-    "";
-
   const [name, setName] = useState("");
-  const [environmentKey, setEnvironmentKey] = useState(defaultEnvironment);
-  const [scopes, setScopes] = useState<ApiKeyScope[]>(["flags:read"]);
   const [expiration, setExpiration] = useState<ApiKeyExpiration>("never");
   const [errors, setErrors] = useState<CreateApiKeyErrors>({});
   const [pending, setPending] = useState(false);
@@ -83,20 +80,10 @@ export function CreateApiKeyForm({
     }));
   }
 
-  function toggleScope(scope: ApiKeyScope, checked: boolean) {
-    setScopes((previous) =>
-      checked
-        ? [...previous, scope]
-        : previous.filter((item) => item !== scope),
-    );
-    clearError("scopes");
-  }
-
   function input(): CreateApiKeyInput {
     return {
       name: name.trim(),
-      environmentKey: environmentKey === "" ? null : environmentKey,
-      scopes,
+      environmentKey,
       expiresInDays:
         expirations.find((option) => option.value === expiration)?.days ??
         null,
@@ -131,8 +118,7 @@ export function CreateApiKeyForm({
       const created = await apiKeys.create(projectKey, input(), {
         signal: controller.signal,
       });
-      setCreated(created);
-      router.push("/api-keys");
+      onCreated(created);
     } catch (error) {
       if ((error as Error)?.name === "AbortError") return;
 
@@ -148,152 +134,78 @@ export function CreateApiKeyForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.55fr)]">
-        <div className="space-y-4">
-          <section className="bg-card rounded-lg border p-4">
-            <h2 className="text-[13px] font-medium">Key details</h2>
+    <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      <section className="bg-card rounded-lg border p-4">
+        <h2 className="text-[13px] font-medium">Key details</h2>
 
-            <div className="mt-4 space-y-4">
-              <div className="space-y-2">
-                <Field
-                  id="api-key-name"
-                  label="Name"
-                  name="name"
-                  placeholder="Production SDK"
-                  required
-                  maxLength={80}
-                  value={name}
-                  error={errors.name}
-                  onChange={(event) => {
-                    setName(event.target.value);
-                    clearError("name");
-                  }}
-                />
-                <p className="text-muted-foreground text-[11px]">
-                  Shown in the dashboard and audit log.
-                </p>
-              </div>
+        <div className="mt-4 space-y-4">
+          <div className="space-y-2">
+            <Field
+              id="api-key-name"
+              label="Name"
+              name="name"
+              placeholder="Production SDK"
+              required
+              maxLength={80}
+              value={name}
+              error={errors.name}
+              onChange={(event) => {
+                setName(event.target.value);
+                clearError("name");
+              }}
+            />
+            <p className="text-muted-foreground text-[11px]">
+              Shown in the dashboard and audit log.
+            </p>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="api-key-environment">Environment</Label>
-                <Select
-                  value={environmentKey}
-                  onValueChange={setEnvironmentKey}
-                  disabled={environments.length === 0}
-                >
-                  <SelectTrigger
-                    id="api-key-environment"
-                    className="h-8 w-full text-[12px]"
-                  >
-                    <SelectValue placeholder="No environment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {environments.map((environment) => (
-                      <SelectItem key={environment.key} value={environment.key}>
-                        {environment.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-muted-foreground text-[11px]">
-                  Keys are scoped to a single environment.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label asChild>
-                  <p id="api-key-permissions-label">Permissions</p>
-                </Label>
-                <ul
-                  aria-labelledby="api-key-permissions-label"
-                  className="divide-y"
-                >
-                  {API_KEY_SCOPE_OPTIONS.map((scope) => (
-                    <li key={scope.value}>
-                      <Label
-                        htmlFor={scopeFieldId(scope.value)}
-                        className="flex cursor-pointer items-start gap-2.5 py-3 font-normal"
-                      >
-                        <Checkbox
-                          id={scopeFieldId(scope.value)}
-                          checked={scopes.includes(scope.value)}
-                          onCheckedChange={(checked) =>
-                            toggleScope(scope.value, checked === true)
-                          }
-                          className="mt-0.5"
-                        />
-                        <span className="min-w-0">
-                          <span className="block text-[12px] font-medium">
-                            {scope.label}
-                          </span>
-                          <span className="text-muted-foreground block text-[11px] leading-4">
-                            {scope.description}
-                          </span>
-                        </span>
-                      </Label>
-                    </li>
-                  ))}
-                </ul>
-                {errors.scopes ? <FieldError>{errors.scopes}</FieldError> : null}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="api-key-expiration">Expiration</Label>
-                <Select
-                  value={expiration}
-                  onValueChange={(value) =>
-                    setExpiration(value as ApiKeyExpiration)
-                  }
-                >
-                  <SelectTrigger
-                    id="api-key-expiration"
-                    className="h-8 w-full text-[12px]"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {expirations.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-muted-foreground text-[11px]">
-                  Rotate keys regularly for production workloads.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {errors.form ? <FieldError>{errors.form}</FieldError> : null}
-
-          <div className="flex items-center justify-between gap-2">
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/api-keys">Cancel</Link>
-            </Button>
-
-            <Button
-              type="submit"
-              size="sm"
-              className="gap-1.5"
-              disabled={pending}
+          <div className="space-y-2">
+            <Label htmlFor="api-key-expiration">Expiration</Label>
+            <Select
+              value={expiration}
+              onValueChange={(value) =>
+                setExpiration(value as ApiKeyExpiration)
+              }
             >
-              {pending ? (
-                <LoaderCircleIcon className="animate-spin" />
-              ) : (
-                <KeyRoundIcon aria-hidden="true" className="size-3.5" />
-              )}
-              {pending ? "Creating…" : "Create key"}
-            </Button>
+              <SelectTrigger
+                id="api-key-expiration"
+                className="h-8 w-full text-[12px]"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {expirations.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-[11px]">
+              Rotate keys regularly for production workloads.
+            </p>
           </div>
         </div>
+      </section>
 
-        <div className="space-y-4">
-          <KeyShownOnceCard />
-          <SecurityBestPracticesCard />
-        </div>
+      <KeyShownOnceCard />
+      <SecurityBestPracticesCard />
+
+      {errors.form ? <FieldError>{errors.form}</FieldError> : null}
+
+      <div className="flex items-center justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+
+        <Button type="submit" size="sm" className="gap-1.5" disabled={pending}>
+          {pending ? (
+            <LoaderCircleIcon className="animate-spin" />
+          ) : (
+            <KeyRoundIcon aria-hidden="true" className="size-3.5" />
+          )}
+          {pending ? "Creating…" : "Create key"}
+        </Button>
       </div>
     </form>
   );

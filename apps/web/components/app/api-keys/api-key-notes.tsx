@@ -18,7 +18,7 @@ export function KeyShownOnceCard() {
       </div>
       <p className="text-muted-foreground mt-2 text-[12px] leading-5">
         Copy it somewhere safe. For security, it cannot be viewed again after
-        you leave this page.
+        you close this.
       </p>
     </section>
   );

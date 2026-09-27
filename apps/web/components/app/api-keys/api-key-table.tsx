@@ -4,20 +4,13 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircleIcon, MoreHorizontalIcon } from "lucide-react";
 import { cn } from "cn";
-import { ApiKeyCreatedNotice } from "@/components/app/api-keys/api-key-created-notice";
 import {
   EnvironmentPill,
   KeyGlyph,
-  NewBadge,
-  ScopePills,
 } from "@/components/app/api-keys/api-key-badges";
-import { useCreatedApiKey } from "@/components/app/api-keys/api-keys-provider";
-import {
-  toApiKeyView,
-  type ApiKeyView,
-  type EnvironmentOption,
-} from "@/components/app/api-keys/api-key-view";
-import { writeToClipboard } from "@/components/app/copy-button";
+import type { ApiKeyView } from "@/components/app/api-keys/api-key-view";
+import { RenameApiKeyDialog } from "@/components/app/api-keys/rename-api-key-dialog";
+import { RotateApiKeyDialog } from "@/components/app/api-keys/rotate-api-key-dialog";
 import { FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,13 +34,18 @@ const headerClass =
   "text-muted-foreground h-8 px-3 text-[10px] font-medium tracking-[0.1em] uppercase";
 const cellClass = "px-3 py-2.5 text-[12px]";
 
+/** The row's actions. Rename and rotate are real writes, not placeholders. */
 function RowMenu({
   apiKey,
   pending,
+  onRename,
+  onRotate,
   onRevoke,
 }: {
   readonly apiKey: ApiKeyView;
   readonly pending: boolean;
+  readonly onRename: () => void;
+  readonly onRotate: () => void;
   readonly onRevoke: () => void;
 }) {
   return (
@@ -58,6 +56,7 @@ function RowMenu({
           size="icon-sm"
           aria-label={`More actions for ${apiKey.name}`}
           disabled={pending}
+          className="cursor-pointer"
         >
           {pending ? (
             <LoaderCircleIcon className="animate-spin" />
@@ -68,19 +67,8 @@ function RowMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuLabel>{apiKey.name}</DropdownMenuLabel>
-        <DropdownMenuItem
-          onSelect={() => {
-            void writeToClipboard(apiKey.prefix);
-          }}
-        >
-          Copy prefix
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled title="Rename — coming soon">
-          Rename key
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled title="Rotate — coming soon">
-          Rotate key
-        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onRename}>Rename key</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onRotate}>Rotate key</DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={onRevoke}>
           Revoke key
         </DropdownMenuItem>
@@ -92,35 +80,26 @@ function RowMenu({
 /**
  * The API key list.
  *
- * A Client Component because each row has an actions menu and revoking is a
- * mutation. The key issued on the create screen is read from the provider that
- * wraps both routes, and merged in with its secret still attached.
+ * A Client Component because each row has an actions menu and every action is a
+ * mutation. The key a dialog has just issued is shown in that dialog and nowhere
+ * else: a secret that stays on the screen behind it is a secret left lying
+ * around.
  */
 export function ApiKeyTable({
   projectKey,
   keys,
-  environments,
-  now,
   truncated,
 }: {
   readonly projectKey: string;
   readonly keys: ApiKeyView[];
-  readonly environments: EnvironmentOption[];
-  readonly now: string;
   readonly truncated: boolean;
 }) {
   const router = useRouter();
-  const { created, setCreated } = useCreatedApiKey();
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<ApiKeyView | null>(null);
+  const [rotateTarget, setRotateTarget] = useState<ApiKeyView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
-
-  const createdRow = created
-    ? toApiKeyView(created, environments, new Date(now), true)
-    : null;
-  const rows = createdRow
-    ? [createdRow, ...keys.filter((key) => key.id !== createdRow.id)]
-    : keys;
 
   async function handleRevoke(apiKey: ApiKeyView) {
     if (pendingId) return;
@@ -135,7 +114,6 @@ export function ApiKeyTable({
       await apiKeys.revoke(projectKey, apiKey.id, {
         signal: controller.signal,
       });
-      if (created?.id === apiKey.id) setCreated(null);
       router.refresh();
     } catch (cause) {
       if ((cause as Error)?.name === "AbortError") return;
@@ -152,25 +130,23 @@ export function ApiKeyTable({
 
   return (
     <div className="space-y-3">
-      {createdRow && created ? (
-        <ApiKeyCreatedNotice name={created.name} secret={created.secret} />
-      ) : null}
-
       <section className="bg-card rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead className={headerClass}>Name</TableHead>
+              <TableHead className={headerClass}>Key</TableHead>
               <TableHead className={headerClass}>Environment</TableHead>
-              <TableHead className={headerClass}>Scopes</TableHead>
               <TableHead className={headerClass}>Created</TableHead>
               <TableHead className={headerClass}>Last used</TableHead>
-              <TableHead className={cn(headerClass, "w-10 text-right")}> </TableHead>
+              <TableHead className={cn(headerClass, "w-10 text-right")}>
+                {" "}
+              </TableHead>
             </TableRow>
           </TableHeader>
 
           <TableBody>
-            {rows.length === 0 ? (
+            {keys.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell
                   colSpan={6}
@@ -180,23 +156,21 @@ export function ApiKeyTable({
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((apiKey) => (
+              keys.map((apiKey) => (
                 <TableRow key={apiKey.id}>
                   <TableCell className={cellClass}>
                     <div className="flex items-center gap-2.5">
                       <KeyGlyph color={apiKey.environmentColor} />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-[12px] font-medium">
-                            {apiKey.name}
-                          </span>
-                          {apiKey.isNew ? <NewBadge /> : null}
-                        </div>
-                        <span className="text-muted-foreground block truncate font-mono text-[11px]">
-                          {apiKey.prefix}
-                        </span>
-                      </div>
+                      <span className="truncate text-[12px] font-medium">
+                        {apiKey.name}
+                      </span>
                     </div>
+                  </TableCell>
+
+                  <TableCell className={cellClass}>
+                    <span className="text-muted-foreground font-mono text-[11px]">
+                      {apiKey.maskedKey}
+                    </span>
                   </TableCell>
 
                   <TableCell className={cellClass}>
@@ -204,10 +178,6 @@ export function ApiKeyTable({
                       name={apiKey.environmentName}
                       color={apiKey.environmentColor}
                     />
-                  </TableCell>
-
-                  <TableCell className={cellClass}>
-                    <ScopePills scopes={apiKey.scopes} />
                   </TableCell>
 
                   <TableCell className={cn(cellClass, "text-muted-foreground")}>
@@ -229,6 +199,12 @@ export function ApiKeyTable({
                     <RowMenu
                       apiKey={apiKey}
                       pending={pendingId === apiKey.id}
+                      onRename={() => {
+                        setRenameTarget(apiKey);
+                      }}
+                      onRotate={() => {
+                        setRotateTarget(apiKey);
+                      }}
                       onRevoke={() => {
                         void handleRevoke(apiKey);
                       }}
@@ -248,6 +224,21 @@ export function ApiKeyTable({
       </section>
 
       {error ? <FieldError>{error}</FieldError> : null}
+
+      <RenameApiKeyDialog
+        projectKey={projectKey}
+        apiKey={renameTarget}
+        onClose={() => {
+          setRenameTarget(null);
+        }}
+      />
+      <RotateApiKeyDialog
+        projectKey={projectKey}
+        apiKey={rotateTarget}
+        onClose={() => {
+          setRotateTarget(null);
+        }}
+      />
     </div>
   );
 }

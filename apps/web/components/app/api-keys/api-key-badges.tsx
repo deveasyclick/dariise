@@ -1,7 +1,5 @@
 import { KeyRoundIcon } from "lucide-react";
 import { cn } from "cn";
-import type { ApiKeyScope } from "@dariise/contracts";
-import { isWriteScope, scopeLabel } from "@/components/app/api-keys/api-key-scopes";
 import { environmentColorTone } from "@/components/app/environments/environment-colors";
 import { Badge } from "@/components/ui/badge";
 import type { EnvironmentColor } from "@/lib/environment-color";
@@ -48,37 +46,6 @@ export function EnvironmentPill({
         )}
       />
       {name}
-    </Badge>
-  );
-}
-
-/**
- * One pill per permission.
- *
- * Write scopes are tinted so a key that can change configuration is
- * distinguishable at a glance from a read-only one.
- */
-export function ScopePills({ scopes }: { readonly scopes: ApiKeyScope[] }) {
-  return (
-    <span className="flex flex-wrap items-center gap-1">
-      {scopes.map((scope) => (
-        <Badge
-          key={scope}
-          variant="secondary"
-          className={cn(isWriteScope(scope) && "bg-info-ink/10 text-info-ink")}
-        >
-          {scopeLabel(scope)}
-        </Badge>
-      ))}
-    </span>
-  );
-}
-
-/** Marks the key issued in this session. */
-export function NewBadge() {
-  return (
-    <Badge variant="ok" className="text-[10px] tracking-wide uppercase">
-      New
     </Badge>
   );
 }

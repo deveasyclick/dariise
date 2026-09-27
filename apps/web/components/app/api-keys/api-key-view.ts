@@ -1,6 +1,6 @@
 import type {
   ApiKey,
-  ApiKeyScope,
+  ApiKeyKind,
   EnvironmentSummary,
 } from "@dariise/contracts";
 import {
@@ -18,16 +18,20 @@ export interface EnvironmentOption {
 export interface ApiKeyView {
   id: string;
   name: string;
+  /** `management` is the dashboard's credential; the others are runtime SDK keys. */
+  kind: ApiKeyKind;
   /** Non-secret identifier the API returns; the secret is never in a list row. */
   prefix: string;
+  /** The secret's tail, kept so the list can mask the key it names. */
+  suffix: string;
+  /** `prefix*****suffix`, which is what the Key column renders. */
+  maskedKey: string;
   /** `null` when the key is valid in every environment. */
   environmentKey: string | null;
   environmentName: string;
   environmentColor: EnvironmentColor | null;
-  scopes: ApiKeyScope[];
   createdLabel: string;
   lastUsedLabel: string;
-  isNew: boolean;
 }
 
 export function toEnvironmentOptions(
@@ -40,11 +44,22 @@ export function toEnvironmentOptions(
   }));
 }
 
+/**
+ * The key as the list shows it: the non-secret head, a run of asterisks, and the
+ * secret's tail.
+ *
+ * Only the two ends are ever stored, so it is what the mask can honestly show. A
+ * key created before the tail was kept falls back to its head alone, because the
+ * tail it never stored cannot be recovered.
+ */
+export function maskKey(prefix: string, suffix: string): string {
+  return suffix ? `${prefix.slice(0, 5)}*****${suffix}` : prefix;
+}
+
 export function toApiKeyView(
   key: ApiKey,
   environments: EnvironmentOption[],
   now: Date,
-  isNew = false,
 ): ApiKeyView {
   const environment =
     key.environmentKey === null
@@ -54,18 +69,19 @@ export function toApiKeyView(
   return {
     id: key.id,
     name: key.name,
+    kind: key.kind,
     prefix: key.prefix,
+    suffix: key.suffix,
+    maskedKey: maskKey(key.prefix, key.suffix),
     environmentKey: key.environmentKey,
     environmentName:
       key.environmentKey === null
         ? "All environments"
         : (environment?.name ?? key.environmentKey),
     environmentColor: environment?.color ?? null,
-    scopes: key.scopes,
     createdLabel: formatDate(key.createdAt),
     lastUsedLabel: key.lastUsedAt
       ? formatRelativeTime(key.lastUsedAt, now)
       : "Never",
-    isNew,
   };
 }

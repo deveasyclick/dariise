@@ -3,10 +3,10 @@ import { CopyButton } from "@/components/app/copy-button";
 import { Badge } from "@/components/ui/badge";
 
 /**
- * Confirmation shown on the list straight after a key is issued.
+ * The secret, shown once inside the dialog that issued it.
  *
- * The create response is the only place the API ever returns `secret`, and it is
- * held in memory by `ApiKeysProvider`, so this is genuinely the one render.
+ * Create and rotate are the only two responses that ever carry `secret`, and
+ * this is rendered from the response itself, so it is genuinely the one render.
  */
 export function ApiKeyCreatedNotice({
   name,
