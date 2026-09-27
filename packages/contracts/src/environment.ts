@@ -6,15 +6,14 @@ import { resourceKeySchema } from "#slug";
 
 export const environmentKeySchema = resourceKeySchema;
 
-export const environmentSettingsSchema = z.object({
-  /**
-   * Flag changes here are staged as a change request that a second person
-   * approves, instead of being applied directly.
-   */
-  protectedEnvironment: z.boolean(),
-});
-
-export type EnvironmentSettings = z.infer<typeof environmentSettingsSchema>;
+/**
+ * The environments every new project starts with, in creation order. The first
+ * is the project's default; every entry is created unprotected.
+ */
+export const STARTER_ENVIRONMENTS = [
+  { key: "development", name: "Development" },
+  { key: "production", name: "Production" },
+] as const;
 
 export const environmentSummarySchema = z.object({
   id: z.string(),
@@ -49,7 +48,6 @@ export const environmentConnectionSchema = z.object({
 export type EnvironmentConnection = z.infer<typeof environmentConnectionSchema>;
 
 export const environmentDetailSchema = environmentSummarySchema.extend({
-  settings: environmentSettingsSchema,
   connection: environmentConnectionSchema,
 });
 
@@ -129,7 +127,9 @@ export const environmentListQuerySchema = paginationQuerySchema.extend({
 
 export type EnvironmentListQuery = z.infer<typeof environmentListQuerySchema>;
 
-export const updateEnvironmentSettingsSchema = environmentSettingsSchema;
+export const updateEnvironmentSettingsSchema = z.object({
+  isProtected: z.boolean(),
+});
 
 export type UpdateEnvironmentSettingsInput = z.infer<
   typeof updateEnvironmentSettingsSchema
