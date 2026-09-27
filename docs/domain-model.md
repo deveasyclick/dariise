@@ -87,11 +87,11 @@ keys rather than a join table, and `flag_dependencies` stores `key`, `requires` 
 
 A project has `created_at` and `updated_at` and nothing else: no archive, soft-delete or
 `deleted_at` column, and no route removes one. The status is the row's existence.
-`project.environment_name` (default `Development`) and `project.default_environment_id`
-are plain text with no foreign key, so the pointer to the project's first environment is
-kept correct by application code rather than by the database. Creating a project also
-creates that first environment in the same transaction, so a project cannot be left
-without somewhere to put a flag.
+`project.default_environment_id` is plain text with no foreign key, so the pointer to the
+project's default environment is kept correct by application code rather than by the database.
+Creating a project also creates its starter environments in the same transaction —
+`development`, which is the default, and `production` — so a project cannot be left without
+somewhere to put a flag. Any further environment arrives later through the environments API.
 
 ### Environment
 
@@ -150,13 +150,13 @@ tables are Better Auth's shape, not Dariise's.
 
 **Workspace and project**
 
-- `project` → one project: organization, unique-per-workspace key, name, description, color, owner team, first-environment name, default environment id.
+- `project` → one project: organization, unique-per-workspace key, name, description, color, owner team, default environment id.
 - `project_members` → a user's role on one project, distinct from the workspace role.
 - `user_preferences` → per-user defaults: default project and environment, theme, notification switches.
 
 **Environment**
 
-- `environments` → one environment of a project: key, name, color, `is_default`, `is_protected`, `settings` jsonb, `archived_at`.
+- `environments` → one environment of a project: key, name, color, `is_default`, `is_protected`, `archived_at`.
 
 **Flag configuration**
 
@@ -285,8 +285,7 @@ endpoints, and nothing consumes them to send a notification;
 
 Not built: project delete or archive (`project.deleted` is declared but unwritten); flag
 unarchive; segment unarchive; API key rotation (`api_key.rotated` is declared but
-unwritten). No foreign key constrains `project.default_environment_id` or
-`project.environment_name`.
+unwritten). No foreign key constrains `project.default_environment_id`.
 
 ## Where it lives
 
@@ -312,8 +311,8 @@ unwritten). No foreign key constrains `project.default_environment_id` or
 - `apps/api/src/db/audit.ts` — `writeAuditLog`, the only writer of audit rows.
 - `apps/api/src/shared/types/audit.ts` — the `AuditEntry` shape.
 - `apps/api/src/shared/types/db.ts` — the `Transaction` type the audit helper is given.
-- `apps/api/src/modules/projects/projects.service.ts` — project creation and update, and the first environment.
-- `apps/api/src/modules/environments/environments.service.ts` — environment archive, unarchive and the last-active-environment rule.
+- `apps/api/src/modules/projects/projects.service.ts` — project creation and update, and the starter environments.
+- `apps/api/src/modules/environments/environments.service.ts` — the starter environments of a new project, environment archive, unarchive and the last-active-environment rule.
 - `apps/api/src/modules/flags/flags.service.ts` — flag creation, identity updates, archive, variations and the per-environment publish.
 - `apps/api/src/modules/segments/segments.service.ts` — segment creation, update and archive.
 - `apps/api/src/modules/evaluation/evaluation.engine.ts` — where an archived flag resolves to the off variation.

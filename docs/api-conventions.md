@@ -92,14 +92,14 @@ module router. Below, `…` stands for `/v1/projects/:projectKey/flags/:flagKey`
 | `/` | GET | `…/environments/:environmentKey/versions` | That environment's configuration history; paginated. |
 | `/` | GET | `…/dependencies` | Read the flag's dependencies. |
 | `/v1/projects` | GET | `/v1/projects` | List projects; the only filter is `search`. |
-| `/v1/projects` | POST | `/v1/projects` | Create a project with its default environment and owner membership; 201. |
+| `/v1/projects` | POST | `/v1/projects` | Create a project with its Development and Production environments and owner membership; 201. |
 | `/v1/projects` | GET | `/v1/projects/:projectKey` | Read one project. |
 | `/v1/projects` | PATCH | `/v1/projects/:projectKey` | Update the project. |
 | `/v1/projects` | GET | `/v1/projects/:projectKey/environments` | List environments; paginated, with `includeArchived`. |
 | `/v1/projects` | POST | `/v1/projects/:projectKey/environments` | Create an environment; 201. |
 | `/v1/projects` | GET | `/v1/projects/:projectKey/environments/:environmentKey` | Read one environment. |
 | `/v1/projects` | PATCH | `/v1/projects/:projectKey/environments/:environmentKey` | Update the environment. |
-| `/v1/projects` | PATCH | `/v1/projects/:projectKey/environments/:environmentKey/settings` | Update the environment's settings. |
+| `/v1/projects` | PATCH | `/v1/projects/:projectKey/environments/:environmentKey/settings` | Set whether the environment is protected. |
 | `/v1/projects` | POST | `/v1/projects/:projectKey/environments/:environmentKey/archive` | Archive the environment. |
 | `/v1/projects` | POST | `/v1/projects/:projectKey/environments/:environmentKey/unarchive` | Unarchive the environment. |
 | `/v1/projects` | GET | `/v1/projects/:projectKey/segments` | List segments; paginated, with `search` and `includeArchived`. |

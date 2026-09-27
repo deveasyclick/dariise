@@ -127,9 +127,9 @@ account."` otherwise. Reading the workspace profile and security settings needs 
 
 ## Protected environments
 
-An environment is protected when its settings set `protectedEnvironment`;
-`environments.repository.ts` mirrors that into `environment.is_protected`. Marking it is an
-environment settings write, so it needs project `admin`.
+An environment is protected when `environment.is_protected` is true. Marking it is an environment
+settings write — `PATCH .../environments/:environmentKey/settings` with `{ "isProtected": true }` —
+so it needs project `admin`.
 
 A direct publish into a protected environment is refused. `FlagsService.assertPublishable`
 throws `ApiError.approvalRequired` — `409`, code `approvalRequired`, carrying the

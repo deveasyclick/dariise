@@ -9,10 +9,11 @@ inventory to `docs/domain-model.md`; the decision is `docs/architecture.md §4`,
 
 ## What a protected environment changes
 
-`isProtected` is a boolean on the environment, mirroring the `protectedEnvironment` field of its
-settings. A project admin toggles it through
+`isProtected` is a boolean on the environment and the only representation of this state —
+there is no settings bag mirroring it. A project admin toggles it through
 `PATCH /v1/projects/:projectKey/environments/:environmentKey/settings` with
-`{ "protectedEnvironment": true }`, audited as `environment.updated`.
+`{ "isProtected": true }`, audited as `environment.updated`. A project's starter environments are
+created unprotected, so protection is always an explicit choice.
 
 Every direct publish into a protected environment is refused by `FlagsService.assertPublishable`.
 The three environment-scoped writes — the configuration publish, the rules and the targets,

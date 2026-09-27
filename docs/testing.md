@@ -97,7 +97,7 @@ A signed-in session comes from `signUp(app)`, which drives Better Auth's own end
 
 - The authorization boundary, not only the happy path. `acceptance.test.ts` walks the role matrix: a viewer reads but every write is refused, an engineer writes flags and segments but not environments, keys or members, and a workspace admin is an implicit project admin while renaming the project itself stays owner-only.
 - Workspace isolation across two tenants, and the not-found-for-another-tenant rule: a caller from another workspace receives 404, never 403. `project-access.integration.test.ts` adds a workspace member with no project row, an unrecognised stored role, a role change applied on the very next request, and access revoked as soon as the membership row goes.
-- The onboarding gates, including the project's first environment created during onboarding and the onboarding state reported through `/v1/me`.
+- The onboarding gates, including the Development and Production environments created with the project and the onboarding state reported through `/v1/me`.
 - The evaluation engine as a pure function, with a case per evaluation reason: `flag_archived`, `flag_disabled`, `targeting_rule`, `segment`, `percentage_rollout` and `default_variation` are each asserted, along with bucketing and rule-level rollout gating.
 - `/healthz` and `/readyz` against a migrated but empty database, which is the state every first run starts from; `/readyz` reports `database: "ok"` and `redis: "not_configured"`.
 
@@ -115,7 +115,7 @@ The suite applies the rule in both directions. `harness.test.ts` asserts that th
 - an unknown environment answering 404 rather than an empty config, and an archive refused for a viewer with 403;
 - segment rename with replaced conditions, reflected in the list's `conditionCount`, and an unknown segment answering 404;
 - cursor paging walked one row at a time across environments, segments and API keys, with a bound so a non-terminating loop cannot hang the suite;
-- the compound project create de-duplicating a derived key (`alpha-platform`, then `alpha-platform-2`) while still giving each project its own first environment;
+- the compound project create de-duplicating a derived key (`alpha-platform`, then `alpha-platform-2`) while still giving each project its own Development and Production environments;
 - environment seeding modes: every flag's configuration written disabled by default, and `initialFlagStatus: "copy-source"` copying the source environment's configurations, with 400 when no source is named;
 - audit `from`/`to` range filters, and a workspace metadata value that is not JSON falling back to defaults on `/v1/workspace` and `/v1/workspace/security`.
 
