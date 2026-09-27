@@ -1,7 +1,6 @@
 import {
   boolean,
   index,
-  jsonb,
   pgTable,
   text,
   timestamp,
@@ -23,9 +22,6 @@ export const environment = pgTable(
     color: text("color"),
     isDefault: boolean("is_default").notNull().default(false),
     isProtected: boolean("is_protected").notNull().default(false),
-    settings: jsonb("settings")
-      .notNull()
-      .default({ protectedEnvironment: false }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

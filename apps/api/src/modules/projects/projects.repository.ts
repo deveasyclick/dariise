@@ -18,7 +18,6 @@ const detailColumns = {
   description: project.description,
   color: project.color,
   ownerTeam: project.ownerTeam,
-  environmentName: project.environmentName,
   defaultEnvironmentId: project.defaultEnvironmentId,
   createdAt: project.createdAt,
   updatedAt: project.updatedAt,
@@ -144,7 +143,6 @@ export class ProjectsRepository {
         id: project.id,
         key: project.key,
         name: project.name,
-        environmentName: project.environmentName,
       })
       .from(project)
       .where(

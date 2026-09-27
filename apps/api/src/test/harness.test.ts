@@ -43,10 +43,7 @@ describe("test harness", () => {
     const response = await app.request("/v1/projects", {
       method: "POST",
       headers: { "content-type": "application/json", cookie: session.cookie },
-      body: JSON.stringify({
-        name: "Checkout Platform",
-        environmentName: "Development",
-      }),
+      body: JSON.stringify({ name: "Checkout Platform" }),
     });
 
     expect(response.status).toBe(201);

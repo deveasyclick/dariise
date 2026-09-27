@@ -1,5 +1,3 @@
-import type { EnvironmentSettings } from "@dariise/contracts";
-
 import type { Transaction } from "../../shared/types/db.js";
 import type { EnvironmentRef } from "../../shared/types/environment.js";
 
@@ -12,7 +10,6 @@ export interface EnvironmentRow {
   color: string | null;
   isDefault: boolean;
   isProtected: boolean;
-  settings: unknown;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -26,7 +23,6 @@ export interface NewEnvironmentRecord {
   color: string | null;
   isDefault: boolean;
   isProtected: boolean;
-  settings: EnvironmentSettings;
 }
 
 /** The mutable half of an environment: `key` is fixed once applications resolve it. */
@@ -66,10 +62,6 @@ export interface EnvironmentConnectionUrls {
   streamUrl: string | null;
   maskedKey: string | null;
 }
-
-export const DEFAULT_ENVIRONMENT_SETTINGS: EnvironmentSettings = {
-  protectedEnvironment: false,
-};
 
 /** The environment row as the flag copier needs to see it. */
 export function toEnvironmentRef(row: EnvironmentRow): EnvironmentRef {

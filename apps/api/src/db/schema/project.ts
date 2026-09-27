@@ -23,10 +23,6 @@ export const project = pgTable(
     description: text("description"),
     color: text("color"),
     ownerTeam: text("owner_team"),
-    // Onboarding's first environment. Plain text, not a foreign key: the
-    // environments table references the project, and a second link back would
-    // make the two mutually dependent.
-    environmentName: text("environment_name").notNull().default("Development"),
     defaultEnvironmentId: text("default_environment_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

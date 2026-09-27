@@ -49,10 +49,7 @@ async function fixture(): Promise<Fixture> {
   const created = await app.request("/v1/projects", {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({
-      name: "Checkout Platform",
-      environmentName: "Development",
-    }),
+    body: JSON.stringify({ name: "Checkout Platform" }),
   });
 
   const project = (await created.json()) as { id: string; key: string };
@@ -190,9 +187,21 @@ describe("api-keys module", () => {
     const other = await app.request("/v1/projects", {
       method: "POST",
       headers: headers(underTest.session),
-      body: JSON.stringify({ name: "Other", environmentName: "Production" }),
+      body: JSON.stringify({ name: "Other" }),
     });
     expect(other.status).toBe(201);
+    const otherProject = (await other.json()) as { key: string };
+
+    // An environment key that exists in the other project only.
+    const foreignEnvironment = await app.request(
+      `/v1/projects/${otherProject.key}/environments`,
+      {
+        method: "POST",
+        headers: headers(underTest.session),
+        body: JSON.stringify({ name: "QA", key: "qa" }),
+      },
+    );
+    expect(foreignEnvironment.status).toBe(201);
 
     const foreign = await app.request(
       `/v1/projects/${underTest.projectKey}/api-keys`,
@@ -201,7 +210,7 @@ describe("api-keys module", () => {
         headers: headers(underTest.session),
         body: JSON.stringify({
           name: "Nope",
-          environmentKey: "production",
+          environmentKey: "qa",
           scopes: ["flags:read"],
         }),
       },

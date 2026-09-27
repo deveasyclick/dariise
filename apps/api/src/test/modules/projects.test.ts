@@ -45,12 +45,11 @@ async function owner(): Promise<{ session: TestSession; organizationId: string }
 async function createProject(
   session: TestSession,
   name: string,
-  environmentName = "Development",
 ): Promise<Project> {
   const response = await app.request("/v1/projects", {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({ name, environmentName }),
+    body: JSON.stringify({ name }),
   });
 
   expect(response.status).toBe(201);
@@ -59,10 +58,28 @@ async function createProject(
 }
 
 describe("projects read and update", () => {
+  it("refuses a retired create field rather than ignoring it", async () => {
+    const { session } = await owner();
+
+    const response = await app.request("/v1/projects", {
+      method: "POST",
+      headers: headers(session),
+      body: JSON.stringify({
+        name: "Checkout Platform",
+        environmentName: "Production",
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "invalid_request" },
+    });
+  });
+
   it("lists projects with their environment count and searches", async () => {
     const { session } = await owner();
     await createProject(session, "Alpha Platform");
-    await createProject(session, "Beta Service", "Production");
+    await createProject(session, "Beta Service");
 
     const list = await app.request("/v1/projects", {
       headers: { cookie: session.cookie },
@@ -75,7 +92,7 @@ describe("projects read and update", () => {
       "alpha-platform",
       "beta-service",
     ]);
-    expect(body[0]).toMatchObject({ environmentCount: 1 });
+    expect(body[0]).toMatchObject({ environmentCount: 2 });
 
     const searched = await app.request("/v1/projects?search=beta", {
       headers: { cookie: session.cookie },
@@ -98,8 +115,7 @@ describe("projects read and update", () => {
     await expect(response.json()).resolves.toMatchObject({
       key: "alpha-platform",
       name: "Alpha Platform",
-      environmentName: "Development",
-      environmentCount: 1,
+      environmentCount: 2,
     });
   });
 

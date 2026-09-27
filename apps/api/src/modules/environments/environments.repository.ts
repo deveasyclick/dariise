@@ -1,19 +1,7 @@
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  gt,
-  isNull,
-  or,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNull, or } from "drizzle-orm";
 
 import { db } from "../../db/client.js";
-import {
-  apiKey,
-  environment,
-} from "../../db/schema/index.js";
+import { apiKey, environment } from "../../db/schema/index.js";
 import type { Transaction } from "../../shared/types/db.js";
 import type {
   EnvironmentDetails,
@@ -112,18 +100,14 @@ export class EnvironmentsRepository {
     await tx.insert(environment).values(record);
   }
 
-  async updateSettings(
+  async setProtected(
     tx: Transaction,
     id: string,
-    settings: NewEnvironmentRecord["settings"],
+    isProtected: boolean,
   ): Promise<void> {
     await tx
       .update(environment)
-      .set({
-        settings,
-        isProtected: settings.protectedEnvironment,
-        updatedAt: new Date(),
-      })
+      .set({ isProtected, updatedAt: new Date() })
       .where(eq(environment.id, id));
   }
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
-  toWorkspaceSlug,
+  STARTER_ENVIRONMENTS,
   type CreateEnvironmentInput,
   type EnvironmentDetail,
   type EnvironmentSummary,
@@ -22,7 +22,6 @@ import {
 } from "./environments.mapper.js";
 import type { EnvironmentsRepository } from "./environments.repository.js";
 import {
-  DEFAULT_ENVIRONMENT_SETTINGS,
   toEnvironmentRef,
   type InitializeEnvironmentConfigs,
   type EnvironmentActorContext,
@@ -105,7 +104,6 @@ export class EnvironmentsService {
         color: input.color ?? null,
         isDefault: existing === 0,
         isProtected: false,
-        settings: DEFAULT_ENVIRONMENT_SETTINGS,
       });
 
       // Every flag of the project gets a configuration here: disabled defaults,
@@ -175,7 +173,7 @@ export class EnvironmentsService {
     this.assertActive(row);
 
     await db.transaction(async (tx) => {
-      await this.repository.updateSettings(tx, row.id, input);
+      await this.repository.setProtected(tx, row.id, input.isProtected);
 
       await writeAuditLog(tx, {
         organizationId: context.organizationId,
@@ -350,27 +348,22 @@ export class EnvironmentsService {
   }
 
   /**
-   * The first environment of a new project, created inside the project's
-   * transaction so onboarding cannot strand a project with nowhere to put a flag.
    */
-  async createDefault(
+  async createStarterEnvironments(
     tx: Transaction,
     projectId: string,
-    name: string,
   ): Promise<void> {
-    const id = randomUUID();
-    const key = toWorkspaceSlug(name) || "development";
-
-    await this.repository.insert(tx, {
-      id,
-      projectId,
-      key,
-      name,
-      color: null,
-      isDefault: true,
-      isProtected: false,
-      settings: DEFAULT_ENVIRONMENT_SETTINGS,
-    });
+    for (const [index, starter] of STARTER_ENVIRONMENTS.entries()) {
+      await this.repository.insert(tx, {
+        id: randomUUID(),
+        projectId,
+        key: starter.key,
+        name: starter.name,
+        color: null,
+        isDefault: index === 0,
+        isProtected: false,
+      });
+    }
   }
 
   private async loadDetail(

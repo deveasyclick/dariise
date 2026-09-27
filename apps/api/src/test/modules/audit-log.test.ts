@@ -47,12 +47,11 @@ interface Fixture {
 async function createProject(
   session: TestSession,
   name = "Checkout Platform",
-  environmentName = "Development",
 ): Promise<{ id: string; key: string }> {
   const response = await app.request("/v1/projects", {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({ name, environmentName }),
+    body: JSON.stringify({ name }),
   });
 
   expect(response.status).toBe(201);
@@ -109,7 +108,7 @@ describe("audit log module", () => {
       {
         method: "POST",
         headers: headers(underTest.session),
-        body: JSON.stringify({ name: "Production", key: "production" }),
+        body: JSON.stringify({ name: "Staging", key: "staging" }),
       },
     );
 
@@ -130,7 +129,7 @@ describe("audit log module", () => {
 
   it("keeps projects apart and spans them in the workspace list", async () => {
     const underTest = await fixture();
-    const second = await createProject(underTest.session, "Second", "Production");
+    const second = await createProject(underTest.session, "Second");
 
     const scoped = await pageOf(
       `/v1/projects/${underTest.projectKey}/audit-logs`,

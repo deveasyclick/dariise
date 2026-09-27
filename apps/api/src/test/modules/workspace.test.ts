@@ -43,10 +43,7 @@ async function owner(): Promise<TestSession> {
   const project = await app.request("/v1/projects", {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({
-      name: "Checkout Platform",
-      environmentName: "Development",
-    }),
+    body: JSON.stringify({ name: "Checkout Platform" }),
   });
   expect(project.status).toBe(201);
 

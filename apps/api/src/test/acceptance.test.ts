@@ -59,7 +59,7 @@ async function workspaceWithProject(name = "Checkout Platform"): Promise<Workspa
   const created = await app.request("/v1/projects", {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({ name, environmentName: "Development" }),
+    body: JSON.stringify({ name }),
   });
   expect(created.status).toBe(201);
   const project = (await created.json()) as { id: string; key: string };

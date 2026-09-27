@@ -1,22 +1,12 @@
-import {
-  environmentSettingsSchema,
-  type EnvironmentDetail,
-  type EnvironmentSettings,
-  type EnvironmentSummary,
+import type {
+  EnvironmentDetail,
+  EnvironmentSummary,
 } from "@dariise/contracts";
 
-import {
-  DEFAULT_ENVIRONMENT_SETTINGS,
-  type EnvironmentConnectionUrls,
-  type EnvironmentRow,
+import type {
+  EnvironmentConnectionUrls,
+  EnvironmentRow,
 } from "./environments.types.js";
-
-/** The settings column is jsonb: validate on read so a bad row cannot leak. */
-export function toEnvironmentSettings(value: unknown): EnvironmentSettings {
-  const parsed = environmentSettingsSchema.safeParse(value);
-
-  return parsed.success ? parsed.data : DEFAULT_ENVIRONMENT_SETTINGS;
-}
 
 export function toEnvironmentSummary(
   row: EnvironmentRow,
@@ -42,7 +32,6 @@ export function toEnvironmentDetail(
 ): EnvironmentDetail {
   return {
     ...toEnvironmentSummary(row),
-    settings: toEnvironmentSettings(row.settings),
     connection,
   };
 }

@@ -53,10 +53,7 @@ async function ownerWithProject(): Promise<{
   const created = await app.request("/v1/projects", {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({
-      name: "Checkout Platform",
-      environmentName: "Development",
-    }),
+    body: JSON.stringify({ name: "Checkout Platform" }),
   });
 
   const project = (await created.json()) as { id: string; key: string };
@@ -85,23 +82,6 @@ async function listEnvironments(
   return body.data;
 }
 
-/** A second active environment, so the first one is allowed to be archived. */
-async function addProduction(
-  projectKey: string,
-  session: TestSession,
-): Promise<void> {
-  const response = await app.request(
-    `/v1/projects/${projectKey}/environments`,
-    {
-      method: "POST",
-      headers: headers(session),
-      body: JSON.stringify({ name: "Production", key: "production" }),
-    },
-  );
-
-  expect(response.status).toBe(201);
-}
-
 async function archive(
   projectKey: string,
   environmentKey: string,
@@ -125,7 +105,7 @@ async function unarchive(
 }
 
 describe("environments module", () => {
-  it("creates the project's first environment during onboarding", async () => {
+  it("creates Development and Production when the project is created", async () => {
     const { session, projectKey } = await ownerWithProject();
 
     const response = await app.request(
@@ -135,16 +115,29 @@ describe("environments module", () => {
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      data: Array<{ key: string; name: string; isDefault: boolean }>;
+      data: Array<{
+        key: string;
+        name: string;
+        isDefault: boolean;
+        isProtected: boolean;
+      }>;
       nextCursor: string | null;
     };
 
-    expect(body.data).toHaveLength(1);
-    expect(body.data[0]).toMatchObject({
-      key: "development",
-      name: "Development",
-      isDefault: true,
-    });
+    expect(body.data).toMatchObject([
+      {
+        key: "development",
+        name: "Development",
+        isDefault: true,
+        isProtected: false,
+      },
+      {
+        key: "production",
+        name: "Production",
+        isDefault: false,
+        isProtected: false,
+      },
+    ]);
   });
 
   it("configures every flag disabled by default and copies one when asked", async () => {
@@ -181,24 +174,14 @@ describe("environments module", () => {
         method: "POST",
         headers: headers(session),
         body: JSON.stringify({
-          name: "Production",
-          key: "production",
+          name: "Staging",
+          key: "staging",
           copyFrom: "development",
           initialFlagStatus: "copy-source",
         }),
       },
     );
     expect(copied.status).toBe(201);
-
-    const empty = await app.request(
-      `/v1/projects/${projectKey}/environments`,
-      {
-        method: "POST",
-        headers: headers(session),
-        body: JSON.stringify({ name: "Staging", key: "staging" }),
-      },
-    );
-    expect(empty.status).toBe(201);
 
     const read = (key: string) =>
       app.request(
@@ -207,17 +190,18 @@ describe("environments module", () => {
       );
 
     // Copying carries the whole configuration, not merely the flag's existence.
-    const production = (await (
-      await read("production")
-    ).json()) as FlagEnvironmentConfig;
-    expect(production).toMatchObject({ enabled: true, rolloutPercentage: 100 });
-
-    // Nothing is copied unless a source is named: the flag is configured here
-    // too, but disabled — a flag is project-scoped, so it exists everywhere.
     const staging = (await (
       await read("staging")
     ).json()) as FlagEnvironmentConfig;
-    expect(staging).toMatchObject({ enabled: false, rolloutPercentage: 0 });
+    expect(staging).toMatchObject({ enabled: true, rolloutPercentage: 100 });
+
+    // The starter environments are configured too, disabled — a flag is
+    // project-scoped, so it exists everywhere, and nothing is copied unless a
+    // source is named.
+    const production = (await (
+      await read("production")
+    ).json()) as FlagEnvironmentConfig;
+    expect(production).toMatchObject({ enabled: false, rolloutPercentage: 0 });
 
     // Variations belong to the flag, not to one environment's configuration.
     const detail = await app.request(
@@ -262,7 +246,7 @@ describe("environments module", () => {
     expect(response.status).toBe(409);
   });
 
-  it("updates settings, writes one audit row and returns the connection", async () => {
+  it("updates protection, writes one audit row and returns the connection", async () => {
     const { session, projectKey } = await ownerWithProject();
 
     const response = await app.request(
@@ -270,16 +254,13 @@ describe("environments module", () => {
       {
         method: "PATCH",
         headers: headers(session),
-        body: JSON.stringify({
-          protectedEnvironment: true,
-        }),
+        body: JSON.stringify({ isProtected: true }),
       },
     );
 
     expect(response.status).toBe(200);
     const detail = (await response.json()) as EnvironmentDetail;
 
-    expect(detail.settings).toEqual({ protectedEnvironment: true });
     expect(detail.isProtected).toBe(true);
     expect(detail.connection.evalUrl).toMatch(/\/v1\/evaluate$/);
     // Streaming and keys do not exist yet, so neither is advertised.
@@ -296,9 +277,26 @@ describe("environments module", () => {
     ]);
   });
 
+  it("rejects the retired settings body rather than ignoring it", async () => {
+    const { session, projectKey } = await ownerWithProject();
+
+    const response = await app.request(
+      `/v1/projects/${projectKey}/environments/development/settings`,
+      {
+        method: "PATCH",
+        headers: headers(session),
+        body: JSON.stringify({ protectedEnvironment: true }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "invalid_request" },
+    });
+  });
+
   it("lets a viewer read but not create, and hides other workspaces", async () => {
-    const { session, organizationId, projectKey, projectId } =
-      await ownerWithProject();
+    const { organizationId, projectKey, projectId } = await ownerWithProject();
     const { db } = await import("../../db/client.js");
     const { member, projectMember } = await import("../../db/schema/index.js");
 
@@ -328,8 +326,6 @@ describe("environments module", () => {
       body: JSON.stringify({ name: "Nope", key: "nope" }),
     });
     expect(write.status).toBe(403);
-
-    await addProduction(projectKey, session);
 
     const rename = await app.request(
       `/v1/projects/${projectKey}/environments/development`,
@@ -460,8 +456,6 @@ describe("environments module", () => {
     );
     expect(projectWide.status).toBe(201);
 
-    await addProduction(projectKey, session);
-
     const response = await archive(projectKey, "development", session);
     expect(response.status).toBe(200);
 
@@ -514,6 +508,9 @@ describe("environments module", () => {
   it("keeps the last active environment from being archived", async () => {
     const { session, projectKey } = await ownerWithProject();
 
+    // Production goes first, so Development is the last one standing.
+    expect((await archive(projectKey, "production", session)).status).toBe(200);
+
     const response = await archive(projectKey, "development", session);
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
@@ -530,7 +527,6 @@ describe("environments module", () => {
 
   it("makes an archived environment read-only until it is restored", async () => {
     const { session, projectKey } = await ownerWithProject();
-    await addProduction(projectKey, session);
 
     await app.request(`/v1/projects/${projectKey}/flags`, {
       method: "POST",
@@ -571,7 +567,7 @@ describe("environments module", () => {
 
     for (const [path, body] of [
       ["", { name: "Renamed while archived" }],
-      ["/settings", { protectedEnvironment: true }],
+      ["/settings", { isProtected: true }],
     ] as const) {
       const write = await app.request(
         `/v1/projects/${projectKey}/environments/development${path}`,

@@ -1,13 +1,19 @@
 import type { ProjectSummary } from "@dariise/contracts";
 
+import type { Transaction } from "../../shared/types/db.js";
+
 export type ProjectRow = ProjectSummary;
+
+export type StarterEnvironmentsCreator = (
+  tx: Transaction,
+  projectId: string,
+) => Promise<void>;
 
 export interface NewProject {
   id: string;
   organizationId: string;
   key: string;
   name: string;
-  environmentName: string;
 }
 
 /** The list/detail shape: the project plus how many environments it has. */
@@ -18,7 +24,6 @@ export interface ProjectDetailRow {
   description: string | null;
   color: string | null;
   ownerTeam: string | null;
-  environmentName: string;
   defaultEnvironmentId: string | null;
   environmentCount: number;
   createdAt: Date;

@@ -52,10 +52,7 @@ async function fixture(): Promise<Fixture> {
   const created = await app.request("/v1/projects", {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({
-      name: "Checkout Platform",
-      environmentName: "Development",
-    }),
+    body: JSON.stringify({ name: "Checkout Platform" }),
   });
   const project = (await created.json()) as { id: string; key: string };
 

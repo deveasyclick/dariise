@@ -95,10 +95,7 @@ describe("auth module", () => {
     const created = await app.request("/v1/projects", {
       method: "POST",
       headers: jsonHeaders(session),
-      body: JSON.stringify({
-        name: "Checkout Platform",
-        environmentName: "Development",
-      }),
+      body: JSON.stringify({ name: "Checkout Platform" }),
     });
     expect(created.status).toBe(201);
 

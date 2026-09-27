@@ -15,26 +15,19 @@ import type { Transaction } from "../../shared/types/db.js";
 import type { ProjectAccessService } from "../project-access/index.js";
 import { toProject } from "./projects.mapper.js";
 import type { ProjectsRepository } from "./projects.repository.js";
-import type { ProjectRow, ProjectsActorContext } from "./projects.types.js";
+import type {
+  ProjectRow,
+  ProjectsActorContext,
+  StarterEnvironmentsCreator,
+} from "./projects.types.js";
 
 /** Bounded so a crowded namespace fails fast instead of probing forever. */
 const MAX_KEY_SUFFIX = 50;
 
-/**
- * The environments module owns what an environment is; the projects module only
- * asks for the first one, so a project can never be created without somewhere to
- * put a flag. `app.ts` injects the real implementation.
- */
-export type DefaultEnvironmentCreator = (
-  tx: Transaction,
-  projectId: string,
-  name: string,
-) => Promise<void>;
-
 export class ProjectsService {
   constructor(
     private readonly repository: ProjectsRepository,
-    private readonly createDefaultEnvironment: DefaultEnvironmentCreator,
+    private readonly createStarterEnvironments: StarterEnvironmentsCreator,
     private readonly projectAccess: ProjectAccessService,
   ) {}
 
@@ -145,7 +138,6 @@ export class ProjectsService {
         id: randomUUID(),
         key,
         name: input.name,
-        environmentName: input.environmentName,
       };
 
       await this.repository.insert(tx, {
@@ -161,7 +153,7 @@ export class ProjectsService {
 
       // Same transaction: a project with no environment cannot hold a flag, and
       // onboarding is the only path to a populated dashboard.
-      await this.createDefaultEnvironment(tx, created.id, input.environmentName);
+      await this.createStarterEnvironments(tx, created.id);
 
       await writeAuditLog(tx, {
         organizationId: context.organizationId,

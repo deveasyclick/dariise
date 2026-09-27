@@ -126,8 +126,7 @@ const auditLogService = new AuditLogService(
 // Injected so the projects module never reaches into environments itself.
 const projectsService = new ProjectsService(
   projectsRepository,
-  (tx, projectId, name) =>
-    environmentsService.createDefault(tx, projectId, name),
+  (tx, projectId) => environmentsService.createStarterEnvironments(tx, projectId),
   projectAccessService,
 );
 const workspaceService = new WorkspaceService(workspaceRepository);

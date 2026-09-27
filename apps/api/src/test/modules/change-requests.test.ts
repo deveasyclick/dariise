@@ -47,7 +47,7 @@ interface Fixture {
 }
 
 /**
- * A project whose only environment is protected, with an engineer who can
+ * A project whose production environment is protected, with an engineer who can
  * propose and an owner who can approve. Nothing here can approve its own work.
  */
 async function fixture(): Promise<Fixture> {
@@ -57,10 +57,7 @@ async function fixture(): Promise<Fixture> {
   const created = await app.request("/v1/projects", {
     method: "POST",
     headers: headers(owner),
-    body: JSON.stringify({
-      name: "Checkout Platform",
-      environmentName: "Production",
-    }),
+    body: JSON.stringify({ name: "Checkout Platform" }),
   });
   const project = (await created.json()) as { id: string; key: string };
 
@@ -69,7 +66,7 @@ async function fixture(): Promise<Fixture> {
     {
       method: "PATCH",
       headers: headers(owner),
-      body: JSON.stringify({ protectedEnvironment: true }),
+      body: JSON.stringify({ isProtected: true }),
     },
   );
 

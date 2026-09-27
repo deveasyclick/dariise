@@ -10,7 +10,6 @@ export function toProject(row: ProjectDetailRow): Project {
     description: row.description,
     color: row.color,
     ownerTeam: row.ownerTeam,
-    environmentName: row.environmentName,
     defaultEnvironmentId: row.defaultEnvironmentId,
     environmentCount: row.environmentCount,
     createdAt: row.createdAt.toISOString(),

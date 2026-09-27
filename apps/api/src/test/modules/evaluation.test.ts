@@ -40,7 +40,7 @@ async function createProject(
   const response = await app.request("/v1/projects", {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({ name, environmentName: "Development" }),
+    body: JSON.stringify({ name }),
   });
 
   expect(response.status).toBe(201);

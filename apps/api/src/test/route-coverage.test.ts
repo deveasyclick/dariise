@@ -61,7 +61,7 @@ async function fixture(projectName = "Checkout Platform"): Promise<Fixture> {
   const created = await app.request("/v1/projects", {
     method: "POST",
     headers: headers(session),
-    body: JSON.stringify({ name: projectName, environmentName: "Development" }),
+    body: JSON.stringify({ name: projectName }),
   });
   expect(created.status).toBe(201);
   const project = (await created.json()) as { key: string };
@@ -137,6 +137,10 @@ describe("route coverage: flag identity", () => {
       environments: [
         expect.objectContaining({
           environmentKey: "development",
+          enabled: false,
+        }),
+        expect.objectContaining({
+          environmentKey: "production",
           enabled: false,
         }),
       ],
@@ -429,7 +433,7 @@ describe("route coverage: pagination for the remaining collections", () => {
       (key) => key.id,
     );
 
-    expect(environments).toEqual(["development", "staging"]);
+    expect(environments).toEqual(["development", "production", "staging"]);
     expect(segments).toEqual(["alpha-segment", "beta-segment"]);
     expect(new Set(keys).size).toBe(2);
   });
@@ -442,10 +446,7 @@ describe("route coverage: compound project create", () => {
     const second = await app.request("/v1/projects", {
       method: "POST",
       headers: headers(underTest.session),
-      body: JSON.stringify({
-        name: "Alpha Platform",
-        environmentName: "Production",
-      }),
+      body: JSON.stringify({ name: "Alpha Platform" }),
     });
 
     expect(second.status).toBe(201);
@@ -464,13 +465,24 @@ describe("route coverage: compound project create", () => {
       "alpha-platform-2",
     ]);
 
-    // Each project still gets its own first environment.
+    // Each project still gets its own starter environments.
     const environments = await app.request(
       `/v1/projects/alpha-platform-2/environments`,
       { headers: { cookie: underTest.session.cookie } },
     );
     await expect(environments.json()).resolves.toMatchObject({
-      data: [expect.objectContaining({ name: "Production", isDefault: true })],
+      data: [
+        expect.objectContaining({
+          key: "development",
+          name: "Development",
+          isDefault: true,
+        }),
+        expect.objectContaining({
+          key: "production",
+          name: "Production",
+          isDefault: false,
+        }),
+      ],
     });
   });
 });
@@ -508,7 +520,7 @@ describe("route coverage: environment seeding modes", () => {
     );
     expect(empty.status).toBe(201);
     const emptyDetail = (await empty.json()) as EnvironmentDetail;
-    expect(emptyDetail.settings.protectedEnvironment).toBe(false);
+    expect(emptyDetail.isProtected).toBe(false);
 
     // Every flag is configured here too, disabled rather than copied.
     const qa = await app.request(
