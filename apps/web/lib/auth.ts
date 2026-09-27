@@ -407,7 +407,6 @@ export async function createWorkspace(
 
 export interface CreateProjectFormInput {
   name: string;
-  environmentName: string;
 }
 
 /**
@@ -415,8 +414,8 @@ export interface CreateProjectFormInput {
  *
  * `POST /v1/projects` takes the workspace from the session rather than the body,
  * so a caller cannot create a project in a tenant they do not belong to. The
- * project key is derived and de-duplicated server-side, which is why it is not
- * sent.
+ * project key is derived and de-duplicated server-side, and the starter
+ * environments are named by the API, which is why neither is sent.
  *
  * The response is parsed rather than cast: the API is a separate deployment and
  * an unchecked cast would turn a contract drift into a confusing runtime failure

@@ -8,6 +8,7 @@ import {
   LoaderCircleIcon,
   PanelsTopLeftIcon,
 } from "lucide-react";
+import { STARTER_ENVIRONMENTS } from "@dariise/contracts";
 import { AuthCard } from "@/components/auth/auth-card";
 import { OnboardingSteps } from "@/components/auth/onboarding-steps";
 import { Field, FieldError } from "@/components/auth/field";
@@ -15,18 +16,15 @@ import { Button } from "@/components/ui/button";
 import { AuthError, createProject } from "@/lib/auth";
 import { isRequired } from "@/lib/validation";
 
-/** The environment every project is created with, and its fallback label. */
-const defaultEnvironmentName = "Development";
+const starterEnvironmentNames = STARTER_ENVIRONMENTS.map(({ name }) => name);
 
 interface CreateProjectErrors {
   form?: string;
   name?: string;
-  environment?: string;
 }
 
 export function CreateProjectForm() {
   const [name, setName] = useState("");
-  const [environment, setEnvironment] = useState(defaultEnvironmentName);
   const [errors, setErrors] = useState<CreateProjectErrors>({});
   const [pending, setPending] = useState(false);
   const router = useRouter();
@@ -44,13 +42,9 @@ export function CreateProjectForm() {
     event.preventDefault();
     if (pending) return;
 
-    const nextErrors: CreateProjectErrors = {
-      name: isRequired(name, "Project name") ?? undefined,
-      environment: isRequired(environment, "Environment name") ?? undefined,
-    };
-
-    if (nextErrors.name || nextErrors.environment) {
-      setErrors(nextErrors);
+    const nameError = isRequired(name, "Project name");
+    if (nameError) {
+      setErrors({ name: nameError });
       return;
     }
 
@@ -61,10 +55,7 @@ export function CreateProjectForm() {
     controllerRef.current = controller;
 
     try {
-      await createProject(
-        { name: name.trim(), environmentName: environment.trim() },
-        controller.signal,
-      );
+      await createProject({ name: name.trim() }, controller.signal);
 
       router.refresh();
       router.push("/overview");
@@ -89,7 +80,7 @@ export function CreateProjectForm() {
     <AuthCard
       steps={<OnboardingSteps current="project" />}
       title="Welcome to Dariise"
-      description="Let's set up your first project. You can rename it or add more environments later."
+      description={`Let's set up your first project. It comes with ${starterEnvironmentNames.join(" and ")}, and you can add more environments later.`}
     >
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <Field
@@ -107,26 +98,7 @@ export function CreateProjectForm() {
           }}
         />
 
-        <Field
-          id="create-project-environment"
-          label="Environment name"
-          name="environment"
-          autoComplete="off"
-          placeholder={defaultEnvironmentName}
-          required
-          value={environment}
-          error={errors.environment}
-          hint="Flags, SDK keys and rollouts are all scoped to an environment."
-          onChange={(event) => {
-            setEnvironment(event.target.value);
-            clearError("environment");
-          }}
-        />
-
-        <ProjectSummaryCard
-          projectName={name.trim() || "Untitled project"}
-          environmentName={environment.trim() || defaultEnvironmentName}
-        />
+        <ProjectSummaryCard projectName={name.trim() || "Untitled project"} />
 
         {errors.form ? <FieldError>{errors.form}</FieldError> : null}
 
@@ -148,13 +120,9 @@ export function CreateProjectForm() {
 
 interface ProjectSummaryCardProps {
   projectName: string;
-  environmentName: string;
 }
 
-function ProjectSummaryCard({
-  projectName,
-  environmentName,
-}: ProjectSummaryCardProps) {
+function ProjectSummaryCard({ projectName }: ProjectSummaryCardProps) {
   return (
     <section className="bg-muted rounded-lg p-4">
       <h2 className="text-muted-foreground text-[10px] font-medium tracking-[0.1em] uppercase">
@@ -168,22 +136,24 @@ function ProjectSummaryCard({
         <span className="truncate text-[13px] font-medium">{projectName}</span>
       </div>
 
-      <div className="mt-2 flex items-center gap-2.5">
-        <CornerDownRightIcon
-          aria-hidden="true"
-          className="text-muted-foreground size-3.5 shrink-0"
-        />
-        <span
-          aria-hidden="true"
-          className="bg-success size-1.5 shrink-0 rounded-full"
-        />
-        <span className="truncate text-[13px] font-medium">
-          {environmentName}
-        </span>
-        <span className="text-muted-foreground shrink-0 text-[11px]">
-          default environment
-        </span>
-      </div>
+      {starterEnvironmentNames.map((environmentName, index) => (
+        <div key={environmentName} className="mt-2 flex items-center gap-2.5">
+          <CornerDownRightIcon
+            aria-hidden="true"
+            className="text-muted-foreground size-3.5 shrink-0"
+          />
+          <span
+            aria-hidden="true"
+            className="bg-success size-1.5 shrink-0 rounded-full"
+          />
+          <span className="truncate text-[13px] font-medium">
+            {environmentName}
+          </span>
+          <span className="text-muted-foreground shrink-0 text-[11px]">
+            {index === 0 ? "default" : "environment"}
+          </span>
+        </div>
+      ))}
     </section>
   );
 }

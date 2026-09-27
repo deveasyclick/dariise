@@ -2,61 +2,41 @@
 
 import { useRef, useState } from "react";
 import { CheckIcon, LoaderCircleIcon, SaveIcon } from "lucide-react";
-import type { EnvironmentDetail, EnvironmentSettings } from "@dariise/contracts";
+import type { EnvironmentDetail } from "@dariise/contracts";
 import { FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import * as api from "@/lib/api";
 
 /**
- * Environment settings.
+ * Environment protection.
  *
- * The switches are local state until Save is pressed; the write goes through
- * `environments.updateSettings` and the response's settings become the new
+ * The switch is local state until Save is pressed; the write goes through
+ * `environments.updateSettings` and the response's `isProtected` becomes the new
  * baseline, so "Saved" means the API accepted the change rather than a local
  * acknowledgement.
  */
-
-interface SettingRow {
-  key: keyof EnvironmentSettings;
-  label: string;
-  description: string;
-}
-
-const rows: SettingRow[] = [
-  {
-    key: "protectedEnvironment",
-    label: "Protected environment",
-    description:
-      "Publish flag changes through a change request a second person approves",
-  },
-];
-
 export function EnvironmentSettingsCard({
   projectKey,
   environment,
   disabled = false,
 }: {
   projectKey: string;
-  environment: Pick<EnvironmentDetail, "key" | "name" | "settings">;
+  environment: Pick<EnvironmentDetail, "key" | "name" | "isProtected">;
   /** An archived environment is read-only until it is restored. */
   disabled?: boolean;
 }) {
-  const [settings, setSettings] = useState<EnvironmentSettings>(
-    environment.settings,
-  );
-  const [baseline, setBaseline] = useState<EnvironmentSettings>(
-    environment.settings,
-  );
+  const [isProtected, setIsProtected] = useState(environment.isProtected);
+  const [baseline, setBaseline] = useState(environment.isProtected);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
-  const dirty = rows.some((row) => settings[row.key] !== baseline[row.key]);
+  const dirty = isProtected !== baseline;
 
-  function toggle(key: keyof EnvironmentSettings, value: boolean) {
-    setSettings((current) => ({ ...current, [key]: value }));
+  function toggle(value: boolean) {
+    setIsProtected(value);
     setSaved(false);
     setError(null);
   }
@@ -74,12 +54,12 @@ export function EnvironmentSettingsCard({
       const updated = await api.environments.updateSettings(
         projectKey,
         environment.key,
-        settings,
+        { isProtected },
         { signal: controller.signal },
       );
 
-      setSettings(updated.settings);
-      setBaseline(updated.settings);
+      setIsProtected(updated.isProtected);
+      setBaseline(updated.isProtected);
       setSaved(true);
     } catch (caught) {
       if ((caught as Error)?.name === "AbortError") return;
@@ -100,27 +80,23 @@ export function EnvironmentSettingsCard({
       <h2 className="text-[13px] font-medium">Settings</h2>
 
       <ul className="mt-2 divide-y">
-        {rows.map((row) => (
-          <li
-            key={row.key}
-            className="flex items-start justify-between gap-4 py-3 last:pb-0"
-          >
-            <div className="min-w-0">
-              <p className="text-[12px] font-medium">{row.label}</p>
-              <p className="text-muted-foreground mt-0.5 text-[11px]">
-                {row.description}
-              </p>
-            </div>
+        <li className="flex items-start justify-between gap-4 py-3 last:pb-0">
+          <div className="min-w-0">
+            <p className="text-[12px] font-medium">Protected environment</p>
+            <p className="text-muted-foreground mt-0.5 text-[11px]">
+              Publish flag changes through a change request a second person
+              approves
+            </p>
+          </div>
 
-            <Switch
-              checked={settings[row.key]}
-              disabled={disabled}
-              onCheckedChange={(value) => toggle(row.key, value)}
-              aria-label={`${row.label} in ${environment.name}`}
-              className="mt-0.5"
-            />
-          </li>
-        ))}
+          <Switch
+            checked={isProtected}
+            disabled={disabled}
+            onCheckedChange={toggle}
+            aria-label={`Protected environment in ${environment.name}`}
+            className="mt-0.5"
+          />
+        </li>
       </ul>
 
       {error ? (

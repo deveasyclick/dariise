@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LoaderCircleIcon, PlusIcon } from "lucide-react";
+import { STARTER_ENVIRONMENTS } from "@dariise/contracts";
 import { cn } from "cn";
 import {
   environmentColors,
@@ -14,39 +15,13 @@ import { Field, FieldError } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { EnvironmentColor } from "@/lib/environment-color";
 import * as api from "@/lib/api";
 import { selectProject } from "@/lib/scope-actions";
 import { isRequired } from "@/lib/validation";
 
-/**
- * Environments a new project is offered with.
- *
- * Presentation only: `POST /v1/projects` takes a single environment name, so
- * only the preset's first environment is created — see the note on the submit
- * button.
- */
-interface EnvironmentPreset {
-  value: string;
-  label: string;
-  environments: string[];
-}
-
-const environmentPresets: EnvironmentPreset[] = [
-  {
-    value: "standard",
-    label: "Standard",
-    environments: ["Development", "Staging", "Production"],
-  },
-];
+const starterEnvironmentNames = STARTER_ENVIRONMENTS.map(({ name }) => name);
 
 interface CreateProjectErrors {
   form?: string;
@@ -54,22 +29,13 @@ interface CreateProjectErrors {
 }
 
 export function CreateProjectForm() {
-  const defaultPreset = environmentPresets[0];
   const [name, setName] = useState("");
   const [color, setColor] = useState<EnvironmentColor>("primary");
-  const [preset, setPreset] = useState<string>(defaultPreset.value);
-  const [defaultEnvironment, setDefaultEnvironment] = useState(
-    defaultPreset.environments[defaultPreset.environments.length - 1],
-  );
   const [setAsDefault, setSetAsDefault] = useState(false);
   const [errors, setErrors] = useState<CreateProjectErrors>({});
   const [pending, setPending] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
   const router = useRouter();
-
-  const environments =
-    environmentPresets.find((item) => item.value === preset)?.environments ??
-    defaultPreset.environments;
 
   function clearError(field: keyof CreateProjectErrors) {
     setErrors((previous) => ({
@@ -77,18 +43,6 @@ export function CreateProjectForm() {
       form: undefined,
       [field]: undefined,
     }));
-  }
-
-  function handlePresetChange(value: string) {
-    setPreset(value);
-
-    const next =
-      environmentPresets.find((item) => item.value === value)?.environments ??
-      defaultPreset.environments;
-
-    if (!next.includes(defaultEnvironment)) {
-      setDefaultEnvironment(next[next.length - 1]);
-    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -109,10 +63,7 @@ export function CreateProjectForm() {
 
     try {
       const project = await api.projects.create(
-        {
-          name: name.trim(),
-          environmentName: environments[0] ?? "Development",
-        },
+        { name: name.trim() },
         { signal: controller.signal },
       );
 
@@ -189,61 +140,11 @@ export function CreateProjectForm() {
 
           <h3 className="mt-6 text-[13px] font-medium">Environments</h3>
 
-          <div className="mt-3 space-y-2">
-            <Label htmlFor="create-project-preset">Environment preset</Label>
-            <Select value={preset} onValueChange={handlePresetChange}>
-              <SelectTrigger
-                id="create-project-preset"
-                className="h-8 w-full text-[12px]"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {environmentPresets.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label} · {option.environments.join(", ")}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground text-[11px]">
-              Only the preset&apos;s first environment is created today.
-            </p>
-          </div>
-
-          <h3 className="mt-6 text-[13px] font-medium">
-            Default environment{" "}
-            <span className="text-muted-foreground font-normal">
-              (not applied yet)
-            </span>
-          </h3>
-
-          <div className="mt-3 space-y-2">
-            <Select
-              value={defaultEnvironment}
-              onValueChange={setDefaultEnvironment}
-            >
-              <SelectTrigger
-                id="create-project-default-environment"
-                aria-label="Default environment"
-                className="h-8 w-full text-[12px]"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {environments.map((environment) => (
-                  <SelectItem key={environment} value={environment}>
-                    {environment}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <p className="text-muted-foreground mt-6 text-[11px] leading-5">
-            Only the project name and its first environment are saved today.
-            Presets, colour and the default environment are sent to the API once
-            those choices are modelled.
+          <p className="text-muted-foreground mt-2 text-[11px] leading-5">
+            Every project starts with {starterEnvironmentNames[0]}, which is its
+            default, and {starterEnvironmentNames.slice(1).join(", ")}. Neither
+            is protected, so changes to them publish directly. Add staging or
+            any other environment later from the environment switcher.
           </p>
 
           {errors.form ? <FieldError>{errors.form}</FieldError> : null}

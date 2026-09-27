@@ -14,7 +14,6 @@ import type {
   EnvironmentDetail,
   EnvironmentListQuery,
   EnvironmentSummary,
-  EnvironmentSettings,
   EvaluateRequest,
   EvaluationResult,
   CreateFlagChangeRequestInput,
@@ -275,10 +274,7 @@ export const projects = {
   get: (projectKey: string, options?: RequestOptions) =>
     request<Project>("GET", `/v1/projects/${projectKey}`, options),
 
-  create: (
-    input: { name: string; environmentName: string },
-    options?: RequestOptions,
-  ) =>
+  create: (input: { name: string }, options?: RequestOptions) =>
     request<Project>("POST", "/v1/projects", { ...options, body: input }),
 
   update: (
@@ -851,8 +847,6 @@ export const workspace = {
       body: input,
     }),
 };
-
-export type { EnvironmentSettings };
 
 /**
  * Evaluate a flag for a user.

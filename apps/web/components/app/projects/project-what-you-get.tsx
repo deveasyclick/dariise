@@ -5,8 +5,11 @@ import {
   ServerIcon,
   type LucideIcon,
 } from "lucide-react";
+import { STARTER_ENVIRONMENTS } from "@dariise/contracts";
 import { cn } from "cn";
 import { SectionCard } from "@/components/app/page-header";
+
+const starterEnvironmentNames = STARTER_ENVIRONMENTS.map(({ name }) => name);
 
 const projectBenefits: Array<{
   title: string;
@@ -16,7 +19,7 @@ const projectBenefits: Array<{
 }> = [
   {
     title: "Environments",
-    description: "Development, Staging and Production created for you.",
+    description: `${starterEnvironmentNames.join(" and ")} created for you.`,
     icon: ServerIcon,
     tone: "bg-primary/10 text-primary",
   },
