@@ -1,0 +1,37 @@
+{
+  "name": "@dariise/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The pure Dariise decision engine, shared by the API and every SDK.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "#bucket": "./src/bucket.ts",
+    "#evaluate": "./src/evaluate.ts",
+    "#sha256": "./src/sha256.ts",
+    "#snapshot": "./src/snapshot.ts",
+    "#types": "./src/types.ts",
+    "#conformance": "./src/conformance.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint src scripts",
+    "format": "biome format --write src scripts",
+    "test": "vitest run",
+    "fixtures": "tsx scripts/generate-conformance.ts"
+  },
+  "dependencies": {
+    "@dariise/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/node": "^20",
+    "tsx": "^4.23.13",
+    "typescript": "^5",
+    "vitest": "^5.0.1"
+  }
+}
