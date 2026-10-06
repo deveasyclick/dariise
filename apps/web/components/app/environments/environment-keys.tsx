@@ -73,7 +73,7 @@ export function SdkKeysCard({
       <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
         <h2 className="text-[13px] font-medium">SDK keys</h2>
         <Button variant="link" size="sm" asChild className="text-[11px]">
-          <Link href="/api-keys/new">Create key</Link>
+          <Link href="/api-keys">Create key</Link>
         </Button>
       </header>
 
@@ -146,9 +146,9 @@ export function EndpointsCard({
       url: connection.baseUrl,
     },
     {
-      label: "Evaluation",
-      description: "Resolve flags at runtime",
-      url: connection.evalUrl,
+      label: "Configuration",
+      description: "The SDK downloads its snapshot here",
+      url: `${connection.baseUrl}/v1/sdk/config`,
     },
   ];
 

@@ -4,6 +4,7 @@ import { ChevronDownIcon } from "lucide-react";
 import { cn } from "cn";
 import { environmentColorSwatch } from "@/components/app/environments/environment-colors";
 import { SdkIntegration } from "@/components/app/sdks/sdk-integration";
+import { SdkKeyCard } from "@/components/app/sdks/sdk-key-card";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import * as api from "@/lib/api";
@@ -71,11 +72,20 @@ export default async function SdksPage() {
         </span>
       </PageHeader>
 
+      <div className="mb-3">
+        <SdkKeyCard
+          key={environment.key}
+          projectKey={project.key}
+          environmentKey={environment.key}
+          environmentName={environment.name}
+        />
+      </div>
+
       <SdkIntegration
         connection={{
           environmentName: environment.name,
           maskedKey: connection.maskedKey,
-          endpoint: connection.evalUrl,
+          endpoint: `${connection.baseUrl}/v1/sdk/config`,
           streamEndpoint: connection.streamUrl,
         }}
       />

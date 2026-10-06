@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   CheckIcon,
   ChevronsUpDownIcon,
@@ -34,13 +35,35 @@ interface EnvironmentSwitcherProps {
  *
  * Selecting an environment writes the scope cookie through a Server Action, so
  * every screen that reads flags reads them in the environment the chrome shows.
+ *
+ * An environment-scoped screen names its environment in the URL rather than
+ * reading the cookie (`requireFlagScope`), so the selection has to travel with
+ * the URL or the page would keep rendering the environment it was opened with.
+ * The rest of the dashboard reads the cookie and only needs a re-render.
  */
 export function EnvironmentSwitcher({
   environments,
   environment,
 }: EnvironmentSwitcherProps) {
   const [pending, startTransition] = useTransition();
+  const pathname = usePathname();
+  const router = useRouter();
   const current = environment ?? environments[0] ?? null;
+
+  /** Keep the reader on the same screen, addressed by the environment chosen. */
+  function select(key: string) {
+    startTransition(async () => {
+      await selectEnvironment(key);
+
+      const target = pathname.replace(
+        /^\/environments\/[^/]+/,
+        `/environments/${key}`,
+      );
+
+      if (target === pathname) router.refresh();
+      else router.replace(target);
+    });
+  }
 
   if (!current) return null;
 
@@ -86,7 +109,7 @@ export function EnvironmentSwitcher({
               disabled={pending}
               onSelect={() => {
                 if (selected) return;
-                startTransition(() => selectEnvironment(item.key));
+                select(item.key);
               }}
               className={cn(
                 "gap-2.5 px-1.5 py-1.5",

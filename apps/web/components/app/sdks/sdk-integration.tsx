@@ -16,7 +16,7 @@ export interface SdkConnection {
   environmentName: string;
   /** The API returns `null` until an SDK key has been issued. */
   maskedKey: string | null;
-  /** Evaluation endpoint, e.g. `sdk.dariise.dev/prod`. */
+  /** The endpoint an SDK fetches its snapshot from, e.g. `…/v1/sdk/config`. */
   endpoint: string;
   /** `null` until flag streaming exists; the row says so rather than lying. */
   streamEndpoint: string | null;

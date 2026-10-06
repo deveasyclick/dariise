@@ -1,14 +1,15 @@
 /**
  * SDK install and usage snippets.
  *
- * These are documentation, not API data: the SDK packages do not exist yet, so
- * the snippets are the shape each SDK is meant to ship with and are maintained
- * here until the packages publish their own. The connection values the screen
- * pairs them with — key, endpoints — come from the API, via
+ * These are documentation, not API data: only `@dariise/node` exists today, so
+ * the rest are the shape each SDK is meant to ship with and are maintained here
+ * until the packages publish their own. The connection values the screen pairs
+ * them with — key, endpoints — come from the API, via
  * `environments.get(...).connection`.
  *
- * Every snippet evaluates `checkout-v2`, the flag used throughout the docs, so
- * the example and the rest of the product agree.
+ * Every snippet shows the same three steps: initialize with an SDK key, identify
+ * the subject targeting reads, then evaluate. The key is a runtime credential:
+ * it reads one environment's configuration and can write nothing.
  */
 
 export type SdkKey =
@@ -27,9 +28,9 @@ export type EvaluationScope = "Server-side" | "Client-side";
 export interface SdkSnippet {
   /** Shell command that installs the package. */
   install: string;
-  /** Creating the client, or mounting the provider. */
+  /** Creating the client, initializing it, and identifying the subject. */
   initialize: string;
-  /** Reading one flag with a fallback value. */
+  /** Reading one flag. */
   evaluate: string;
 }
 
@@ -47,15 +48,24 @@ const sdkOptions: SdkOption[] = [
     label: "Node.js",
     scope: "Server-side",
     steps: {
-      install: "npm install @dariise/node",
-      initialize: `import { Dariise } from "@dariise/node";
+      install: "npm install @dariise/node  # not on npm yet — link it from the workspace",
+      initialize: `import { FeatureFlags } from "@dariise/node";
 
-const client = new Dariise({
-  apiKey: process.env.DARIISE_API_KEY,
+const flags = new FeatureFlags({
+  sdkKey: process.env.DARIISE_SDK_KEY,
+  environment: "production",
+});
+
+// Downloads the configuration, then evaluates locally.
+await flags.initialize();
+
+flags.identify({
+  userId: "123",
+  attributes: { plan: "pro", country: "NL" },
 });`,
-      evaluate: `const on = await client.getBoolean("checkout-v2", false);
+      evaluate: `if (flags.isOn("checkout-v2")) renderNewCheckout();
 
-if (on) renderNewCheckout();`,
+const maxItems = flags.getNumber("max-items", 10);`,
     },
   },
   {
@@ -64,13 +74,19 @@ if (on) renderNewCheckout();`,
     scope: "Server-side",
     steps: {
       install: "pip install dariise",
-      initialize: `from dariise import Dariise
+      initialize: `from dariise import FeatureFlags
 
-client = Dariise(api_key=os.environ["DARIISE_API_KEY"])`,
-      evaluate: `on = client.get_boolean("checkout-v2", False)
+flags = FeatureFlags(
+    sdk_key=os.environ["DARIISE_SDK_KEY"],
+    environment="production",
+)
+flags.initialize()
 
-if on:
-    render_new_checkout()`,
+flags.identify(user_id="123", attributes={"plan": "pro"})`,
+      evaluate: `if flags.is_on("checkout-v2"):
+    render_new_checkout()
+
+max_items = flags.get_number("max-items", 10)`,
     },
   },
   {
@@ -79,15 +95,22 @@ if on:
     scope: "Server-side",
     steps: {
       install: "go get github.com/dariise/dariise-go",
-      initialize: `client, err := dariise.New(os.Getenv("DARIISE_API_KEY"))
+      initialize: `flags, err := featureflags.New(featureflags.Config{
+    SDKKey:      os.Getenv("DARIISE_SDK_KEY"),
+    Environment: "production",
+})
 if err != nil {
     log.Fatal(err)
-}`,
-      evaluate: `on := client.GetBoolean("checkout-v2", false)
+}
 
-if on {
-    renderNewCheckout()
+if err := flags.Initialize(); err != nil {
+    log.Fatal(err)
 }`,
+      evaluate: `if flags.IsOn("checkout-v2", nil) {
+    renderNewCheckout()
+}
+
+maxItems := flags.GetNumber("max-items", 10)`,
     },
   },
   {
@@ -96,11 +119,14 @@ if on {
     scope: "Client-side",
     steps: {
       install: "npm install @dariise/react",
-      initialize: `import { DariiseProvider } from "@dariise/react";
+      initialize: `import { FeatureFlagsProvider } from "@dariise/react";
 
-<DariiseProvider clientKey={process.env.NEXT_PUBLIC_DARIISE_CLIENT_KEY}>
+<FeatureFlagsProvider
+  sdkKey={process.env.NEXT_PUBLIC_DARIISE_SDK_KEY}
+  environment="production"
+>
   <App />
-</DariiseProvider>`,
+</FeatureFlagsProvider>`,
       evaluate: `const on = useFlag("checkout-v2", false);
 
 return on ? <NewCheckout /> : <Checkout />;`,
@@ -112,12 +138,18 @@ return on ? <NewCheckout /> : <Checkout />;`,
     scope: "Server-side",
     steps: {
       install: `implementation("dev.dariise:dariise-java:1.0.0")`,
-      initialize: `DariiseClient client = DariiseClient.builder()
-    .apiKey(System.getenv("DARIISE_API_KEY"))
-    .build();`,
-      evaluate: `boolean on = client.getBoolean("checkout-v2", false);
+      initialize: `FeatureFlags flags = FeatureFlags.builder()
+    .sdkKey(System.getenv("DARIISE_SDK_KEY"))
+    .environment("production")
+    .build();
 
-if (on) renderNewCheckout();`,
+flags.initialize();
+flags.identify("123", Map.of("plan", "pro"));`,
+      evaluate: `if (flags.isOn("checkout-v2")) {
+    renderNewCheckout();
+}
+
+int maxItems = flags.getNumber("max-items", 10);`,
     },
   },
   {
@@ -128,10 +160,16 @@ if (on) renderNewCheckout();`,
       install: "gem install dariise",
       initialize: `require "dariise"
 
-client = Dariise::Client.new(api_key: ENV["DARIISE_API_KEY"])`,
-      evaluate: `on = client.get_boolean("checkout-v2", false)
+flags = Dariise::FeatureFlags.new(
+  sdk_key: ENV["DARIISE_SDK_KEY"],
+  environment: "production",
+)
+flags.initialize
 
-render_new_checkout if on`,
+flags.identify(user_id: "123", attributes: { plan: "pro" })`,
+      evaluate: `render_new_checkout if flags.is_on("checkout-v2")
+
+max_items = flags.get_number("max-items", 10)`,
     },
   },
   {
@@ -140,14 +178,20 @@ render_new_checkout if on`,
     scope: "Server-side",
     steps: {
       install: "composer require dariise/dariise",
-      initialize: `use Dariise\\Client;
+      initialize: `use Dariise\\FeatureFlags;
 
-$client = new Client(getenv("DARIISE_API_KEY"));`,
-      evaluate: `$on = $client->getBoolean("checkout-v2", false);
+$flags = new FeatureFlags(
+    getenv("DARIISE_SDK_KEY"),
+    "production",
+);
+$flags->initialize();
 
-if ($on) {
+$flags->identify("123", ["plan" => "pro"]);`,
+      evaluate: `if ($flags->isOn("checkout-v2")) {
     renderNewCheckout();
-}`,
+}
+
+$maxItems = $flags->getNumber("max-items", 10);`,
     },
   },
   {
@@ -158,11 +202,20 @@ if ($on) {
       install: "dotnet add package Dariise",
       initialize: `using Dariise;
 
-var client = new DariiseClient(
-    Environment.GetEnvironmentVariable("DARIISE_API_KEY"));`,
-      evaluate: `var on = await client.GetBooleanAsync("checkout-v2", false);
+var flags = new FeatureFlags(new FeatureFlagsOptions
+{
+    SdkKey = Environment.GetEnvironmentVariable("DARIISE_SDK_KEY"),
+    Environment = "production",
+});
 
-if (on) RenderNewCheckout();`,
+await flags.InitializeAsync();
+flags.Identify("123", new Dictionary<string, object> { ["plan"] = "pro" });`,
+      evaluate: `if (flags.IsOn("checkout-v2"))
+{
+    RenderNewCheckout();
+}
+
+var maxItems = flags.GetNumber("max-items", 10);`,
     },
   },
 ];
@@ -173,9 +226,4 @@ export const defaultSdkKey: SdkKey = "node";
 /** Every SDK the screen offers, in the order the picker lists them. */
 export function getSdkOptions(): SdkOption[] {
   return sdkOptions;
-}
-
-/** Look up one SDK by key; `null` when it does not exist. */
-export function getSdk(key: string): SdkOption | null {
-  return sdkOptions.find((option) => option.key === key) ?? null;
 }

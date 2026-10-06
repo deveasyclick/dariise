@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { CheckIcon, ChevronDownIcon, FolderIcon, PlusIcon } from "lucide-react";
 import { cn } from "cn";
 import { environmentColorTone } from "@/components/app/environments/environment-colors";
@@ -29,9 +30,51 @@ interface ProjectSwitcherProps {
  * Selecting a project writes the scope cookie through a Server Action and
  * re-renders the current screen against it; the project's own colour tints the
  * icon tile, so the menu stays legible without a per-project glyph.
+ *
+ * A screen that names its project in the URL — `/projects/:key`, a segment —
+ * belongs to the project that was selected when it was opened, so the selection
+ * has to move the route as well. Every other screen reads the cookie and only
+ * needs a re-render.
  */
 export function ProjectSwitcher({ project, projects }: ProjectSwitcherProps) {
   const [pending, startTransition] = useTransition();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  function select(key: string) {
+    startTransition(async () => {
+      await selectProject(key);
+
+      // The same screen of the project just chosen, where that is addressable.
+      if (pathname.startsWith(`/projects/${project.key}`)) {
+        router.replace(
+          pathname.replace(`/projects/${project.key}`, `/projects/${key}`),
+        );
+        return;
+      }
+
+      // An environment screen names its environment in the URL, and that key
+      // belongs to the project it was chosen in; the new project's list of
+      // environments is the nearest screen that holds for it.
+      const environmentScoped =
+        pathname.startsWith("/environments/") &&
+        !pathname.startsWith("/environments/new");
+
+      if (environmentScoped) {
+        router.replace("/environments");
+        return;
+      }
+
+      // A segment key belongs to the project it was created in, so it cannot be
+      // carried across; the list of the new project is the nearest screen.
+      if (/^\/segments\/[^/]+/.test(pathname)) {
+        router.replace("/segments");
+        return;
+      }
+
+      router.refresh();
+    });
+  }
 
   return (
     <DropdownMenu>
@@ -71,7 +114,7 @@ export function ProjectSwitcher({ project, projects }: ProjectSwitcherProps) {
               disabled={pending}
               onSelect={() => {
                 if (current) return;
-                startTransition(() => selectProject(item.key));
+                select(item.key);
               }}
               className={cn("gap-2.5 px-1.5 py-1.5", current && "bg-primary/5")}
             >
