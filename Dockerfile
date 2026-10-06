@@ -41,7 +41,7 @@ COPY --chown=node:node --from=builder /app/apps/api/dist ./apps/api/dist
 
 WORKDIR /app/apps/api
 USER node
-EXPOSE 4000
+EXPOSE 8080
 
 # The workspace packages ship TypeScript; Node 24 strips types at load, so the
 # built server needs no bundler and no tsx.
