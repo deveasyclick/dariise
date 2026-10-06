@@ -26,6 +26,7 @@
     "#project": "./src/project.ts",
     "#project-member": "./src/project-member.ts",
     "#query": "./src/query.ts",
+    "#sdk": "./src/sdk.ts",
     "#segment": "./src/segment.ts",
     "#session": "./src/session.ts",
     "#slug": "./src/slug.ts",
