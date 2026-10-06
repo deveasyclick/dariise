@@ -9,9 +9,9 @@ Dariise's HTTP surface is versioned, schema-first and uniformly shaped: a route 
 `packages/contracts` is the single source of truth for the wire contract: each domain ships a `zod` schema and
 its TypeScript type is inferred with `z.infer`, never restated in `apps/api` or `apps/web`.
 
-Its `imports` map exposes twenty subpaths, each resolving to `./src/<name>.ts`: `#api-key`, `#audit-log`,
+Its `imports` map exposes twenty-one subpaths, each resolving to `./src/<name>.ts`: `#api-key`, `#audit-log`,
 `#auth`, `#change-request`, `#environment`, `#errors`, `#evaluation`, `#fields`, `#flag`, `#forms`, `#me`,
-`#oauth`, `#pagination`, `#project`, `#project-member`, `#query`, `#segment`, `#session`, `#slug`,
+`#oauth`, `#pagination`, `#project`, `#project-member`, `#query`, `#sdk`, `#segment`, `#session`, `#slug`,
 `#workspace`.
 
 The `exports` map publishes only the root entry, `.` → `./src/index.ts`, which re-exports every subpath.
@@ -45,7 +45,7 @@ service the flags module's validate/apply pair.
 
 Shared types and constants live in `src/shared/types/` and `src/shared/constants.ts`; session middleware and
 gates in `src/middleware/authorization.ts`; the Drizzle client, schema and audit writer in `src/db/`. Auth adds
-`auth.config.ts` and `auth.cli.ts`; evaluation adds `evaluation.engine.ts`, the pure function in
+`auth.config.ts` and `auth.cli.ts`; evaluation is the pure function in `packages/engine/src/`, described in
 `docs/architecture.md §5`.
 
 ## Route inventory
@@ -108,7 +108,8 @@ module router. Below, `…` stands for `/v1/projects/:projectKey/flags/:flagKey`
 | `/v1/projects` | GET | `/v1/projects/:projectKey/segments/:segmentKey` | Read one segment. |
 | `/v1/projects` | PATCH | `/v1/projects/:projectKey/segments/:segmentKey` | Update the segment. |
 | `/v1/projects` | DELETE | `/v1/projects/:projectKey/segments/:segmentKey` | Archive the segment. |
-| `/v1/projects` | GET | `/v1/projects/:projectKey/api-keys` | List API keys; paginated, with `includeRevoked`. |
+| `/v1/projects` | GET | `/v1/projects/:projectKey/api-keys` | List API keys; paginated, with `includeRevoked` and `environmentKey` (which also keeps the project-wide keys). |
+| `/` | GET | `/v1/sdk/config` | One environment's SDK configuration snapshot, authenticated by an `Authorization: Bearer <sdkKey>` runtime key; `ETag` and `304`. |
 | `/v1/projects` | POST | `/v1/projects/:projectKey/api-keys` | Create an API key; 201. |
 | `/v1/projects` | DELETE | `/v1/projects/:projectKey/api-keys/:keyId` | Revoke an API key by its row id. |
 | `/v1/projects` | GET | `/v1/projects/:projectKey/members` | List the project's members; every member, unpaginated. |

@@ -110,7 +110,7 @@ The evaluation engine is a pure, deterministic function with no I/O, clock, rand
 cache dependency:
 
 ```text
-apps/api/src/modules/evaluation/evaluation.engine.ts
+packages/engine/src/evaluate.ts
 ```
 
 Determinism is the decision: the same input always produces the same variation, so a
@@ -129,7 +129,7 @@ responses.
 `0` and `100`, so an enabled flag at `0%` serves the default variation to everyone and `0%`
 behaves like `100%`. This is an implementation defect, not an intended semantic.
 
-→ Resolution order, the eight reasons, operator semantics, the exact bucketing input and the
+→ Resolution order, the seven reasons the code produces, operator semantics, the exact bucketing input and the
 `/v1/evaluate` contract: `docs/evaluation.md`
 
 ## 6. Persistence and audit
@@ -232,10 +232,9 @@ the fallback.
 
 Known gaps without an accepted implementation decision.
 
-- **SDK authentication** — API key CRUD exists, but `/v1/evaluate` currently requires a
-  session.
-- **Python and Go SDKs** — the TypeScript engine is the reference implementation; shared
-  conformance fixtures are intended to prevent cross-language drift.
+- **Python and Go SDKs** — the TypeScript engine is the reference implementation; the
+  conformance corpus in `sdks/fixtures/conformance.json` is what prevents cross-language
+  drift, and `@dariise/node` is the only SDK built so far.
 - **OpenAPI export** — generate `/v1/openapi.json` from the existing Zod contracts. No
   OpenAPI document is served today.
 - **Rate limiting**

@@ -31,7 +31,7 @@ apps/api/src/test/
 
 `apps/api/vitest.config.ts` includes `src/test/**/*.test.ts`. The pattern is deliberately narrow so a `*.test.ts` colocated with its source is ignored rather than run twice: the rule is to put a test under `src/test/`. `harness.ts` matches no include pattern, so the helpers are never collected as a suite.
 
-`modules/` holds route suites driven through the app alongside unit suites such as `evaluation.engine.test.ts` and `project-access.service.test.ts`; `shared/` covers email templates, rendering and substitution, the email service and the Brevo transport.
+`modules/` holds route suites driven through the app alongside unit suites such as `project-access.service.test.ts`; the engine and SDK packages test themselves under `packages/engine/src/` and `packages/sdk-node/src/`; `shared/` covers email templates, rendering and substitution, the email service and the Brevo transport.
 
 ## Sequential execution
 
@@ -130,7 +130,7 @@ The suite applies the rule in both directions. `harness.test.ts` asserts that th
 
 - Full command table and local setup: `docs/development.md`.
 - The persistence and audit rules the suites run against: `docs/architecture.md §6`.
-- The evaluation semantics unit-tested by `evaluation.engine.test.ts`: `docs/evaluation.md`.
+- The evaluation semantics unit-tested by `packages/engine/src/engine.test.ts`: `docs/evaluation.md`.
 - The authorization rules integration-tested by `project-access.integration.test.ts`: `docs/authorization.md`.
 
 ## Status

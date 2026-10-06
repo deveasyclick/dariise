@@ -4,9 +4,9 @@ How a flag decision is produced: the endpoint, the rows that feed it, the pure e
 
 ## The purity invariant
 
-`evaluate()` in `apps/api/src/modules/evaluation/evaluation.engine.ts` is a pure function from `EvaluationInput` to `EvaluationOutcome`. It receives rows that are already loaded and performs no I/O, reads no clock, draws no randomness and consults no cache. The only capability it reaches for outside its own types is `createHash` from `node:crypto`, used deterministically by `bucketFor`, so the same input always produces the same decision.
+`evaluate()` in `packages/engine/src/evaluate.ts` is a pure function from `EvaluationInput` to `EvaluationOutcome`. It receives rows that are already loaded and performs no I/O, reads no clock, draws no randomness and consults no cache. The only capability it reaches for outside its own types is `sha256` from `packages/engine/src/sha256.ts`, used deterministically by `bucketFor`, so the same input always produces the same decision.
 
-That buys three things. A test can call `evaluate` and `bucketFor` directly with a literal input object, with no database, HTTP request or session, which is what `apps/api/src/test/modules/evaluation.engine.test.ts` does. Each reason and each operator can be its own case, because the reason is part of the return value rather than a side effect. And because a decision depends only on the rows and the subject, it can be reproduced outside this process from the same inputs, which is the precondition for checking another implementation against this one later.
+That buys three things. A test can call `evaluate` and `bucketFor` directly with a literal input object, with no database, HTTP request or session, which is what `packages/engine/src/engine.test.ts` does. Each reason and each operator can be its own case, because the reason is part of the return value rather than a side effect. And because a decision depends only on the rows and the subject, it can be reproduced outside this process from the same inputs, which is the precondition for checking another implementation against this one later.
 
 ## Resolution order
 
@@ -88,7 +88,7 @@ Coercion details, all from `satisfies()` and its helpers:
 bucketFor(flagKey, value) = readUInt32BE(sha256(`${flagKey}:v1:${value}`), 0) % 100
 ```
 
-The middle segment is `EVALUATION_HASH_VERSION`, defined as `"v1"` in `evaluation.types.ts`. The digest's first four bytes are read as an unsigned 32-bit big-endian integer, then reduced modulo 100, so a bucket is 0 through 99. The flag key is inside the hash input so that two flags at 10% do not select the same users, and the version segment makes the algorithm versionable.
+The middle segment is `EVALUATION_HASH_VERSION`, defined as `"v1"` in `packages/engine/src/types.ts`. The digest's first four bytes are read as an unsigned 32-bit big-endian integer, then reduced modulo 100, so a bucket is 0 through 99. The flag key is inside the hash input so that two flags at 10% do not select the same users, and the version segment makes the algorithm versionable.
 
 This input is frozen. Changing the hash input, its separators or the version reshuffles everyone already bucketed, which is a one-way-door change: users who saw a variation under the old input can move to the other side, so the version constant carries the version rather than being edited in place.
 
@@ -96,7 +96,7 @@ The hashed value is chosen by `bucketValue(subject, bucketBy)`: the subject's at
 
 ## Known defect: flag-level 0% behaves like 100%
 
-The flag-level rollout branch in `apps/api/src/modules/evaluation/evaluation.engine.ts:191` is guarded by:
+The flag-level rollout branch in `packages/engine/src/evaluate.ts:180` is guarded by:
 
 ```ts
 if (percentage > 0 && percentage < 100) {
@@ -139,7 +139,7 @@ An example response:
 
 The controller parses the body with `evaluateRequestSchema.safeParse`; malformed JSON and schema failures both answer 400 with the first issue's message, in the envelope described in `docs/api-conventions.md`.
 
-The endpoint currently requires a session. `evaluation.routes.ts` applies the session middleware to every route and the controller calls `requireWorkspace(c)`, which throws `unauthorized` when there is no session, so no SDK can call it yet; that gap is tracked in `docs/architecture.md §9`. The evaluation is scoped to the workspace taken from that session, not from the body; the tenancy rules are in `docs/architecture.md §2`.
+The endpoint currently requires a session. `evaluation.routes.ts` applies the session middleware to every route and the controller calls `requireWorkspace(c)`, which throws `unauthorized` when there is no session. That is deliberate: `/v1/evaluate` is the dashboard's explainer, and the SDK-facing path is `GET /v1/sdk/config`, which takes a read-only runtime key and lets the SDK decide locally (`docs/sdk.md`). The evaluation is scoped to the workspace taken from that session, not from the body; the tenancy rules are in `docs/architecture.md §2`.
 
 ## How rows are loaded
 
@@ -150,25 +150,28 @@ The lookup resolves the flag by `projects.organization_id` from the session, `fl
 The follow-up queries are keyed by ids from that row:
 
 - `targeting_rules` for the flag and environment, ordered by `priority` ascending. Each rule contributes its `variation_key`, `segment_keys`, `rollout_percentage` and `bucket_by`.
-- `targeting_conditions` for those rules, ordered by `priority` ascending, then grouped back onto their rule by `rule_id`.
+- `targeting_conditions` for those rules, ordered by `priority` ascending and then by id, then grouped back onto their rule by `rule_id`.
 - `flag_individual_targets` for the flag and environment, every row, in no particular order.
 - `segments` for the flag's project, restricted to the deduplicated segment keys the loaded rules reference. There is no archived filter, so an archived segment still resolves; the source states that a hidden segment must not silently change what a flag serves.
-- `segment_conditions` for those segments, ordered by `priority` ascending, then grouped by `segment_id`.
+- `segment_conditions` for those segments, ordered by `priority` ascending and then by id, then grouped by `segment_id`.
 
-Condition values arrive from `jsonb` and are normalised by the repository's `toValues`. `flag_variations` does not contribute: evaluation returns variation keys and never resolves them to values. The configuration always comes from the resolved `flag_environment_configs` row; `DISABLED_CONFIG` is declared in `evaluation.types.ts` but referenced by no other source file, and no cache sits in front of the query, so every evaluation reads PostgreSQL.
+Condition values arrive from `jsonb` and are normalised by the repository's `toValues`. `flag_variations` does not contribute: evaluation returns variation keys and never resolves them to values. The configuration always comes from the resolved `flag_environment_configs` row, and no cache sits in front of the query, so every evaluation reads PostgreSQL.
 
 ## Status
 
-Built: the pure engine with its full resolution order; the seven reasons the code actually produces; bucketing with the frozen `v1` input; `POST /v1/evaluate` behind a session; and the repository queries that assemble an evaluation input.
+Built: the pure engine with its full resolution order; the seven reasons the code actually produces; bucketing with the frozen `v1` input; `POST /v1/evaluate` behind a session; the repository queries that assemble an evaluation input; and the `GET /v1/sdk/config` snapshot with its runtime-key authentication (`docs/sdk.md`).
 
-Partial: the `error` reason is in the contract vocabulary but has no producer, and evaluation failures surface as a generic 500 through `app.onError`. The flag-level `0%` defect documented above serves the default variation to everyone. The endpoint's session requirement means the SDK-facing path does not exist yet (`docs/architecture.md §9`), and `DISABLED_CONFIG` is an unreferenced constant.
+Partial: the `error` reason is in the contract vocabulary but has no producer, and evaluation failures surface as a generic 500 through `app.onError`. The flag-level `0%` defect documented above serves the default variation to everyone.
 
 Not built: the Redis configuration cache that would feed evaluation later (`docs/architecture.md §8.1`); evaluation reads the database on every request.
 
 ## Where it lives
 
-- `apps/api/src/modules/evaluation/evaluation.engine.ts` — the pure `evaluate` function, `satisfies` and `bucketFor`.
-- `apps/api/src/modules/evaluation/evaluation.types.ts` — engine input and outcome types, the hash version, the off variation and `DISABLED_CONFIG`.
+- `packages/engine/src/evaluate.ts` — the pure `evaluate` function and `satisfies`.
+- `packages/engine/src/bucket.ts` — `bucketFor`, the frozen bucketing hash.
+- `packages/engine/src/sha256.ts` — the SHA-256 the bucket hashes with, and the UTF-8 encoder it reads.
+- `packages/engine/src/types.ts` — engine input and outcome types, the hash version and the off variation.
+- `packages/engine/src/snapshot.ts` — the snapshot adapter an SDK evaluates from (`evaluateSnapshot`, `servedValue`, `toSubject`).
 - `apps/api/src/modules/evaluation/evaluation.service.ts` — resolves the row set and returns `flag_not_found`.
 - `apps/api/src/modules/evaluation/evaluation.repository.ts` — loads the rows that form an evaluation input.
 - `apps/api/src/modules/evaluation/evaluation.controller.ts` — session context, body validation and the response.
@@ -186,4 +189,5 @@ Not built: the Redis configuration cache that would feed evaluation later (`docs
 - `apps/api/src/middleware/authorization.ts` — the session and workspace requirement.
 - `apps/api/src/app.ts` — route mounting, `notFound` and the `onError` boundary.
 - `apps/api/src/shared/http/errors.ts` — the error envelope and the generic 500.
-- `apps/api/src/test/modules/evaluation.engine.test.ts` — direct unit tests of `evaluate` and `bucketFor`.
+- `packages/engine/src/engine.test.ts` — direct unit tests of `evaluate` and `bucketFor`.
+- `packages/engine/src/conformance.test.ts` — the committed cross-language corpus still matches the engine.

@@ -315,5 +315,5 @@ unwritten). No foreign key constrains `project.default_environment_id`.
 - `apps/api/src/modules/environments/environments.service.ts` — the starter environments of a new project, environment archive, unarchive and the last-active-environment rule.
 - `apps/api/src/modules/flags/flags.service.ts` — flag creation, identity updates, archive, variations and the per-environment publish.
 - `apps/api/src/modules/segments/segments.service.ts` — segment creation, update and archive.
-- `apps/api/src/modules/evaluation/evaluation.engine.ts` — where an archived flag resolves to the off variation.
+- `packages/engine/src/evaluate.ts` — where an archived flag resolves to the off variation.
 - `packages/contracts/src/audit-log.ts` — the declared `AUDIT_ACTIONS` list, including two names nothing writes.

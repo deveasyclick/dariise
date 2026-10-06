@@ -317,7 +317,7 @@ at evaluation time. Any flag configuration cache: reads reach PostgreSQL on ever
 - `apps/api/src/db/schema/flag-individual-targets.ts` — the `flag_individual_targets` table.
 - `apps/api/src/db/schema/flag-versions.ts` — the `flag_versions` table.
 - `apps/api/src/db/schema/flag-dependencies.ts` — the `flag_dependencies` table.
-- `apps/api/src/modules/evaluation/evaluation.engine.ts` — the operator matching this section defers to.
+- `packages/engine/src/evaluate.ts` — the operator matching this section defers to.
 - `apps/api/src/modules/environments/environments.service.ts` — environment creation and the copy transaction.
 - `apps/web/components/app/flags/create-flag-form.tsx` — the create flow.
 - `apps/web/components/app/flags/flag-configuration.tsx` — the per-environment configuration tab.
