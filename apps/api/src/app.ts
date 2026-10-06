@@ -7,6 +7,7 @@ import { env } from "./config/index.js";
 import { pool } from "./db/client.js";
 import { BrevoTransport } from "./integrations/brevo/index.js";
 import { createSessionMiddleware } from "./middleware/authorization.js";
+import { createApiKeyMiddleware } from "./middleware/api-key.js";
 import { ApiKeysController } from "./modules/api-keys/api-keys.controller.js";
 import { ApiKeysRepository } from "./modules/api-keys/api-keys.repository.js";
 import { createApiKeysRoutes } from "./modules/api-keys/api-keys.routes.js";
@@ -59,6 +60,12 @@ import { SegmentsController } from "./modules/segments/segments.controller.js";
 import { SegmentsRepository } from "./modules/segments/segments.repository.js";
 import { createSegmentsRoutes } from "./modules/segments/segments.routes.js";
 import { SegmentsService } from "./modules/segments/segments.service.js";
+import {
+  createSdkRoutes,
+  SdkController,
+  SdkRepository,
+  SdkService,
+} from "./modules/sdk/index.js";
 import { WorkspaceController } from "./modules/workspace/workspace.controller.js";
 import { WorkspaceRepository } from "./modules/workspace/workspace.repository.js";
 import { createWorkspaceRoutes } from "./modules/workspace/workspace.routes.js";
@@ -95,6 +102,7 @@ const changeRequestsRepository = new ChangeRequestsRepository();
 const accountRepository = new AccountRepository();
 const projectMembersRepository = new ProjectMembersRepository();
 const evaluationRepository = new EvaluationRepository();
+const sdkRepository = new SdkRepository();
 const workspaceRepository = new WorkspaceRepository();
 
 const projectAccessService = new ProjectAccessService(projectAccessRepository);
@@ -119,6 +127,13 @@ const apiKeysService = new ApiKeysService(
   apiKeysRepository,
   projectAccessService,
 );
+// The SDK surface authenticates runtime keys only; the resolver is the api-keys
+// module's, so this middleware owns no query of its own.
+const apiKeyMiddleware = createApiKeyMiddleware((secret) =>
+  apiKeysService.resolveApiKey(secret),
+);
+const sdkService = new SdkService(sdkRepository);
+const sdkController = new SdkController(sdkService);
 const auditLogService = new AuditLogService(
   auditLogRepository,
   projectAccessService,
@@ -245,6 +260,11 @@ const evaluationRoutes = createEvaluationRoutes({
   controller: evaluationController,
   sessionMiddleware,
 });
+// Mounted at `/`: the SDK surface, which accepts a runtime key and no session.
+const sdkRoutes = createSdkRoutes({
+  controller: sdkController,
+  apiKeyMiddleware,
+});
 const workspaceRoutes = createWorkspaceRoutes({
   controller: workspaceController,
   sessionMiddleware,
@@ -297,6 +317,7 @@ app.route("/", auditLogRoutes);
 app.route("/", accountRoutes);
 app.route("/v1/projects", projectMemberRoutes);
 app.route("/", evaluationRoutes);
+app.route("/", sdkRoutes);
 app.route("/", workspaceRoutes);
 app.route("/", flagRoutes);
 
