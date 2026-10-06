@@ -4,9 +4,10 @@ import { app } from "./app.js";
 import { env } from "./config/index.js";
 import { closeDatabase } from "./db/client.js";
 
+const HOST = "0.0.0.0";
 const server = serve({ fetch: app.fetch, port: env.port }, (info) => {
   console.info(
-    `[api] listening on http://localhost:${info.port} (${env.nodeEnv})`,
+    `[api] listening on http://${HOST}:${info.port} (${env.nodeEnv})`,
   );
 });
 
