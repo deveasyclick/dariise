@@ -1,0 +1,3118 @@
+{
+  "formatVersion": 1,
+  "bucketing": [
+    {
+      "flagKey": "checkout-v2",
+      "value": "user-1",
+      "bucket": 80
+    },
+    {
+      "flagKey": "checkout-v2",
+      "value": "user-2",
+      "bucket": 91
+    },
+    {
+      "flagKey": "checkout-v2",
+      "value": "user-42",
+      "bucket": 90
+    },
+    {
+      "flagKey": "checkout-v2",
+      "value": "acme",
+      "bucket": 35
+    },
+    {
+      "flagKey": "checkout-v2",
+      "value": "",
+      "bucket": 17
+    },
+    {
+      "flagKey": "flag-a",
+      "value": "user-1",
+      "bucket": 92
+    },
+    {
+      "flagKey": "flag-b",
+      "value": "user-1",
+      "bucket": 20
+    },
+    {
+      "flagKey": "max-items",
+      "value": "123",
+      "bucket": 5
+    },
+    {
+      "flagKey": "max-items",
+      "value": "1234567890",
+      "bucket": 72
+    },
+    {
+      "flagKey": "emoji-🚀",
+      "value": "user-1",
+      "bucket": 47
+    }
+  ],
+  "snapshot": [
+    {
+      "name": "an active flag with no targeting serves its default variation",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a disabled flag serves the off variation",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": false,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "flag_disabled",
+        "matchedRuleId": null
+      },
+      "value": false
+    },
+    {
+      "name": "an archived flag serves the off variation",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "archived",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "flag_archived",
+        "matchedRuleId": null
+      },
+      "value": false
+    },
+    {
+      "name": "a flag the snapshot does not carry is not found",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "missing-flag",
+        "enabled": false,
+        "variation": "off",
+        "reason": "flag_not_found",
+        "matchedRuleId": null
+      }
+    },
+    {
+      "name": "an individual target wins over a rule",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "on",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": []
+              }
+            ],
+            "targets": [
+              {
+                "userId": "user-1",
+                "variation": "off"
+              }
+            ],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": null
+      },
+      "value": false
+    },
+    {
+      "name": "a rule matches on an attribute",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "equals",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "beta"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a rule whose segment does not match is skipped",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [
+                  "beta-users"
+                ],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": []
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": [
+          {
+            "key": "beta-users",
+            "conditions": [
+              {
+                "attribute": "plan",
+                "operator": "equals",
+                "values": [
+                  "beta"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "free"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a rule whose segment matches reports the segment reason",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [
+                  "beta-users"
+                ],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": []
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": [
+          {
+            "key": "beta-users",
+            "conditions": [
+              {
+                "attribute": "plan",
+                "operator": "equals",
+                "values": [
+                  "beta"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "beta"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "segment",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a full rollout serves the default variation",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 100,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a partial rollout buckets the subject",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 50,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "percentage_rollout",
+        "matchedRuleId": null
+      },
+      "value": false
+    },
+    {
+      "name": "a string flag serves its variation value",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "string",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": "v2"
+              },
+              {
+                "key": "off",
+                "value": "legacy"
+              }
+            ],
+            "rules": [],
+            "targets": [],
+            "key": "checkout-version"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-version",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": "v2"
+    },
+    {
+      "name": "an equals condition matches its value",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "equals",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "beta"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "an equals condition ignores another value",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "equals",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "free"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "an equals condition on a missing attribute does not match",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "equals",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {}
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a not_equals condition matches another value",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "not_equals",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "free"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a not_equals condition rejects its own value",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "not_equals",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "beta"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a not_equals condition matches a missing attribute",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "not_equals",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {}
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a contains condition matches a substring",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "contains",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "beta-plan"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a contains condition ignores another substring",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "contains",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "free-plan"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a not_contains condition matches another substring",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "not_contains",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "free-plan"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a not_contains condition rejects its substring",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "not_contains",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "beta-plan"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "an in condition matches one of its values",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "in",
+                    "values": [
+                      "beta",
+                      "gamma"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "gamma"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "an in condition ignores a value outside the list",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "in",
+                    "values": [
+                      "beta",
+                      "gamma"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "free"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a not_in condition matches a value outside the list",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "not_in",
+                    "values": [
+                      "beta",
+                      "gamma"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "free"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a not_in condition rejects one of its values",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "not_in",
+                    "values": [
+                      "beta",
+                      "gamma"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "beta"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a greater_than condition matches a larger number",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "greater_than",
+                    "values": [
+                      "5"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "10"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a greater_than condition ignores an equal number",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "greater_than",
+                    "values": [
+                      "5"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "5"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a greater_than condition matches a numeric attribute",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "greater_than",
+                    "values": [
+                      "5"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": 10
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a greater_than condition ignores a non-numeric attribute",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "greater_than",
+                    "values": [
+                      "5"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "beta"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a greater_than_or_equal condition matches its bound",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "greater_than_or_equal",
+                    "values": [
+                      "5"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "5"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a greater_than_or_equal condition ignores a smaller number",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "greater_than_or_equal",
+                    "values": [
+                      "5"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "4"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a less_than condition matches a smaller number",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "less_than",
+                    "values": [
+                      "5"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "4"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a less_than condition ignores an equal number",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "less_than",
+                    "values": [
+                      "5"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "5"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a less_than_or_equal condition matches its bound",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "less_than_or_equal",
+                    "values": [
+                      "5"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "5"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a less_than_or_equal condition ignores a larger number",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "less_than_or_equal",
+                    "values": [
+                      "5"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "6"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a matches_regex condition matches a pattern",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "matches_regex",
+                    "values": [
+                      "^user-[0-9]+$"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "user-42"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a matches_regex condition ignores another string",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "matches_regex",
+                    "values": [
+                      "^user-[0-9]+$"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "admin-1"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a matches_regex condition with a broken pattern matches nothing",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "matches_regex",
+                    "values": [
+                      "("
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "user-42"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a matches_regex condition on a missing attribute does not match",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "matches_regex",
+                    "values": [
+                      "^user"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {}
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "an unknown operator matches nothing",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": null,
+                "bucketBy": null,
+                "conditions": [
+                  {
+                    "attribute": "plan",
+                    "operator": "unknown_operator",
+                    "values": [
+                      "beta"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "plan": "beta"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a rule whose rollout sits on the subject bucket does not apply",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": 80,
+                "bucketBy": null,
+                "conditions": []
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a rule one point above the subject bucket applies",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": 81,
+                "bucketBy": null,
+                "conditions": []
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a rule at 100% always applies",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": 100,
+                "bucketBy": null,
+                "conditions": []
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a rule at 0% never applies",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": 0,
+                "bucketBy": null,
+                "conditions": []
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": true,
+        "variation": "on",
+        "reason": "default_variation",
+        "matchedRuleId": null
+      },
+      "value": true
+    },
+    {
+      "name": "a rule buckets by its own attribute",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": 36,
+                "bucketBy": "accountId",
+                "conditions": []
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1",
+        "attributes": {
+          "accountId": "acme"
+        }
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    },
+    {
+      "name": "a rule without its own bucket attribute falls back to the subject id",
+      "config": {
+        "version": "conformance",
+        "project": {
+          "key": "checkout",
+          "name": "Checkout"
+        },
+        "environment": {
+          "key": "production",
+          "name": "production"
+        },
+        "flags": [
+          {
+            "type": "boolean",
+            "status": "active",
+            "enabled": true,
+            "offVariation": "off",
+            "defaultVariation": "on",
+            "rolloutPercentage": 0,
+            "bucketBy": "userId",
+            "variations": [
+              {
+                "key": "on",
+                "value": true
+              },
+              {
+                "key": "off",
+                "value": false
+              }
+            ],
+            "rules": [
+              {
+                "id": "rule-1",
+                "priority": 0,
+                "variation": "off",
+                "segmentKeys": [],
+                "rolloutPercentage": 81,
+                "bucketBy": "accountId",
+                "conditions": []
+              }
+            ],
+            "targets": [],
+            "key": "checkout-v2"
+          }
+        ],
+        "segments": []
+      },
+      "context": {
+        "userId": "user-1"
+      },
+      "expect": {
+        "flag": "checkout-v2",
+        "enabled": false,
+        "variation": "off",
+        "reason": "targeting_rule",
+        "matchedRuleId": "rule-1"
+      },
+      "value": false
+    }
+  ]
+}
