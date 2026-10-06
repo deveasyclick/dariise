@@ -27,10 +27,6 @@ RUN pnpm prune --prod --no-optional
 FROM node:24-alpine AS runner
 WORKDIR /app
 
-# Set production environment defaults
-ENV NODE_ENV=production
-ENV PORT=4000
-
 # Copy only the pruned, production-ready modules and built code
 COPY --chown=node:node --from=builder /app/package.json /app/pnpm-workspace.yaml ./
 COPY --chown=node:node --from=builder /app/node_modules ./node_modules
