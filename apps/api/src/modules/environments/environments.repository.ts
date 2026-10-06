@@ -1,4 +1,5 @@
-import { and, asc, count, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { SDK_API_KEY_KINDS } from "@dariise/contracts";
+import { and, asc, count, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 
 import { db } from "../../db/client.js";
 import { apiKey, environment } from "../../db/schema/index.js";
@@ -164,8 +165,13 @@ export class EnvironmentsRepository {
   }
 
   /**
-   * The most recent usable key for the connection preview: environment-specific
-   * keys first, then workspace-wide ones. Only the prefix is ever read.
+   * The most recent usable **SDK** key for the connection preview:
+   * environment-specific keys first, then workspace-wide ones. Only the prefix
+   * is ever read.
+   *
+   * The kinds are restricted because the SDKs screen pairs this prefix with the
+   * install snippets: a management key's prefix there would invite somebody to
+   * paste a credential that cannot call the SDK endpoint at all.
    */
   async findUsableKeyPrefix(
     projectId: string,
@@ -181,6 +187,7 @@ export class EnvironmentsRepository {
             eq(apiKey.environmentId, environmentId),
             isNull(apiKey.environmentId),
           ),
+          inArray(apiKey.kind, [...SDK_API_KEY_KINDS]),
           isNull(apiKey.revokedAt),
         ),
       )
