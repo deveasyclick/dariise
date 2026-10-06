@@ -1,8 +1,7 @@
 import type { EvaluateRequest, EvaluationResult } from "@dariise/contracts";
+import { evaluate as evaluateFlag, OFF_VARIATION } from "@dariise/engine";
 
-import { evaluate as evaluateFlag } from "./evaluation.engine.js";
 import type { EvaluationRepository } from "./evaluation.repository.js";
-import { OFF_VARIATION } from "./evaluation.types.js";
 
 export interface EvaluationActorContext {
   organizationId: string;

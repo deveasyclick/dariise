@@ -1,3 +1,10 @@
+import type {
+  EvaluationCondition,
+  EvaluationConfig,
+  EvaluationRule,
+  EvaluationSegment,
+  EvaluationTarget,
+} from "@dariise/engine";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { db } from "../../db/client.js";
@@ -12,13 +19,6 @@ import {
   targetingCondition,
   targetingRule,
 } from "../../db/schema/index.js";
-import type {
-  EvaluationCondition,
-  EvaluationConfig,
-  EvaluationRule,
-  EvaluationSegment,
-  EvaluationTarget,
-} from "./evaluation.types.js";
 
 export interface EvaluationTargetData {
   flagKey: string;
