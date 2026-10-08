@@ -141,7 +141,8 @@ const auditLogService = new AuditLogService(
 // Injected so the projects module never reaches into environments itself.
 const projectsService = new ProjectsService(
   projectsRepository,
-  (tx, projectId) => environmentsService.createStarterEnvironments(tx, projectId),
+  (tx, projectId) =>
+    environmentsService.createStarterEnvironments(tx, projectId),
   projectAccessService,
 );
 const workspaceService = new WorkspaceService(workspaceRepository);
@@ -277,7 +278,7 @@ app.use("*", logger());
 
 app.use("*", (c, next) =>
   cors({
-    origin: (origin) => (env.corsOrigins.includes(origin) ? origin : undefined),
+    origin: ["http://localhost:3000", "https://dariise.yusufadeniyi.dev/"],
     credentials: true,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],

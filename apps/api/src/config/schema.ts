@@ -35,16 +35,6 @@ export const ConfigSchema = z
 
     BETTER_AUTH_URL: z.url().default("http://localhost:4000"),
 
-    CORS_ORIGINS: z
-      .string()
-      .default("http://localhost:3000,https://dariise.yusufadeniyi.dev")
-      .transform((value) =>
-        value
-          .split(",")
-          .map((origin) => origin.trim())
-          .filter(Boolean),
-      ),
-
     GITHUB_CLIENT_ID: optionalString,
     GITHUB_CLIENT_SECRET: optionalString,
 
@@ -65,7 +55,6 @@ export const ConfigSchema = z
     redisUrl: value.REDIS_URL,
     betterAuthSecret: value.BETTER_AUTH_SECRET,
     betterAuthUrl: value.BETTER_AUTH_URL,
-    corsOrigins: value.CORS_ORIGINS,
     githubClientId: value.GITHUB_CLIENT_ID,
     githubClientSecret: value.GITHUB_CLIENT_SECRET,
     googleClientId: value.GOOGLE_CLIENT_ID,
