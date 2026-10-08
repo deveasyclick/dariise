@@ -37,7 +37,7 @@ export const ConfigSchema = z
 
     CORS_ORIGINS: z
       .string()
-      .default("http://localhost:3000")
+      .default("http://localhost:3000,https://dariise.yusufadeniyi.dev")
       .transform((value) =>
         value
           .split(",")
